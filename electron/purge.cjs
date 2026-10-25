@@ -46,9 +46,9 @@ function createConversationPurger({ conversations, videos, workspaceDir, isVideo
   }
 
   // The workspace keeps a single video, so a new illustrator chat re-links the same record. Before
-  // that happens its illustration data (character sheets, scene images, their indexes and the Flow
+  // that happens its illustration data (character sheets, scene images, animation videos, their indexes and the Flow
   // project) is removed, so the new chat starts clean; script, voice and timeline data stay.
-  const ILLUSTRATION_ENTRIES = ['characters', 'scenes', 'characters.json', 'scenes.json'];
+  const ILLUSTRATION_ENTRIES = ['characters', 'scenes', 'animations', 'characters.json', 'scenes.json', 'animations.json'];
 
   function linkIllustrator(input = {}) {
     const next = input.illustratorConversationId;

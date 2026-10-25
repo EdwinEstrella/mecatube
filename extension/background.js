@@ -379,8 +379,9 @@ function runTabStep(tabId, command, { portName = 'mecatube-flow', label = 'Flow'
   });
 }
 
-// model / outputs / references travel to the Flow tab untouched; flow.js decides what to do with them
-async function handleFlowGenerate({ requestId, prompt, projectUrl, model, outputs, references }) {
+// model / outputs / references (and, for kind 'animate', sourceAssetId / video) travel to the Flow tab
+// untouched; flow.js decides what to do with them
+async function handleFlowGenerate({ requestId, prompt, projectUrl, model, outputs, references, kind, sourceAssetId, video }) {
   if (flowBusy) {
     send({ type: 'flow-error', requestId, message: 'Ya hay otro trabajo de Flow en curso.' });
     return;
@@ -412,7 +413,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
 
     const result = await runTabStep(
       tabId,
-      { type: 'generate', prompt, model, outputs, references },
+      { type: 'generate', prompt, model, outputs, references, kind, sourceAssetId, video },
       {
         settleOn: 'result',
         timeoutMs: FLOW_JOB_TIMEOUT_MS,
@@ -423,7 +424,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
         },
       },
     );
-    send({ type: 'flow-result', requestId, projectUrl: currentProject, images: result.images, submitMethod: result.submitMethod ?? null });
+    send({ type: 'flow-result', requestId, projectUrl: currentProject, images: result.images, videos: result.videos, submitMethod: result.submitMethod ?? null });
   } catch (error) {
     send({ type: 'flow-error', requestId, message: error.message });
   } finally {

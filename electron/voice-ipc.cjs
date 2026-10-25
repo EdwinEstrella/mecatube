@@ -39,10 +39,12 @@ function parseRange(header, size) {
 // voiceovers/<id>/narration.wav (mecatube-media://voiceover/<id>), with range support for seeking.
 // With `characterFile(videoId, key, file)` it also serves a Flow character image
 // (mecatube-media://character/<videoId>/<characterKey>/<file>); `sceneFile(videoId, number, file)` does
-// the same for scene images (mecatube-media://scene/<videoId>/<number>/<file>). Resolvers validate every part.
+// the same for scene images (mecatube-media://scene/<videoId>/<number>/<file>) and `animationFile` for
+// animation videos (mecatube-media://animation/<videoId>/<number>/<file>). Resolvers validate every part.
 const IMAGE_TYPES = { '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
+const VIDEO_TYPES = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime' };
 
-function createMediaHandler(voice, { characterFile, sceneFile } = {}) {
+function createMediaHandler(voice, { characterFile, sceneFile, animationFile } = {}) {
   return async (request) => {
     let file;
     let contentType = 'audio/wav';
@@ -58,6 +60,10 @@ function createMediaHandler(voice, { characterFile, sceneFile } = {}) {
       } else if (url.hostname === 'scene' && sceneFile && parts.length === 3) {
         file = sceneFile(parts[0], parts[1], parts[2]);
         contentType = IMAGE_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()];
+        if (!contentType) throw new Error('No encontrado');
+      } else if (url.hostname === 'animation' && animationFile && parts.length === 3) {
+        file = animationFile(parts[0], parts[1], parts[2]);
+        contentType = VIDEO_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()];
         if (!contentType) throw new Error('No encontrado');
       } else throw new Error('No encontrado');
     } catch {

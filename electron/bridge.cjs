@@ -165,7 +165,8 @@ function createBridge({ port = BRIDGE_PORT, host = BRIDGE_HOST } = {}) {
   }
 
   // model / outputs / references (see flow.cjs) are applied by the extension inside the Flow page
-  function sendFlowJob({ requestId, prompt, projectUrl, model, outputs, references }) {
+  // Image jobs send model/outputs/references; animate jobs (kind 'animate') add sourceAssetId and video
+  function sendFlowJob({ requestId, prompt, projectUrl, model, outputs, references, kind, sourceAssetId, video }) {
     if (!client || client.readyState !== client.OPEN) {
       throw new Error('La extensión del navegador no está conectada.');
     }
@@ -178,6 +179,9 @@ function createBridge({ port = BRIDGE_PORT, host = BRIDGE_HOST } = {}) {
         model: model ?? null,
         outputs: outputs ?? null,
         references: references ?? [],
+        ...(kind ? { kind } : {}),
+        ...(sourceAssetId ? { sourceAssetId } : {}),
+        ...(video ? { video } : {}),
       }),
     );
   }

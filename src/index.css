@@ -2151,6 +2151,20 @@ body {
   background: rgba(248, 113, 113, 0.14);
 }
 
+.scene-card__badge--hook {
+  color: #f9a8d4;
+  background: rgba(244, 114, 182, 0.16);
+}
+
+.animation-card__video {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  margin-top: 12px;
+  border-radius: 8px;
+  background: #0d0d12;
+}
+
 .scene-card__pre {
   max-height: 220px;
   overflow: auto;
@@ -2163,6 +2177,15 @@ body {
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
+}
+
+.scene-card__thumb {
+  position: relative;
+}
+
+.scene-card__thumb .char-card__image img {
+  min-height: 0;
+  max-height: 260px;
 }
 
 .scene-card__thumb img {

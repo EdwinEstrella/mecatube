@@ -84,6 +84,15 @@ export function useFlowScenes(conversationId, conversationTitle, isConnected) {
     }
   };
 
+  const select = async (number, file) => {
+    try {
+      const updated = await window.electronAPI.selectSceneImage({ videoId: videoIdRef.current, number, file });
+      setRecords((current) => ({ ...current, [number]: updated }));
+    } catch (selectError) {
+      setError(cleanError(selectError));
+    }
+  };
+
   const cancel = async () => {
     try {
       await window.electronAPI.cancelScenes();
@@ -110,6 +119,7 @@ export function useFlowScenes(conversationId, conversationTitle, isConnected) {
     connected: isConnected,
     busy: Object.values(statuses).some(isActive),
     generate,
+    select,
     cancel,
     openProject,
   };

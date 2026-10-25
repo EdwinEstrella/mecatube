@@ -386,6 +386,11 @@ como debe aparecer.
 ```
 [prompt en inglés]
 ```
+* Marca del gancho: si el momento de la imagen pertenece a la parte del GANCHO del
+guion (la apertura que engancha al espectador), añade `· Gancho` en el título:
+`**Imagen 01 — Escena · Gancho · [Nombre] (hoja [N])**` y
+`**Imagen 02 — Explicación · Gancho ([disposición])**`. Las imágenes que no
+pertenecen al gancho llevan el título normal, sin esa marca.
 * Solo el título y el prompt. No escribas el momento del guion ni ninguna otra
 línea.
 (… hasta completar el bloque)
@@ -442,6 +447,10 @@ anterior.
 ```
 [prompt de animación en inglés]
 ```
+* Marca del gancho: la animación lleva `· Gancho` en el título exactamente cuando
+su imagen lo lleva: `**Animación 01 — Escena · Gancho · [Nombre] (hoja [N])**` y
+`**Animación 02 — Explicación · Gancho ([disposición])**`. Las demás llevan el
+título normal.
 (… hasta completar el bloque)
 Al final de cada bloque, excepto el último:
 ```

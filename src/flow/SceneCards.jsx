@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { isActive, latestFiles, pendingScenes, sceneImageUrl, sceneStatusLabel } from './sceneStatus.js';
+import { allFiles, isActive, pendingScenes, selectedCount, sceneImageUrl, sceneStatusLabel } from './sceneStatus.js';
 
-function CopyButton({ text }) {
+export function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -32,8 +32,8 @@ function sceneHeading(scene) {
 }
 
 // Presentational: one card per image prompt. The container owns the queue, records and sending.
-function SceneCard({ scene, record, status, videoId, canStart, onGenerate }) {
-  const files = latestFiles(record);
+function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSelect }) {
+  const files = allFiles(record);
   const label = sceneStatusLabel(status, record);
   const active = isActive(status);
   const sheets = scene.sheetRefs.length > 0 ? `Hoja${scene.sheetRefs.length > 1 ? 's' : ''} ${scene.sheetRefs.join(', ')}` : '';
@@ -42,6 +42,7 @@ function SceneCard({ scene, record, status, videoId, canStart, onGenerate }) {
     <li className="char-card scene-card">
       <div className="char-card__header">
         <h3 className="char-card__title">{sceneHeading(scene)}</h3>
+        {scene.hook && <span className="scene-card__badge scene-card__badge--hook">Gancho</span>}
         {label.text && <span className={`scene-card__badge scene-card__badge--${label.tone}`}>{label.text}</span>}
       </div>
       {sheets && <p className="char-card__role">{sheets} como referencia</p>}
@@ -74,11 +75,30 @@ function SceneCard({ scene, record, status, videoId, canStart, onGenerate }) {
 
       {files.length > 0 && (
         <ul className="scene-card__grid" aria-label={`Imágenes de la escena ${scene.number}`}>
-          {files.slice(0, 2).map((file) => (
-            <li key={file} className="scene-card__thumb">
-              <img src={sceneImageUrl(videoId, scene.number, file)} alt="" loading="lazy" />
-            </li>
-          ))}
+          {files.map((file) => {
+            const selected = record.selectedFile === file;
+            return (
+              <li key={file} className="scene-card__thumb">
+                <button
+                  type="button"
+                  className={`char-card__image${selected ? ' char-card__image--selected' : ''}`}
+                  aria-pressed={selected}
+                  aria-label={selected ? 'Imagen seleccionada' : 'Seleccionar esta imagen'}
+                  onClick={() => onSelect(scene.number, file)}
+                >
+                  <img src={sceneImageUrl(videoId, scene.number, file)} alt="" loading="lazy" />
+                  {selected && (
+                    <span className="char-card__selected-badge">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Seleccionada
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </li>
@@ -96,6 +116,9 @@ export default function SceneCards({ block, scenes, flow, characterBusy }) {
       <div className="scene-cards__bar">
         <span className="scene-cards__title">
           {block ? `Bloque ${block.index} de ${block.total} · Imágenes ${block.from} a ${block.to}` : `${scenes.length} imágenes`}
+        </span>
+        <span className="char-card__hint">
+          {selectedCount(scenes, flow.records)} de {scenes.length} elegidas
         </span>
         <button type="button" className="idea-card__choose" disabled={!canStart || pending.length === 0} onClick={() => flow.generate(pending)}>
           Generar todas
@@ -123,6 +146,7 @@ export default function SceneCards({ block, scenes, flow, characterBusy }) {
             videoId={flow.videoId}
             canStart={canStart}
             onGenerate={(item) => flow.generate([item])}
+            onSelect={flow.select}
           />
         ))}
       </ol>

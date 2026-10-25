@@ -419,6 +419,7 @@ app.whenReady().then(() => {
     createMediaHandler(voiceProxy, {
       characterFile: (videoId, key, file) => flowStoreProxy.filePath(videoId, key, file),
       sceneFile: (videoId, number, file) => flowStoreProxy.sceneFilePath(videoId, number, file),
+      animationFile: (videoId, number, file) => flowStoreProxy.animationFilePath(videoId, number, file),
     }),
   );
   bridge.onMessage(handleBridgeMessage);

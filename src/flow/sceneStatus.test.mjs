@@ -1,6 +1,6 @@
 // Run with: node src/flow/sceneStatus.test.mjs
 import assert from 'node:assert/strict';
-import { latestFiles, pendingScenes, sceneImageUrl, sceneStatusLabel } from './sceneStatus.js';
+import { allFiles, latestFiles, selectedCount, pendingScenes, sceneImageUrl, sceneStatusLabel } from './sceneStatus.js';
 
 const done = { number: 1, generations: [{ files: ['a-1.webp', 'a-2.webp'] }, { files: ['b-1.webp', 'b-2.webp'] }] };
 
@@ -21,5 +21,10 @@ assert.deepEqual(sceneStatusLabel({ state: 'cancelled' }, undefined), { tone: 'i
 const scenes = [1, 2, 3, 4, 5].map((number) => ({ number }));
 const pending = pendingScenes(scenes, { 2: { state: 'queued' }, 3: { state: 'running' }, 4: { state: 'error' }, 5: { state: 'cancelled' } }, { 1: done });
 assert.deepEqual(pending.map((scene) => scene.number), [4, 5]);
+
+assert.deepEqual(allFiles(done), ['a-1.webp', 'a-2.webp', 'b-1.webp', 'b-2.webp']);
+assert.deepEqual(allFiles(undefined), []);
+const records = { 1: { ...done, selectedFile: 'a-2.webp' }, 2: { ...done, selectedFile: 'gone.webp' }, 3: { ...done, selectedFile: null } };
+assert.equal(selectedCount([{ number: 1 }, { number: 2 }, { number: 3 }, { number: 4 }], records), 1);
 
 console.log('sceneStatus: all passed');

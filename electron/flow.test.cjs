@@ -86,6 +86,7 @@ async function waitUntil(check, label) {
       videoId: video.id,
       characterKey: 'personaje-1-tomas',
       scenes: { busy: false, running: null, pending: 0 },
+      animations: { busy: false, running: null, pending: 0 },
     });
 
     ext.send(JSON.stringify({ type: 'flow-project', requestId, projectUrl: PROJECT }));
@@ -419,6 +420,31 @@ async function waitUntil(check, label) {
     for (const file of firstFiles) assert.equal(fs.existsSync(path.join(dirOf, file)), false);
   });
 
+  await test('scene selection persists, rejects foreign files and clears when pruned', async () => {
+    const a = sceneStore.addSceneGeneration(sceneVideo.id, { number: 50, title: 'A', prompt: 'p', images: [image, image] });
+    const b = sceneStore.addSceneGeneration(sceneVideo.id, { number: 51, title: 'B', prompt: 'p', images: [image, image] });
+    assert.equal(a.selectedFile, null);
+    const mine = a.generations[0].files[1];
+    const selectedOf = () => sceneStore.listScenes(sceneVideo.id).find((item) => item.number === 50).selectedFile;
+    assert.equal(sceneStore.selectScene(sceneVideo.id, 50, mine).selectedFile, mine);
+    assert.equal(selectedOf(), mine);
+    // another scene's file, a traversal attempt, an unknown scene and a bad number
+    assert.throws(() => sceneStore.selectScene(sceneVideo.id, 50, b.generations[0].files[0]), /no pertenece/);
+    assert.throws(() => sceneStore.selectScene(sceneVideo.id, 50, '../51/x.webp'), /Archivo de imagen no válido/);
+    assert.throws(() => sceneStore.selectScene(sceneVideo.id, 99, mine), /Escena no encontrada/);
+    assert.throws(() => sceneStore.selectScene(sceneVideo.id, 0, mine), /Número de escena no válido/);
+    assert.equal(selectedOf(), mine);
+    // newer generations keep the selection while its generation is kept; pruning it clears the selection
+    for (let i = 0; i < 3; i += 1) {
+      await sleep(3);
+      sceneStore.addSceneGeneration(sceneVideo.id, { number: 50, title: 'A', prompt: 'p', images: [image, image] });
+    }
+    assert.equal(selectedOf(), mine);
+    await sleep(3);
+    assert.equal(sceneStore.addSceneGeneration(sceneVideo.id, { number: 50, title: 'A', prompt: 'p', images: [image, image] }).selectedFile, null);
+    assert.equal(selectedOf(), null);
+  });
+
   await test('media protocol serves scene images and rejects malformed scene paths', async () => {
     const [{ generations }] = sceneStore.listScenes(sceneVideo.id);
     const file = generations[0].files[0];
@@ -488,6 +514,185 @@ async function waitUntil(check, label) {
   await test('scenePromptForFlow leaves prompts without references unchanged', () => {
     const prompt = 'Whiteboard explainer. No main characters.';
     assert.equal(scenePromptForFlow(prompt, []), prompt);
+  });
+
+  // --- Animations: shared serial queue, source asset from the chosen scene image, video storage ---
+  const MP4 = Buffer.from('....ftypisom-fake-video-bytes');
+  const clip = (sourceUrl) => ({ mime: 'video/mp4', base64: MP4.toString('base64'), sourceUrl });
+  const SRC_ID = '0f8fad5b-d9cb-469f-a165-70867728950f';
+  const VID_ID = '22222222-3333-4444-8555-666666666666';
+  const flowImageUrl = (id) => `https://flow-content.google/image/${id}?Expires=1`;
+  const animation = (number, hook = false) => ({ number, title: `Escena ${number}`, prompt: `animate ${number}`, hook });
+  const animStates = (number) => sceneEvents.filter(([c, p]) => c === 'flow:animation-status' && p.number === number).map(([, p]) => p.state);
+  const lastAnim = (number) => sceneEvents.findLast(([c, p]) => c === 'flow:animation-status' && p.number === number)[1];
+  const finishClip = (job, extra = {}) =>
+    sceneListener({ type: 'flow-result', requestId: job.requestId, projectUrl: PROJECT, videos: [clip(flowImageUrl(VID_ID))], ...extra });
+
+  // 90: chosen image with a Flow id; 91: no chosen image; 92: chosen image without a Flow id
+  const chosen = (number, sourceUrl) => {
+    const saved = sceneStore.addSceneGeneration(sceneVideo.id, { number, title: 'S', prompt: 'p', images: [{ ...image, sourceUrl }, image] });
+    sceneStore.selectScene(sceneVideo.id, number, saved.generations[0].files[0]);
+  };
+  chosen(90, flowImageUrl(SRC_ID));
+  sceneStore.addSceneGeneration(sceneVideo.id, { number: 91, title: 'S', prompt: 'p', images: [image, image] });
+  chosen(92, 'https://flow.google.com/asb/a');
+
+  await test('animations and scenes share one serial queue; the source asset comes from the chosen scene image', async () => {
+    sent.length = 0;
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(70)] });
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(90, true), animation(91), animation(92)] }), { queued: 3 });
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(71)] });
+    assert.equal(sent.length, 1, 'one Flow job at a time');
+    assert.deepEqual(animStates(90), ['queued']);
+    assert.deepEqual(sceneService.status().animations, { busy: true, running: null, pending: 3 });
+    assert.deepEqual(sceneService.status().scenes, { busy: true, running: 70, pending: 1 });
+    // a duplicate request for a waiting animation is ignored
+    assert.equal(sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(90)] }).queued, 0);
+
+    finish(sent[0]);
+    assert.equal(sent.length, 2);
+    assert.deepEqual(sent[1], {
+      requestId: sent[1].requestId,
+      kind: 'animate',
+      prompt: 'animate 90',
+      projectUrl: PROJECT,
+      sourceAssetId: SRC_ID,
+      video: { model: 'omni-1.1-flash', resolution: '720p', seconds: 8, aspect: '16:9', outputs: 1 },
+    });
+    assert.deepEqual(animStates(90), ['queued', 'running']);
+    assert.equal(sceneService.isVideoBusy(sceneVideo.id), true);
+
+    sceneListener({ type: 'flow-progress', requestId: sent[1].requestId, percent: 40 });
+    assert.equal(lastAnim(90).percent, 40);
+    assert.equal(sceneEvents.filter(([c]) => c === 'flow:progress').length, 0);
+    assert.equal(sceneEvents.findLast(([c]) => c === 'flow:scene-status')[1].number, 70, 'animation traffic stays off the scene channel');
+
+    finishClip(sent[1]);
+    assert.deepEqual(animStates(90), ['queued', 'running', 'running', 'done']);
+    // 91 and 92 fail alone, then the scene queued after them goes out
+    assert.deepEqual(animStates(91).slice(-1), ['error']);
+    assert.equal(lastAnim(91).error, 'Elige primero la imagen de la escena 91 en Flow.');
+    assert.deepEqual(animStates(92).slice(-1), ['error']);
+    assert.match(lastAnim(92).error, /escena 92 no tiene identificador de Flow/);
+    assert.equal(sent.length, 3);
+    assert.equal(sent[2].prompt, 'scene 71');
+    assert.equal(sent[2].kind, undefined, 'image jobs keep their payload');
+    finish(sent[2]);
+    assert.deepEqual(sceneService.status().animations, { busy: false, running: null, pending: 0 });
+    assert.equal(sceneService.isVideoBusy(sceneVideo.id), false);
+  });
+
+  await test('animation videos are persisted with asset ids and served by the media protocol', async () => {
+    const [stored] = sceneStore.listAnimations(sceneVideo.id);
+    assert.equal(stored.number, 90);
+    assert.equal(stored.hook, true);
+    assert.equal(stored.title, 'Escena 90');
+    const generation = stored.generations[0];
+    assert.equal(generation.files.length, 1);
+    assert.match(generation.files[0], /^\d+-1\.mp4$/);
+    assert.deepEqual(generation.assetIds, [VID_ID]);
+    assert.equal(generation.sourceAssetId, SRC_ID);
+    const full = sceneStore.animationFilePath(sceneVideo.id, 90, generation.files[0]);
+    assert.deepEqual(fs.readFileSync(full), MP4);
+    assert.equal(sceneEvents.findLast(([c, p]) => c === 'flow:animation-status' && p.state === 'done')[1].animation.number, 90);
+
+    const handler = createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { animationFile: sceneStore.animationFilePath });
+    const file = generation.files[0];
+    const ok = await handler({ url: `mecatube-media://animation/${sceneVideo.id}/90/${file}`, headers: new Headers() });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.headers.get('content-type'), 'video/mp4');
+    const ranged = await handler({ url: `mecatube-media://animation/${sceneVideo.id}/90/${file}`, headers: new Headers({ range: 'bytes=0-3' }) });
+    assert.equal(ranged.status, 206);
+    for (const url of [
+      `mecatube-media://animation/${sceneVideo.id}/..%2F90/${file}`,
+      `mecatube-media://animation/${sceneVideo.id}/x/${file}`,
+      `mecatube-media://animation/${sceneVideo.id}/90/..%2F..%2Fanimations.json`,
+      `mecatube-media://animation/${sceneVideo.id}/90/${file.replace('.mp4', '.png')}`,
+      `mecatube-media://animation/${sceneVideo.id}/90`,
+    ]) {
+      assert.equal((await handler({ url, headers: new Headers() })).status, 404, url);
+    }
+    assert.throws(() => sceneStore.animationFilePath(sceneVideo.id, 90, '../x.mp4'), /Archivo de vídeo no válido/);
+  });
+
+  await test('only the latest animation generations are kept and older files are deleted', async () => {
+    const dirOf = path.join(sceneRoot, 'videos', sceneVideo.id, 'animations', '95');
+    const first = [];
+    for (let i = 0; i < 5; i += 1) {
+      const saved = sceneStore.addAnimationGeneration(sceneVideo.id, { number: 95, title: 'T', prompt: 'p', videos: [clip(null)] });
+      if (i === 0) first.push(...saved.generations[0].files);
+      await sleep(3);
+    }
+    const kept = sceneStore.listAnimations(sceneVideo.id).find((item) => item.number === 95);
+    assert.equal(kept.generations.length, 3);
+    assert.equal(fs.readdirSync(dirOf).length, 3);
+    for (const file of first) assert.equal(fs.existsSync(path.join(dirOf, file)), false);
+    assert.throws(() => sceneStore.addAnimationGeneration(sceneVideo.id, { number: 95, prompt: 'p', videos: [] }), /no tiene vídeos utilizables/);
+    assert.throws(() => sceneStore.addAnimationGeneration(sceneVideo.id, { number: 95, prompt: 'p', videos: [{ mime: 'image/png', base64: 'AQID' }] }), /Tipo de vídeo no compatible/);
+    assert.throws(() => sceneStore.addAnimationGeneration(sceneVideo.id, { number: 0, prompt: 'p', videos: [clip(null)] }), /Número de escena no válido/);
+  });
+
+  await test('cancelAnimations drops only waiting animations; a result without videos fails that animation alone', async () => {
+    sent.length = 0;
+    sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(90)] });
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(72)] });
+    sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(92)] });
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sceneService.cancelAnimations(), { cancelled: 1 });
+    assert.deepEqual(animStates(92).slice(-1), ['cancelled']);
+    assert.deepEqual(sceneService.status().scenes, { busy: true, running: null, pending: 1 });
+    // the running animation gets a result with images only: it errors and the queue moves on
+    sceneListener({ type: 'flow-result', requestId: sent[0].requestId, projectUrl: PROJECT, images: [image] });
+    assert.deepEqual(animStates(90).slice(-1), ['error']);
+    assert.match(lastAnim(90).error, /no tiene vídeos utilizables/);
+    assert.equal(sent.at(-1).prompt, 'scene 72');
+    assert.deepEqual(sceneService.cancelScenes(), { cancelled: 0 });
+    finish(sent.at(-1));
+  });
+
+  await test('animation jobs conflict with character jobs and validate their payload', async () => {
+    sent.length = 0;
+    const characterArgs = { videoId: sceneVideo.id, characterKey: 'personaje-1-tomas', name: 'Personaje 1 — Tomás (protagonista)', role: '', prompt: 'sheet 1' };
+    sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(90)] });
+    assert.throws(() => sceneService.generate(characterArgs), /cola de escenas y animaciones/);
+    finishClip(sent[0]);
+    sceneService.generate(characterArgs);
+    assert.throws(() => sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(90)] }), /generación de personaje en curso/);
+    sceneListener({ type: 'flow-error', requestId: sent.at(-1).requestId, message: 'x' });
+
+    const bad = (animations, pattern) => assert.throws(() => sceneService.generateAnimations({ videoId: sceneVideo.id, animations }), pattern);
+    bad([], /Lista de animaciones no válida/);
+    bad([{ number: 0, prompt: 'p' }], /Número de escena no válido/);
+    bad([{ number: 1, prompt: '  ' }], /prompt de la animación está vacío/);
+    assert.throws(() => sceneService.generateAnimations({ videoId: 'nope', animations: [animation(1)] }), /Video no encontrado/);
+    connected = false;
+    assert.throws(() => sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(1)] }), /no está conectada/);
+    connected = true;
+
+    // a disconnect fails the running animation and the waiting ones
+    sent.length = 0;
+    sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [animation(90), animation(91)] });
+    statusListener(false);
+    assert.deepEqual(animStates(90).slice(-1), ['error']);
+    assert.match(lastAnim(91).error, /se desconectó/);
+  });
+
+  await test('an animation has its own, longer watchdog', async () => {
+    const watchedEvents = [];
+    const watched = createFlowService({
+      bridge: { isConnected: () => true, sendFlowJob: () => {}, onMessage: () => {}, onStatusChange: () => {} },
+      store: sceneStore,
+      videos: sceneVideos,
+      pushToWindow: (c, p) => watchedEvents.push([c, p]),
+      jobTimeoutMs: 30,
+      animationTimeoutMs: 150,
+    });
+    watched.generateAnimations({ videoId: sceneVideo.id, animations: [animation(90)] });
+    await sleep(70);
+    assert.equal(watched.status().animations.busy, true, 'survives the image watchdog');
+    await waitUntil(() => !watched.status().animations.busy, 'animation watchdog');
+    assert.match(watchedEvents.findLast(([c]) => c === 'flow:animation-status')[1].error, /tardó demasiado/);
   });
 
   fs.rmSync(sceneRoot, { recursive: true, force: true });

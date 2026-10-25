@@ -5,6 +5,8 @@
 //         <userData>/videos/<videoId>/characters/<characterKey>/<timestamp>-<n>.<ext>
 //         <userData>/videos/<videoId>/scenes.json
 //         <userData>/videos/<videoId>/scenes/<sceneNumber>/<timestamp>-<n>.<ext>
+//         <userData>/videos/<videoId>/animations.json
+//         <userData>/videos/<videoId>/animations/<number>/<timestamp>-<n>.<mp4|webm|mov>
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -32,13 +34,24 @@ const REFERENCES_MAX = 6;
 // Every Flow request asks for this model and image count; the extension applies them in the page
 const FLOW_MODEL = 'nano-banana-pro';
 const FLOW_OUTPUTS = 2;
+// Animations: the extension sends the generated video(s) as base64. A video generation takes much
+// longer than an image one, hence its own watchdog.
+const VIDEO_FILE = /^\d{10,16}-\d{1,3}\.(mp4|webm|mov)$/;
+const VIDEO_EXTENSIONS = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' };
+const VIDEO_MAX_BYTES = 24 * 1024 * 1024;
+const MAX_VIDEOS = 4;
+const MAX_ANIMATION_GENERATIONS = 3;
+const ANIMATIONS_PER_BATCH_MAX = 200;
+const ANIMATION_JOB_TIMEOUT_MS = 15 * 60 * 1000;
+// Video settings every animate job asks for (Omni 1.1 Flash); the extension applies them in the page
+const ANIMATION_VIDEO_SETTINGS = Object.freeze({ model: 'omni-1.1-flash', resolution: '720p', seconds: 8, aspect: '16:9', outputs: 1 });
 const MIME_BY_EXTENSION = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg' };
 
-// Flow asset id inside a result image URL: https://flow-content.google/image/<uuid>?Expires=... ; null when absent
+// Flow asset id inside a result image/video URL: https://flow-content.google/image|video/<uuid>?Expires=... ; null when absent
 const FLOW_ASSET_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function flowAssetId(url) {
   if (typeof url !== 'string') return null;
-  const match = /\/image\/([^/?#]+)/.exec(url);
+  const match = /\/(?:image|video)\/([^/?#]+)/.exec(url);
   return match && FLOW_ASSET_ID.test(match[1]) ? match[1].toLowerCase() : null;
 }
 
@@ -54,6 +67,11 @@ function validKey(value) {
 
 function validFile(value) {
   if (typeof value !== 'string' || !IMAGE_FILE.test(value)) throw new Error('Archivo de imagen no válido.');
+  return value;
+}
+
+function validVideoFile(value) {
+  if (typeof value !== 'string' || !VIDEO_FILE.test(value)) throw new Error('Archivo de vídeo no válido.');
   return value;
 }
 
@@ -91,6 +109,21 @@ function decodeImages(images) {
     const bytes = Buffer.from(image.base64, 'base64');
     if (bytes.length === 0 || bytes.length > IMAGE_MAX_BYTES) throw new Error('Tamaño de imagen no válido.');
     return { extension, bytes, assetId: flowAssetId(image.sourceUrl) };
+  });
+}
+
+// videos: [{ mime, base64, sourceUrl }] -> [{ extension, bytes, assetId }], validated
+function decodeVideos(videos) {
+  if (!Array.isArray(videos) || videos.length === 0 || videos.length > MAX_VIDEOS) {
+    throw new Error('La animación no tiene vídeos utilizables.');
+  }
+  return videos.map((video) => {
+    const extension = VIDEO_EXTENSIONS[String(video?.mime ?? '').split(';')[0].trim().toLowerCase()];
+    if (!extension) throw new Error('Tipo de vídeo no compatible.');
+    if (typeof video.base64 !== 'string') throw new Error('Datos de vídeo no válidos.');
+    const bytes = Buffer.from(video.base64, 'base64');
+    if (bytes.length === 0 || bytes.length > VIDEO_MAX_BYTES) throw new Error('Tamaño de vídeo no válido.');
+    return { extension, bytes, assetId: flowAssetId(video.sourceUrl) };
   });
 }
 
@@ -236,18 +269,33 @@ function createFlowStore(userDataDir) {
     return { name: character.selectedFile, mime, base64: fs.readFileSync(file).toString('base64'), assetId };
   }
 
-  // Scenes: videos/<id>/scenes.json holds [{ number, title, prompt, sheetRefs, generations }]
+  // Scenes: videos/<id>/scenes.json holds [{ number, title, prompt, sheetRefs, generations, selectedFile }]
   const scenesIndexFile = (videoId) => path.join(videoDir(videoId), 'scenes.json');
   const sceneDir = (videoId, number) => path.join(videoDir(videoId), 'scenes', String(validScene(number)));
 
   function listScenes(videoId) {
     try {
       const data = JSON.parse(fs.readFileSync(scenesIndexFile(videoId), 'utf8'));
-      return Array.isArray(data) ? data : [];
+      return Array.isArray(data) ? data.map((scene) => ({ ...scene, selectedFile: scene.selectedFile ?? null })) : [];
     } catch (error) {
       if (error.message === 'ID de video no válido.') throw error;
       return [];
     }
+  }
+
+  // Marks one stored image as the chosen one of a scene; the file must belong to that scene
+  function selectScene(videoId, number, file) {
+    validScene(number);
+    validFile(file);
+    const scenes = listScenes(videoId);
+    const scene = scenes.find((item) => item.number === number);
+    if (!scene) throw new Error('Escena no encontrada.');
+    if (!scene.generations.some((generation) => generation.files.includes(file))) {
+      throw new Error('Esa imagen no pertenece a esta escena.');
+    }
+    scene.selectedFile = file;
+    writeAtomic(scenesIndexFile(videoId), JSON.stringify(scenes, null, 2));
+    return scene;
   }
 
   // Records one generation of a scene (creating the scene or refreshing its text) and keeps only the
@@ -258,7 +306,7 @@ function createFlowStore(userDataDir) {
     const scenes = listScenes(videoId);
     let scene = scenes.find((item) => item.number === number);
     if (!scene) {
-      scene = { number, title: '', prompt: '', sheetRefs: [], generations: [] };
+      scene = { number, title: '', prompt: '', sheetRefs: [], generations: [], selectedFile: null };
       scenes.push(scene);
       scenes.sort((a, b) => a.number - b.number);
     }
@@ -280,6 +328,10 @@ function createFlowStore(userDataDir) {
     for (const old of scene.generations.splice(0, Math.max(0, scene.generations.length - MAX_SCENE_GENERATIONS))) {
       for (const file of old.files) fs.rmSync(path.join(dir, file), { force: true });
     }
+    // The chosen image goes away with its generation
+    if (scene.selectedFile && !scene.generations.some((generation) => generation.files.includes(scene.selectedFile))) {
+      scene.selectedFile = null;
+    }
     fs.mkdirSync(videoDir(videoId), { recursive: true });
     writeAtomic(scenesIndexFile(videoId), JSON.stringify(scenes, null, 2));
     return scene;
@@ -295,7 +347,87 @@ function createFlowStore(userDataDir) {
     return full;
   }
 
-  return { list, upsert, addGeneration, select, setApproved, filePath, readReference, listScenes, addSceneGeneration, sceneFilePath };
+  // Flow asset id of the chosen image of a scene (the source frame of its animation); throws a
+  // Spanish message when the scene has no chosen image or the image has no Flow id
+  function selectedSceneAssetId(videoId, number) {
+    const scene = listScenes(videoId).find((item) => item.number === number);
+    const generation = scene?.selectedFile ? scene.generations.find((item) => item.files.includes(scene.selectedFile)) : null;
+    const label = String(number).padStart(2, '0');
+    if (!generation) throw new Error(`Elige primero la imagen de la escena ${label} en Flow.`);
+    const assetId = generation.assetIds?.[generation.files.indexOf(scene.selectedFile)] ?? null;
+    if (!assetId) throw new Error(`La imagen elegida de la escena ${label} no tiene identificador de Flow. Vuelve a generarla.`);
+    return assetId;
+  }
+
+  // Animations: videos/<id>/animations.json holds [{ number, title, prompt, hook, generations }]
+  const animationsIndexFile = (videoId) => path.join(videoDir(videoId), 'animations.json');
+  const animationDir = (videoId, number) => path.join(videoDir(videoId), 'animations', String(validScene(number)));
+
+  function listAnimations(videoId) {
+    try {
+      const data = JSON.parse(fs.readFileSync(animationsIndexFile(videoId), 'utf8'));
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      if (error.message === 'ID de video no válido.') throw error;
+      return [];
+    }
+  }
+
+  // Records one generation of an animation (creating it or refreshing its text) and keeps only the
+  // latest MAX_ANIMATION_GENERATIONS, deleting the files of the older ones
+  function addAnimationGeneration(videoId, { number, title = '', prompt, hook = false, sourceAssetId = null, projectUrl = null, videos: clips }) {
+    validScene(number);
+    const decoded = decodeVideos(clips);
+    const animations = listAnimations(videoId);
+    let animation = animations.find((item) => item.number === number);
+    if (!animation) {
+      animation = { number, title: '', prompt: '', hook: false, generations: [] };
+      animations.push(animation);
+      animations.sort((a, b) => a.number - b.number);
+    }
+    animation.title = boundedText(title, NAME_MAX, 'animation title');
+    animation.prompt = boundedText(prompt, PROMPT_MAX, 'animation prompt');
+    animation.hook = hook === true;
+
+    const at = Date.now();
+    const dir = animationDir(videoId, number);
+    fs.mkdirSync(dir, { recursive: true });
+    const files = decoded.map(({ extension, bytes }, index) => {
+      const name = `${at}-${index + 1}.${extension}`;
+      writeAtomic(path.join(dir, name), bytes);
+      return name;
+    });
+    animation.generations.push({
+      id: crypto.randomUUID(),
+      at,
+      files,
+      assetIds: assetIdsOf(decoded),
+      sourceAssetId: typeof sourceAssetId === 'string' && FLOW_ASSET_ID.test(sourceAssetId) ? sourceAssetId : null,
+      projectUrl: projectUrl && FLOW_PROJECT_URL.test(projectUrl) ? projectUrl : null,
+    });
+    for (const old of animation.generations.splice(0, Math.max(0, animation.generations.length - MAX_ANIMATION_GENERATIONS))) {
+      for (const file of old.files) fs.rmSync(path.join(dir, file), { force: true });
+    }
+    fs.mkdirSync(videoDir(videoId), { recursive: true });
+    writeAtomic(animationsIndexFile(videoId), JSON.stringify(animations, null, 2));
+    return animation;
+  }
+
+  // Absolute path of one stored animation video, or throws when any part is invalid or the file is missing
+  function animationFilePath(videoId, number, file) {
+    validVideoFile(file);
+    const base = animationDir(videoId, Number(number));
+    const full = path.join(base, file);
+    if (path.dirname(full) !== base) throw new Error('Ruta de vídeo no válida.');
+    if (!fs.statSync(full).isFile()) throw new Error('Vídeo no encontrado.');
+    return full;
+  }
+
+  return {
+    list, upsert, addGeneration, select, setApproved, filePath, readReference,
+    listScenes, addSceneGeneration, selectScene, sceneFilePath, selectedSceneAssetId,
+    listAnimations, addAnimationGeneration, animationFilePath,
+  };
 }
 
 // Sheet number a stored character answers to: "Personaje 2 — Ana" (name) or "personaje-2-ana" (key)
@@ -324,15 +456,24 @@ function resolveSheets(characters, refs) {
 
 // bridge: createBridge(); videos: video store; pushToWindow(channel, payload)
 //
-// One Flow job runs at a time, shared by character sheets and scenes. Scenes go through a serial
-// queue: the next one is sent only after the previous one finished (result or error). Character
-// jobs push flow:progress / flow:captcha / flow:result / flow:error; scene jobs push only
-// flow:scene-status { videoId, number, state, percent, captcha, error, scene } with state one of
-// queued | running | done | error | cancelled, so the character cards never see scene traffic.
-function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs = JOB_TIMEOUT_MS }) {
-  // The one job in flight: { requestId, videoId, kind: 'character' | 'scene', characterKey?, scene?, timer }
+// One Flow job runs at a time, shared by character sheets, scenes and animations. Scenes and
+// animations go through one serial queue: the next item is sent only after the previous one finished
+// (result or error). Character jobs push flow:progress / flow:captcha / flow:result / flow:error;
+// scene jobs push only flow:scene-status { videoId, number, state, percent, captcha, error, scene } and
+// animation jobs flow:animation-status { ..., animation } with state one of
+// queued | running | done | error | cancelled, so the character cards never see their traffic.
+function createFlowService({
+  bridge,
+  store,
+  videos,
+  pushToWindow,
+  jobTimeoutMs = JOB_TIMEOUT_MS,
+  animationTimeoutMs = ANIMATION_JOB_TIMEOUT_MS,
+}) {
+  // The one job in flight: { requestId, videoId, kind: 'character' | 'scene' | 'animation',
+  // characterKey?, scene?, animation?, timer }
   let job = null;
-  // Scenes waiting for their turn: [{ videoId, number, title, prompt, sheetRefs }]
+  // Items waiting for their turn: [{ type: 'scene' | 'animation', videoId, number, title, prompt, sheetRefs?, hook? }]
   const queue = [];
 
   const findVideo = (videoId) => videos.list().find((video) => video.id === videoId);
@@ -340,6 +481,14 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
   function sceneStatus(videoId, number, state, extra = {}) {
     pushToWindow('flow:scene-status', { videoId, number, state, percent: null, captcha: false, error: null, ...extra });
   }
+
+  function animationStatus(videoId, number, state, extra = {}) {
+    pushToWindow('flow:animation-status', { videoId, number, state, percent: null, captcha: false, error: null, ...extra });
+  }
+
+  // Status event of a scene or animation (type 'scene' | 'animation'), on its own channel
+  const itemStatus = (type, videoId, number, state, extra) =>
+    (type === 'animation' ? animationStatus : sceneStatus)(videoId, number, state, extra);
 
   function finishJob() {
     if (job) clearTimeout(job.timer);
@@ -350,17 +499,22 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
     if (!job) return;
     const failed = job;
     finishJob();
-    if (failed.kind === 'scene') {
-      sceneStatus(failed.videoId, failed.scene.number, 'error', { error: message });
+    if (failed.kind === 'scene' || failed.kind === 'animation') {
+      itemStatus(failed.kind, failed.videoId, (failed.scene ?? failed.animation).number, 'error', { error: message });
       pump();
     } else {
       pushToWindow('flow:error', { videoId: failed.videoId, characterKey: failed.characterKey, message });
     }
   }
 
-  // Empties the waiting queue, telling the UI why each scene will not run
-  function dropQueue(state, error = null) {
-    for (const item of queue.splice(0)) sceneStatus(item.videoId, item.number, state, { error });
+  // Empties the waiting queue (only one type when given), telling the UI why each item will not run
+  function dropQueue(state, error = null, type = null) {
+    const dropped = [];
+    for (let index = queue.length - 1; index >= 0; index -= 1) {
+      if (!type || queue[index].type === type) dropped.unshift(...queue.splice(index, 1));
+    }
+    for (const item of dropped) itemStatus(item.type, item.videoId, item.number, state, { error });
+    return dropped.length;
   }
 
   function rememberProject(videoId, projectUrl) {
@@ -369,8 +523,8 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
     videos.update(videoId, { flowProjectUrl: projectUrl });
   }
 
-  function startTimer() {
-    const timer = setTimeout(() => failJob('Flow tardó demasiado en responder. Revisa la pestaña de Flow e inténtalo de nuevo.'), jobTimeoutMs);
+  function startTimer(timeoutMs = jobTimeoutMs) {
+    const timer = setTimeout(() => failJob('Flow tardó demasiado en responder. Revisa la pestaña de Flow e inténtalo de nuevo.'), timeoutMs);
     timer.unref?.();
     return timer;
   }
@@ -378,7 +532,8 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
   function handleBridgeMessage(message) {
     if (!job || message.requestId !== job.requestId) return;
     const { videoId, characterKey, kind } = job;
-    const number = job.scene?.number;
+    const number = (job.scene ?? job.animation)?.number;
+    const queued = kind === 'scene' || kind === 'animation';
 
     if (message.type === 'flow-project') {
       try {
@@ -387,18 +542,34 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
         failJob(error.message);
         return;
       }
-      if (kind === 'scene') sceneStatus(videoId, number, 'running');
+      if (queued) itemStatus(kind, videoId, number, 'running');
       else pushToWindow('flow:progress', { videoId, characterKey, stage: 'project', percent: null });
     } else if (message.type === 'flow-progress') {
       const percent = Number.isFinite(message.percent) ? Math.max(0, Math.min(100, message.percent)) : null;
-      if (kind === 'scene') sceneStatus(videoId, number, 'running', { percent });
+      if (queued) itemStatus(kind, videoId, number, 'running', { percent });
       else pushToWindow('flow:progress', { videoId, characterKey, stage: 'generating', percent });
     } else if (message.type === 'flow-captcha') {
       const active = message.active !== false;
-      if (kind === 'scene') sceneStatus(videoId, number, 'running', { captcha: active });
+      if (queued) itemStatus(kind, videoId, number, 'running', { captcha: active });
       else pushToWindow('flow:captcha', { videoId, characterKey, active });
     } else if (message.type === 'flow-result') {
       try {
+        if (kind === 'animation') {
+          const animation = store.addAnimationGeneration(videoId, {
+            ...job.animation,
+            projectUrl: message.projectUrl,
+            videos: message.videos,
+          });
+          try {
+            rememberProject(videoId, message.projectUrl);
+          } catch {
+            // The videos are already stored; the project link is a convenience
+          }
+          finishJob();
+          animationStatus(videoId, number, 'done', { percent: 100, animation });
+          pump();
+          return;
+        }
         if (kind === 'scene') {
           const scene = store.addSceneGeneration(videoId, {
             ...job.scene,
@@ -441,7 +612,7 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
     validKey(characterKey);
     const video = findVideo(videoId);
     if (!video) throw new Error('Video no encontrado.');
-    if (job?.kind === 'scene' || queue.length > 0) throw new Error('La cola de escenas está en curso. Espera a que termine o detenla.');
+    if ((job && job.kind !== 'character') || queue.length > 0) throw new Error('La cola de escenas y animaciones está en curso. Espera a que termine o detenla.');
     if (job) throw new Error('Ya hay otra generación de Flow en curso.');
     if (!bridge.isConnected()) throw new Error('La extensión del navegador no está conectada.');
 
@@ -480,6 +651,27 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
       const item = queue.shift();
       const video = findVideo(item.videoId);
       const requestId = crypto.randomUUID();
+      if (item.type === 'animation') {
+        try {
+          if (!video) throw new Error('Video no encontrado.');
+          // The scene's chosen image is the start frame; without it only this animation fails
+          const sourceAssetId = store.selectedSceneAssetId(item.videoId, item.number);
+          job = { requestId, videoId: item.videoId, kind: 'animation', animation: { ...item, sourceAssetId }, timer: startTimer(animationTimeoutMs) };
+          animationStatus(item.videoId, item.number, 'running');
+          bridge.sendFlowJob({
+            requestId,
+            kind: 'animate',
+            prompt: item.prompt,
+            projectUrl: video.flowProjectUrl ?? null,
+            sourceAssetId,
+            video: { ...ANIMATION_VIDEO_SETTINGS },
+          });
+        } catch (error) {
+          finishJob();
+          animationStatus(item.videoId, item.number, 'error', { error: error.message });
+        }
+        continue;
+      }
       try {
         if (!video) throw new Error('Video no encontrado.');
         const references = referencesFor(item);
@@ -514,6 +706,7 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
       const prompt = boundedText(scene?.prompt, PROMPT_MAX, 'scene prompt');
       if (prompt.trim() === '') throw new Error('El prompt de la escena está vacío.');
       return {
+        type: 'scene',
         videoId,
         number: validScene(scene?.number),
         title: boundedText(scene?.title ?? '', NAME_MAX, 'scene title'),
@@ -522,29 +715,71 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
       };
     });
 
+    const added = enqueue(videoId, items);
+    return { queued: added };
+  }
+
+  // Adds items to the shared queue unless the same scene/animation is already running or waiting
+  function enqueue(videoId, items) {
     let added = 0;
     for (const item of items) {
-      const busy = (job?.kind === 'scene' && job.videoId === videoId && job.scene.number === item.number)
-        || queue.some((waiting) => waiting.videoId === videoId && waiting.number === item.number);
+      const running = job?.kind === item.type ? job[item.type] : null;
+      const busy = (running && job.videoId === videoId && running.number === item.number)
+        || queue.some((waiting) => waiting.type === item.type && waiting.videoId === videoId && waiting.number === item.number);
       if (busy) continue;
       queue.push(item);
       added += 1;
-      sceneStatus(videoId, item.number, 'queued');
+      itemStatus(item.type, videoId, item.number, 'queued');
     }
     pump();
-    return { queued: added };
+    return added;
+  }
+
+  // animations: [{ number, title, prompt, hook }]; the source image of each is the chosen image of the
+  // scene with the same number. Shares the serial queue with scenes.
+  function generateAnimations({ videoId, animations } = {}) {
+    validVideoId(videoId);
+    if (!findVideo(videoId)) throw new Error('Video no encontrado.');
+    if (!Array.isArray(animations) || animations.length === 0 || animations.length > ANIMATIONS_PER_BATCH_MAX) {
+      throw new Error('Lista de animaciones no válida.');
+    }
+    if (job?.kind === 'character') throw new Error('Hay una generación de personaje en curso. Espera a que termine.');
+    if (!bridge.isConnected()) throw new Error('La extensión del navegador no está conectada.');
+
+    const items = animations.map((animation) => {
+      const prompt = boundedText(animation?.prompt, PROMPT_MAX, 'animation prompt');
+      if (prompt.trim() === '') throw new Error('El prompt de la animación está vacío.');
+      return {
+        type: 'animation',
+        videoId,
+        number: validScene(animation?.number),
+        title: boundedText(animation?.title ?? '', NAME_MAX, 'animation title'),
+        prompt,
+        hook: animation?.hook === true,
+      };
+    });
+    return { queued: enqueue(videoId, items) };
   }
 
   // Drops every waiting scene; the one already in Flow cannot be recalled and finishes normally
   function cancelScenes() {
-    const cancelled = queue.length;
-    dropQueue('cancelled');
-    return { cancelled };
+    return { cancelled: dropQueue('cancelled', null, 'scene') };
   }
 
+  // Same for the waiting animations
+  function cancelAnimations() {
+    return { cancelled: dropQueue('cancelled', null, 'animation') };
+  }
+
+  const pendingOf = (type) => queue.filter((item) => item.type === type).length;
   const status = () => ({
     ...(job?.kind === 'character' ? { busy: true, videoId: job.videoId, characterKey: job.characterKey } : { busy: false }),
-    scenes: { busy: job?.kind === 'scene' || queue.length > 0, running: job?.kind === 'scene' ? job.scene.number : null, pending: queue.length },
+    scenes: { busy: job?.kind === 'scene' || pendingOf('scene') > 0, running: job?.kind === 'scene' ? job.scene.number : null, pending: pendingOf('scene') },
+    animations: {
+      busy: job?.kind === 'animation' || pendingOf('animation') > 0,
+      running: job?.kind === 'animation' ? job.animation.number : null,
+      pending: pendingOf('animation'),
+    },
   });
 
   // True while a character or scene job for this video is running or queued
@@ -572,7 +807,7 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
     failJob('La extensión del navegador se desconectó.');
   });
 
-  return { generate, generateScenes, cancelScenes, status, isVideoBusy, setProject, projectUrl, handleBridgeMessage, store };
+  return { generate, generateScenes, cancelScenes, generateAnimations, cancelAnimations, status, isVideoBusy, setProject, projectUrl, handleBridgeMessage, store };
 }
 
 function registerFlowIpc({ ipcMain, shell, service }) {
@@ -583,8 +818,12 @@ function registerFlowIpc({ ipcMain, shell, service }) {
   ipcMain.handle('flow:select', (_event, { videoId, characterKey, file } = {}) => store.select(videoId, characterKey, file));
   ipcMain.handle('flow:approve', (_event, { videoId, keys, approved } = {}) => store.setApproved(videoId, keys, approved));
   ipcMain.handle('flow:scenes', (_event, { videoId } = {}) => store.listScenes(videoId));
+  ipcMain.handle('flow:scene-select', (_event, { videoId, number, file } = {}) => store.selectScene(videoId, number, file));
   ipcMain.handle('flow:scenes-generate', (_event, payload = {}) => service.generateScenes(payload));
   ipcMain.handle('flow:scenes-cancel', () => service.cancelScenes());
+  ipcMain.handle('flow:animations', (_event, { videoId } = {}) => store.listAnimations(videoId));
+  ipcMain.handle('flow:animations-generate', (_event, payload = {}) => service.generateAnimations(payload));
+  ipcMain.handle('flow:animations-cancel', () => service.cancelAnimations());
   ipcMain.handle('flow:set-project', (_event, { videoId, url } = {}) => service.setProject(videoId, url));
   ipcMain.handle('flow:open-project', async (_event, { videoId } = {}) => {
     await shell.openExternal(service.projectUrl(videoId));

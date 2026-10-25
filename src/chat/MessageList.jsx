@@ -5,6 +5,7 @@ import { parseIdeas } from './parseIdeas.js';
 import CharacterCards from '../flow/CharacterCards.jsx';
 import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
 import SceneCards from '../flow/SceneCards.jsx';
+import AnimationCards from '../flow/AnimationCards.jsx';
 import { parseImageScenes } from '../flow/parseImageScenes.js';
 import { chosenIdeaNumber, hasUserMessageAfter } from './chosenIdea.js';
 import { isScriptMessage } from '../timeline/stages.js';
@@ -50,6 +51,7 @@ export default function MessageList({
   scriptVoice,
   flow,
   scenes,
+  animations,
   onOpenTimeline,
   onOpenSettings,
 }) {
@@ -133,7 +135,17 @@ export default function MessageList({
           return (
             <div key={message.id} className="chat-message chat-message--assistant chat-message--ideas">
               {blockResult.intro && <Markdown>{blockResult.intro}</Markdown>}
-              <SceneCards block={blockResult.block} scenes={blockResult.scenes} flow={scenes} characterBusy={flow.job !== null} />
+              {blockResult.kind === 'animations' ? (
+                <AnimationCards
+                  block={blockResult.block}
+                  animations={blockResult.scenes}
+                  flow={animations}
+                  sceneRecords={scenes.records}
+                  characterBusy={flow.job !== null}
+                />
+              ) : (
+                <SceneCards block={blockResult.block} scenes={blockResult.scenes} flow={scenes} characterBusy={flow.job !== null} />
+              )}
               {blockResult.outro && <Markdown>{blockResult.outro}</Markdown>}
               <details className="char-original">
                 <summary>Mensaje original</summary>

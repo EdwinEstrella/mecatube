@@ -9,6 +9,7 @@ import { syncChosenIdea } from './timeline/syncChosenIdea.js';
 import { useScriptVoice } from './voice/useScriptVoice.js';
 import { useFlowCharacters } from './flow/useFlowCharacters.js';
 import { useFlowScenes } from './flow/useFlowScenes.js';
+import { useFlowAnimations } from './flow/useFlowAnimations.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -281,6 +282,7 @@ export default function ChatView({
   const activeTitle = conversations.find((item) => item.id === activeId)?.title ?? '';
   const flow = useFlowCharacters(activeId, activeTitle, isConnected);
   const flowScenes = useFlowScenes(activeId, activeTitle, isConnected);
+  const flowAnimations = useFlowAnimations(activeId, activeTitle, isConnected, flowScenes);
 
   const isBusy = pending !== null;
   const isWaiting = isBusy && pending.conversationId === activeId;
@@ -339,6 +341,7 @@ export default function ChatView({
           scriptVoice={scriptVoice}
           flow={flow}
           scenes={flowScenes}
+          animations={flowAnimations}
           onOpenTimeline={onOpenTimeline}
           onOpenSettings={onOpenSettings}
         />

@@ -11,6 +11,19 @@ export function latestFiles(record) {
   return generations.length > 0 ? generations[generations.length - 1].files : [];
 }
 
+// Every stored image of a scene (all kept generations, oldest first), or []
+export function allFiles(record) {
+  return (record?.generations ?? []).flatMap((generation) => generation.files);
+}
+
+// How many of the given scenes have a chosen image that still exists
+export function selectedCount(scenes, records) {
+  return scenes.filter((scene) => {
+    const record = records?.[scene.number];
+    return Boolean(record?.selectedFile) && allFiles(record).includes(record.selectedFile);
+  }).length;
+}
+
 export const isActive = (status) => status?.state === 'queued' || status?.state === 'running';
 
 // Label of a scene: { tone: 'idle' | 'active' | 'done' | 'error' | 'warn', text }

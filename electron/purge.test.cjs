@@ -26,12 +26,14 @@ function setup(isVideoBusy) {
 
 function seedVideoFiles(dir, id) {
   const base = path.join(dir, 'videos', id);
-  for (const sub of ['characters', 'scenes', 'voice']) fs.mkdirSync(path.join(base, sub), { recursive: true });
+  for (const sub of ['characters', 'scenes', 'animations', 'voice']) fs.mkdirSync(path.join(base, sub), { recursive: true });
   fs.writeFileSync(path.join(base, 'characters', 'a.png'), 'x');
   fs.writeFileSync(path.join(base, 'scenes', '1.png'), 'x');
+  fs.writeFileSync(path.join(base, 'animations', '1.mp4'), 'x');
   fs.writeFileSync(path.join(base, 'voice', 'narration.wav'), 'x');
   fs.writeFileSync(path.join(base, 'characters.json'), '[]');
   fs.writeFileSync(path.join(base, 'scenes.json'), '[]');
+  fs.writeFileSync(path.join(base, 'animations.json'), '[]');
   return base;
 }
 
@@ -105,7 +107,7 @@ test('a new illustrator chat clears the previous illustration data but keeps voi
   assert.equal(relinked.illustratorConversationId, 'chat-new');
   assert.equal(relinked.scriptConversationId, 'script-1');
   assert.equal(relinked.flowProjectUrl, null);
-  for (const entry of ['characters', 'scenes', 'characters.json', 'scenes.json']) {
+  for (const entry of ['characters', 'scenes', 'animations', 'characters.json', 'scenes.json', 'animations.json']) {
     assert.equal(fs.existsSync(path.join(base, entry)), false, entry);
   }
   assert.equal(fs.existsSync(path.join(base, 'voice', 'narration.wav')), true);

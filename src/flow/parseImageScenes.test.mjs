@@ -41,8 +41,9 @@ test('standard Etapa 3 output', () => {
   assert.deepEqual(result.block, { index: 1, total: 3, from: 1, to: 20 });
   assert.equal(result.intro, '');
   assert.equal(result.scenes.length, 3);
-  assert.deepEqual(result.scenes[0], { number: 1, kind: 'scene', title: 'Tomás', sheetRefs: ['1'], prompt: P1 });
-  assert.deepEqual(result.scenes[1], { number: 2, kind: 'explanation', title: 'infografía central', sheetRefs: [], prompt: P2 });
+  assert.equal(result.kind, 'images');
+  assert.deepEqual(result.scenes[0], { number: 1, kind: 'scene', title: 'Tomás', sheetRefs: ['1'], hook: false, prompt: P1 });
+  assert.deepEqual(result.scenes[1], { number: 2, kind: 'explanation', title: 'infografía central', sheetRefs: [], hook: false, prompt: P2 });
   assert.deepEqual(result.scenes[2].sheetRefs, ['1', '2']);
   assert.equal(result.scenes[2].title, 'Tomás, Ana');
   assert.match(result.outro, /¿Paso al siguiente bloque\?/);
@@ -126,9 +127,84 @@ test('returns null for everything else', () => {
   assert.equal(parseImageScenes(null), null);
   assert.equal(parseImageScenes('Hola, ¿qué tal?'), null);
   assert.equal(parseImageScenes('**Personaje 1 — Tomás**\nHoja 1 · Rol: x.\n```\nsheet\n```'), null);
-  const animation = ['**Bloque 1 de 3 — Animaciones 1 a 20**', '**Animación 01 — Escena · Tomás (hoja 1)**', '```', 'p', '```'].join('\n');
-  assert.equal(parseImageScenes(animation), null);
+  assert.equal(parseImageScenes('**Bloque 1 de 3 — Miniaturas**\n**Imagen 01 — Escena · A**\n```\np\n```'), null);
   assert.equal(parseImageScenes('Mira la Imagen 3 - es genial'), null);
+});
+
+test('hook tag in image titles (with accents, casing and explanations)', () => {
+  const text = [
+    '**Bloque 1 de 3 — Imágenes 1 a 20**',
+    '**Imagen 01 — Escena · Gancho · Tomás (hoja 1)**',
+    '```',
+    'a',
+    '```',
+    '**Imagen 02 — Explicación · Gancho (infografía central)**',
+    '```',
+    'b',
+    '```',
+    '**Imagen 03 — escena · GANCHO · Tomás y Ana (hojas 1 y 2)**',
+    '```',
+    'c',
+    '```',
+    '**Imagen 04 — Escena · El gancho del anzuelo (hoja 1)**',
+    '```',
+    'd',
+    '```',
+    '**Imagen 05 — Escena · Tomás (hoja 1)**',
+    '```',
+    'e',
+    '```',
+  ].join('\n');
+  const { kind, scenes } = parseImageScenes(text);
+  assert.equal(kind, 'images');
+  assert.deepEqual(scenes.map((scene) => scene.hook), [true, true, true, false, false]);
+  assert.deepEqual(scenes.map((scene) => scene.title), ['Tomás', 'infografía central', 'Tomás y Ana', 'El gancho del anzuelo', 'Tomás']);
+  assert.deepEqual(scenes.map((scene) => scene.kind), ['scene', 'explanation', 'scene', 'scene', 'scene']);
+  assert.deepEqual(scenes[2].sheetRefs, ['1', '2']);
+});
+
+test('animation blocks with and without hook', () => {
+  const text = [
+    '**Bloque 1 de 3 — Animaciones 1 a 20**',
+    '**Animación 01 — Escena · Gancho · Tomás (hoja 1)**',
+    '```',
+    'Slow push-in on the caveman.',
+    '```',
+    '**Animación 02 — Explicación (infografía)**',
+    '```',
+    'The arrows animate.',
+    '```',
+    '**Animación 03 — Explicación · Gancho (comparativa)**',
+    '```',
+    'x',
+    '```',
+    '¿Paso al siguiente bloque de animaciones?',
+  ].join('\n');
+  const result = parseImageScenes(text);
+  assert.equal(result.kind, 'animations');
+  assert.deepEqual(result.block, { index: 1, total: 3, from: 1, to: 20 });
+  assert.deepEqual(result.scenes[0], { number: 1, kind: 'scene', title: 'Tomás', sheetRefs: ['1'], hook: true, prompt: 'Slow push-in on the caveman.' });
+  assert.deepEqual(result.scenes.map((scene) => [scene.number, scene.kind, scene.title, scene.hook]), [
+    [1, 'scene', 'Tomás', true],
+    [2, 'explanation', 'infografía', false],
+    [3, 'explanation', 'comparativa', true],
+  ]);
+  assert.match(result.outro, /siguiente bloque de animaciones/);
+});
+
+test('corrected animations without block header and unaccented heading', () => {
+  const text = ['Animacion 07 - Escena · Gancho · Ana (hoja 2)', '```', 'p', '```'].join('\n');
+  const result = parseImageScenes(text);
+  assert.equal(result.kind, 'animations');
+  assert.equal(result.block, null);
+  assert.deepEqual(result.scenes.map((scene) => [scene.number, scene.title, scene.hook]), [[7, 'Ana', true]]);
+});
+
+test('a heading of the other kind is not an item', () => {
+  const text = ['**Imagen 01 — Escena · A**', '```', 'p', '```', '**Animación 01 — Escena · A**', '```', 'q', '```'].join('\n');
+  const result = parseImageScenes(text);
+  assert.equal(result.kind, 'images');
+  assert.equal(result.scenes.length, 1);
 });
 
 if (failures > 0) {
