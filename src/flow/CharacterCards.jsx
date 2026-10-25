@@ -46,7 +46,9 @@ function CharacterCard({ card, record, videoId, job, canStart, hasProject, error
       {card.role && <p className="char-card__role">{card.role}</p>}
 
       <details className="char-card__prompt">
-        <summary>Prompt</summary>
+        <summary>
+          Prompt <span className="char-card__chars">({card.prompt.length.toLocaleString('es')} caracteres)</span>
+        </summary>
         <div className="md-code">
           <div className="md-code__header">
             <span>prompt</span>

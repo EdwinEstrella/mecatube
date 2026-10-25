@@ -9,6 +9,7 @@ import { isScriptMessage } from '../timeline/stages.js';
 import { extractNarration } from '../voice/narration.js';
 import { afterRemaining } from '../voice/creditsText.js';
 import ScriptVoiceControl from '../voice/ScriptVoiceControl.jsx';
+import CopyScriptButton from './CopyScriptButton.jsx';
 
 const COLLAPSE_CHARS = 600;
 const COLLAPSE_LINES = 12;
@@ -119,6 +120,7 @@ export default function MessageList({
           return (
             <div key={message.id} className="chat-message chat-message--assistant">
               <Markdown>{message.content}</Markdown>
+              {narrationLengths[index] !== null && <CopyScriptButton text={message.content} />}
               {scriptVoice && narrationLengths[index] !== null && (
                 <ScriptVoiceControl
                   chars={narrationLengths[index]}

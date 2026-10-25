@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, protocol, safeStorage } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, protocol, safeStorage, dialog } = require('electron');
+const { createWorkspaceStore } = require('./workspaces.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -57,6 +58,8 @@ let secrets = null;
 let voice = null;
 // DeepSeek handles one prompt at a time: { requestId, conversationId } while a reply is in flight
 let inFlight = null;
+// True while a DeepSeek history read for a resync is running (the DeepSeek tab is busy)
+let resyncing = false;
 
 function pushToWindow(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
@@ -80,7 +83,8 @@ function handleBridgeMessage(message) {
     try {
       const reply = conversations.appendMessage(conversationId, 'assistant', String(message.text ?? ''));
       if (message.deepseekUrl) conversations.update(conversationId, { deepseekUrl: message.deepseekUrl });
-      pushToWindow('chat:done', { conversationId, message: reply });
+      // source is 'dom' when the extension could not read the final text from DeepSeek's history API
+      pushToWindow('chat:done', { conversationId, message: reply, source: message.source === 'dom' ? 'dom' : 'api' });
     } catch (error) {
       pushToWindow('chat:error', { conversationId, message: error.message });
     }
@@ -185,7 +189,7 @@ ipcMain.handle('videos:delete', (_event, payload) => {
   const id = payload?.id;
   videos.delete(id);
   // Generated narration lives next to the video record; id was validated by the store
-  fs.rmSync(path.join(app.getPath('userData'), 'videos', id), { recursive: true, force: true });
+  fs.rmSync(path.join(activeWorkspacePath, 'videos', id), { recursive: true, force: true });
 });
 
 ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
@@ -193,6 +197,7 @@ ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
   const content = typeof text === 'string' ? text : '';
   if (content.trim() === '') throw new Error('Message is empty.');
   if (inFlight) throw new Error('A reply is already in progress.');
+  if (resyncing) throw new Error('Se está resincronizando una conversación. Espera un momento.');
   if (!bridge.isConnected()) throw new Error('The DeepSeek extension is not connected.');
 
   const conversation = (conversationId && conversations.get(conversationId)) || conversations.create();
@@ -209,40 +214,132 @@ ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
   return { conversationId: conversation.id };
 });
 
+// Rewrites stored assistant replies with what DeepSeek's own history holds (repairs replies that
+// were stored truncated). Needs the extension, and cannot overlap a prompt in flight.
+ipcMain.handle('chat:resync', async (_event, { conversationId } = {}) => {
+  if (inFlight) throw new Error('Espera a que termine la respuesta en curso antes de resincronizar.');
+  if (resyncing) throw new Error('Ya hay una resincronización en curso.');
+  const conversation = conversationId ? conversations.get(conversationId) : null;
+  if (!conversation) throw new Error('La conversación ya no existe.');
+  if (!conversation.deepseekUrl) throw new Error('Esta conversación no tiene un chat de DeepSeek asociado.');
+  if (!bridge.isConnected()) throw new Error('La extensión del navegador no está conectada.');
+
+  resyncing = true;
+  try {
+    const remote = await bridge.requestHistory({ deepseekUrl: conversation.deepseekUrl });
+    const result = conversations.applyRemoteHistory(conversation.id, remote);
+    pushToWindow('chat:refresh', { conversationId: conversation.id });
+    return result;
+  } finally {
+    resyncing = false;
+  }
+});
+
 ipcMain.handle('bridge:status', () => bridge.isConnected());
+
+
+let workspaceStore;
+let activeWorkspacePath;
+let prefs;
+let credits;
+let savedVoices;
+let flowStore;
+let flowService;
+
+const voiceProxy = new Proxy({}, { get: (_t, p) => voice?.[p] });
+const videosProxy = new Proxy({}, { get: (_t, p) => videos?.[p] });
+const flowStoreProxy = new Proxy({}, { get: (_t, p) => flowStore?.[p] });
+const prefsProxy = new Proxy({}, { get: (_t, p) => prefs?.[p] });
+const creditsProxy = new Proxy({}, { get: (_t, p) => credits?.[p] });
+const savedVoicesProxy = new Proxy({}, { get: (_t, p) => savedVoices?.[p] });
+
+function setupWorkspace(workspacePath) {
+  activeWorkspacePath = workspacePath;
+  fs.mkdirSync(workspacePath, { recursive: true });
+  fs.mkdirSync(path.join(workspacePath, 'videos'), { recursive: true });
+  fs.mkdirSync(path.join(workspacePath, 'voiceovers'), { recursive: true });
+  fs.mkdirSync(path.join(workspacePath, 'conversations'), { recursive: true });
+
+  conversations = createConversationStore(path.join(workspacePath, 'conversations'));
+  prompts = createPromptStore(path.join(workspacePath, 'prompts'));
+  ideas = createIdeaStore(workspacePath);
+  videos = createVideoStore(workspacePath);
+  voice = createVoiceService({
+    userDataDir: workspacePath,
+    getApiKey: () => secrets.getCartesiaKey(),
+    videoExists: (id) => videos.list().some((v) => v.id === id),
+    onProgress: (progress) => pushToWindow('voice:progress', progress),
+  });
+  prefs = createVoicePrefsStore(workspacePath);
+  credits = createCreditStore(workspacePath);
+  savedVoices = createSavedVoiceStore(workspacePath);
+  flowStore = createFlowStore(workspacePath);
+  if (bridge) {
+    flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, pushToWindow });
+  }
+}
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
-  conversations = createConversationStore(path.join(app.getPath('userData'), 'conversations'));
-  prompts = createPromptStore(path.join(app.getPath('userData'), 'prompts'));
-  ideas = createIdeaStore(app.getPath('userData'));
-  videos = createVideoStore(app.getPath('userData'));
+  workspaceStore = createWorkspaceStore(app.getPath('userData'));
   secrets = createSecretStore(app.getPath('userData'), safeStorage);
-  voice = createVoiceService({
-    userDataDir: app.getPath('userData'),
-    getApiKey: () => secrets.getCartesiaKey(),
-    videoExists: (id) => videos.list().some((video) => video.id === id),
-    onProgress: (progress) => pushToWindow('voice:progress', progress),
-  });
+  bridge = createBridge();
+  setupWorkspace(workspaceStore.getActive().path);
+
   registerVoiceIpc({
     ipcMain,
     shell,
-    voice,
+    voice: voiceProxy,
     secrets,
     pushToWindow,
-    prefs: createVoicePrefsStore(app.getPath('userData')),
-    credits: createCreditStore(app.getPath('userData')),
-    savedVoices: createSavedVoiceStore(app.getPath('userData')),
-    getVideoTitle: (id) => videos.list().find((video) => video.id === id)?.title ?? '',
+    prefs: prefsProxy,
+    credits: creditsProxy,
+    savedVoices: savedVoicesProxy,
+    getVideoTitle: (id) => videosProxy.list().find((v) => v.id === id)?.title ?? '',
   });
-  bridge = createBridge();
-  const flowStore = createFlowStore(app.getPath('userData'));
+
+  flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, pushToWindow });
   registerFlowIpc({
     ipcMain,
     shell,
-    service: createFlowService({ bridge, store: flowStore, videos, pushToWindow }),
+    service: flowService,
   });
-  protocol.handle(MEDIA_SCHEME, createMediaHandler(voice, { characterFile: flowStore.filePath }));
+
+  ipcMain.handle('workspace:get-current', () => workspaceStore.getActive());
+  ipcMain.handle('workspace:list', () => workspaceStore.list());
+
+  ipcMain.handle('workspace:select-directory', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Seleccionar carpeta para el espacio de trabajo',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle('workspace:create', async (_event, { name, path: targetPath }) => {
+    const newWs = workspaceStore.createWorkspace({ name, targetPath });
+    setupWorkspace(newWs.path);
+    BrowserWindow.getAllWindows().forEach((win) => win.reload());
+    return newWs;
+  });
+
+  ipcMain.handle('workspace:switch', async (_event, { id }) => {
+    const ws = workspaceStore.switchWorkspace(id);
+    setupWorkspace(ws.path);
+    BrowserWindow.getAllWindows().forEach((win) => win.reload());
+    return ws;
+  });
+
+  ipcMain.handle('workspace:reveal', async () => {
+    const ws = workspaceStore.getActive();
+    if (ws?.path) shell.openPath(ws.path);
+  });
+
+  protocol.handle(MEDIA_SCHEME, createMediaHandler(voiceProxy, { characterFile: (videoId, key, file) => flowStoreProxy.filePath(videoId, key, file) }));
   bridge.onMessage(handleBridgeMessage);
   bridge.onStatusChange((connected) => {
     if (!connected) failInFlight('The DeepSeek extension disconnected.');

@@ -32,6 +32,9 @@ export default function ChatView({
   // True once the first bridge status reply arrived, so a queued action does not run on the initial "false"
   const [bridgeChecked, setBridgeChecked] = useState(false);
   const [savedIdeas, setSavedIdeas] = useState([]);
+  // DeepSeek chat URL of the active conversation (needed to resync it) and the resync state
+  const [activeUrl, setActiveUrl] = useState(null);
+  const [resync, setResync] = useState({ busy: false, message: '' });
 
   const activeIdRef = useRef(null);
   const actionRunningRef = useRef(false);
@@ -44,13 +47,16 @@ export default function ChatView({
     activeIdRef.current = id;
     setActiveId(id);
     setError('');
+    setResync((current) => (current.busy ? current : { busy: false, message: '' }));
     if (!id) {
       setMessages([]);
+      setActiveUrl(null);
       return;
     }
     const conversation = await window.electronAPI?.getConversation(id);
     if (activeIdRef.current !== id) return;
     setMessages(conversation?.messages ?? []);
+    setActiveUrl(conversation?.deepseekUrl ?? null);
     if (!conversation) setError('That conversation no longer exists.');
   }, []);
 
@@ -81,10 +87,29 @@ export default function ChatView({
       api.onChatDelta(({ conversationId, text }) => {
         setPending((current) => (current ? { conversationId, text } : current));
       }),
-      api.onChatDone(({ conversationId, message }) => {
+      api.onChatDone(({ conversationId, message, source }) => {
         setPending(null);
-        if (activeIdRef.current === conversationId) setMessages((current) => [...current, message]);
+        if (activeIdRef.current === conversationId) {
+          setMessages((current) => [...current, message]);
+          // The first reply of a new chat is what stores its DeepSeek URL
+          api.getConversation(conversationId).then((conversation) => {
+            if (activeIdRef.current === conversationId) setActiveUrl(conversation?.deepseekUrl ?? null);
+          });
+          if (source === 'dom') {
+            setResync({
+              busy: false,
+              message: 'La respuesta se leyó de la página y puede estar incompleta. Usa «Resincronizar con DeepSeek» para repararla.',
+            });
+          }
+        }
         refreshList();
+      }),
+      // A resync rewrote stored replies: reload the open conversation
+      api.onChatRefresh(({ conversationId }) => {
+        if (activeIdRef.current !== conversationId) return;
+        api.getConversation(conversationId).then((conversation) => {
+          if (activeIdRef.current === conversationId && conversation) setMessages(conversation.messages ?? []);
+        });
       }),
       api.onChatError(({ conversationId, message }) => {
         setPending(null);
@@ -209,6 +234,23 @@ export default function ChatView({
     refreshList();
   };
 
+  const handleResync = async () => {
+    const conversationId = activeIdRef.current;
+    if (!conversationId) return;
+    setResync({ busy: true, message: '' });
+    try {
+      const result = await window.electronAPI.resyncConversation(conversationId);
+      const count = result.updated === 1 ? '1 mensaje actualizado' : `${result.updated} mensajes actualizados`;
+      const note =
+        result.localCount === result.remoteCount
+          ? ''
+          : ` (aquí hay ${result.localCount} mensajes y DeepSeek tiene ${result.remoteCount})`;
+      setResync({ busy: false, message: `${count}${note}` });
+    } catch (resyncError) {
+      setResync({ busy: false, message: cleanError(resyncError) });
+    }
+  };
+
   const scriptVoice = useScriptVoice(activeId, messages);
   const flow = useFlowCharacters(activeId, conversations.find((item) => item.id === activeId)?.title ?? '', isConnected);
 
@@ -237,6 +279,18 @@ export default function ChatView({
         <div className={`chat__status${isConnected ? ' chat__status--on' : ''}`}>
           <span className="chat__status-dot" />
           {isConnected ? 'Extension connected' : 'Extension not connected — install it from the extension folder'}
+          {activeId && (
+            <button
+              type="button"
+              className="chat__resync"
+              disabled={!activeUrl || isBusy || resync.busy || !isConnected}
+              title={activeUrl ? 'Vuelve a leer las respuestas desde el historial de DeepSeek' : 'Esta conversación aún no tiene un chat de DeepSeek'}
+              onClick={handleResync}
+            >
+              {resync.busy ? 'Resincronizando…' : 'Resincronizar con DeepSeek'}
+            </button>
+          )}
+          {resync.message && <span className="chat__resync-result">{resync.message}</span>}
         </div>
 
         <MessageList

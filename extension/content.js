@@ -17,11 +17,111 @@ const SELECTORS = {
   thinkingBlock: '.ds-think-content, [class*="think" i]',
 };
 
+// FRAGILE: DeepSeek's internal history API (same origin, authenticated with the page's own token).
+// Observed 2026-10-25, internal API, may change. It returns the original Markdown of every message,
+// so it is the source of truth for the final reply (the DOM can lag behind while the tab is in the
+// background and code blocks are still being rendered).
+const HISTORY_API = {
+  path: '/api/v0/chat/history_messages',
+  sessionParam: 'chat_session_id',
+  // localStorage key holding the bearer token: JSON `{ value: "..." }` or a raw string
+  tokenKey: 'userToken',
+  // Response shape: data.biz_data.chat_messages[]
+  messagesPath: ['data', 'biz_data', 'chat_messages'],
+  roleUser: 'USER',
+  roleAssistant: 'ASSISTANT',
+  statusFinished: 'FINISHED',
+  fragmentRequest: 'REQUEST',
+  // Thinking is a separate fragment type and is deliberately excluded
+  fragmentResponse: 'RESPONSE',
+  // Chat page path: /a/chat/s/<sessionId>
+  sessionPath: /\/a\/chat\/s\/([\w-]+)/,
+};
+
 const DELTA_THROTTLE_MS = 150;
 const STABLE_MS = 1500;
 const TIMEOUT_MS = 5 * 60 * 1000;
 const POLL_MS = 250;
 const URL_WAIT_MS = 3000;
+const API_POLL_MS = 1000;
+// Consecutive failed history reads before the reply falls back to the DOM text
+const API_MAX_FAILURES = 3;
+// Fallback without the API: the DOM text must stay untouched this long
+const DOM_FALLBACK_STABLE_MS = 5000;
+// The API keeps saying "pending" although the DOM has been done and still for this long: trust the DOM
+const API_PENDING_GRACE_MS = 60000;
+const HISTORY_FETCH_TIMEOUT_MS = 20000;
+
+// --- Pure history helpers (exported for tests) -------------------------------------------------
+
+function sessionIdFromUrl(url) {
+  const match = HISTORY_API.sessionPath.exec(String(url ?? ''));
+  return match ? match[1] : null;
+}
+
+// The stored token is either JSON `{ value }` or a raw string
+function parseToken(raw) {
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'string') return parsed || null;
+    if (parsed && typeof parsed.value === 'string') return parsed.value || null;
+    return null;
+  } catch {
+    return raw.trim();
+  }
+}
+
+// The chat_messages array of a history response, or null when the shape is not what we expect
+function historyMessages(json) {
+  let node = json;
+  for (const key of HISTORY_API.messagesPath) {
+    if (!node || typeof node !== 'object') return null;
+    node = node[key];
+  }
+  return Array.isArray(node) ? node : null;
+}
+
+// Joined content of one kind of fragment (REQUEST or RESPONSE) of a history message
+function fragmentsText(message, type) {
+  if (!message || !Array.isArray(message.fragments)) return '';
+  return message.fragments
+    .filter((fragment) => fragment && fragment.type === type && typeof fragment.content === 'string')
+    .map((fragment) => fragment.content)
+    .join('');
+}
+
+// Final reply from a history response. minCount is the number of messages the chat had before the
+// prompt was sent, so an older finished reply is never mistaken for the new one.
+//   { status: 'done', text }        the last message is a finished reply
+//   { status: 'pending' }           the reply is still being written (or not there yet)
+//   { status: 'error', reason }     unexpected shape or an empty finished reply
+function extractFinalText(historyJson, minCount = 0) {
+  const messages = historyMessages(historyJson);
+  if (!messages) return { status: 'error', reason: 'shape' };
+  if (messages.length <= minCount) return { status: 'pending' };
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== HISTORY_API.roleAssistant) return { status: 'pending' };
+  if (last.status !== HISTORY_API.statusFinished || last.has_pending_fragment) return { status: 'pending' };
+  const text = fragmentsText(last, HISTORY_API.fragmentResponse).trim();
+  if (!text) return { status: 'error', reason: 'empty' };
+  return { status: 'done', text };
+}
+
+// Whole history as [{ role: 'user' | 'assistant', content }] (messages with another role are skipped)
+function extractHistoryMessages(historyJson) {
+  const messages = historyMessages(historyJson);
+  if (!messages) return null;
+  const out = [];
+  for (const message of messages) {
+    if (message?.role === HISTORY_API.roleUser) {
+      out.push({ role: 'user', content: fragmentsText(message, HISTORY_API.fragmentRequest) });
+    } else if (message?.role === HISTORY_API.roleAssistant) {
+      out.push({ role: 'assistant', content: fragmentsText(message, HISTORY_API.fragmentResponse).trim() });
+    }
+  }
+  return out;
+}
 
 // DOM -> Markdown conversion of a reply. Walks the live container (innerText on a detached
 // clone has no layout and loses all line breaks) and skips thinking blocks.
@@ -251,7 +351,20 @@ function toMarkdown(container) {
   return joinBlocks(blocksOf(container), false).replace(/\n{3,}/g, '\n\n').trim();
 }
 
-if (!window.__mecatubeBridgeLoaded) {
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    HISTORY_API,
+    sessionIdFromUrl,
+    parseToken,
+    historyMessages,
+    fragmentsText,
+    extractFinalText,
+    extractHistoryMessages,
+    toMarkdown,
+  };
+}
+
+if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__mecatubeBridgeLoaded) {
   window.__mecatubeBridgeLoaded = true;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -314,9 +427,53 @@ if (!window.__mecatubeBridgeLoaded) {
     }, 400);
   }
 
+  // Reads the bearer token from the page's own storage; it is only ever used for the same-origin
+  // history request below and is never logged, stored or sent anywhere else.
+  function readToken() {
+    try {
+      return parseToken(window.localStorage.getItem(HISTORY_API.tokenKey));
+    } catch {
+      return null;
+    }
+  }
+
+  // Full chat history JSON for a session. Throws a generic Error (no token, no response body).
+  async function fetchHistory(sessionId) {
+    const token = readToken();
+    if (!token) throw new Error('DeepSeek token not available.');
+    const url = `${location.origin}${HISTORY_API.path}?${HISTORY_API.sessionParam}=${encodeURIComponent(sessionId)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), HISTORY_FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`DeepSeek history request failed (HTTP ${response.status}).`);
+      return await response.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Number of messages the chat already has (0 for a chat that does not exist yet); null when unknown
+  async function historyCount(sessionId) {
+    if (!sessionId) return 0;
+    try {
+      return historyMessages(await fetchHistory(sessionId))?.length ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async function runPrompt(text, port) {
     const input = await waitFor(findInput, 15000, 'DeepSeek input box not found.');
     const countBefore = assistantContainers().length;
+    // Messages already in the chat: the final reply must come after them. If the baseline cannot be
+    // read, each earlier assistant message is assumed to have a user message before it.
+    const historyBefore = (await historyCount(sessionIdFromUrl(location.href))) ?? countBefore * 2;
 
     setInputValue(input, text);
     await sleep(150);
@@ -334,6 +491,7 @@ if (!window.__mecatubeBridgeLoaded) {
 
     let lastText = '';
     let lastChange = Date.now();
+    let lastMutation = Date.now();
     let lastSent = 0;
 
     const sendDelta = (force) => {
@@ -349,26 +507,87 @@ if (!window.__mecatubeBridgeLoaded) {
       }
     };
 
-    const observer = new MutationObserver(() => sendDelta(false));
+    const observer = new MutationObserver(() => {
+      lastMutation = Date.now();
+      sendDelta(false);
+    });
     observer.observe(container, { childList: true, subtree: true, characterData: true });
 
+    // The DOM drives the live `delta` display only. The final text comes from the history API
+    // (original Markdown, complete code blocks) once the reply is FINISHED; the DOM text is the
+    // fallback when the API cannot be used.
+    let finalText = null;
+    let source = 'api';
+    let apiFailures = 0;
+    let apiPoll = 0;
+    let domDoneSince = null;
+
     try {
-      // Done when generation has stopped and the text has been stable for a while
-      while (true) {
+      while (finalText === null) {
         if (Date.now() - startedAt > TIMEOUT_MS) throw new Error('Timed out waiting for the DeepSeek reply.');
         await sleep(POLL_MS);
         sendDelta(false);
-        if (lastText && !isGenerating() && Date.now() - lastChange >= STABLE_MS) break;
+
+        const now = Date.now();
+        const domDone = Boolean(lastText) && !isGenerating() && now - lastChange >= STABLE_MS;
+        if (domDone && domDoneSince === null) domDoneSince = now;
+        if (!domDone) domDoneSince = null;
+
+        const apiUsable = apiFailures < API_MAX_FAILURES;
+        if (apiUsable && now - apiPoll >= API_POLL_MS) {
+          apiPoll = now;
+          const sessionId = sessionIdFromUrl(location.href);
+          if (sessionId) {
+            try {
+              const result = extractFinalText(await fetchHistory(sessionId), historyBefore);
+              if (result.status === 'done') {
+                finalText = result.text;
+                break;
+              }
+              apiFailures = result.status === 'error' ? apiFailures + 1 : 0;
+            } catch {
+              apiFailures += 1;
+            }
+          }
+        }
+
+        if (!apiUsable) {
+          // No API: accept the DOM text only after generation stopped and nothing changed for a while
+          if (domDone && now - lastMutation >= DOM_FALLBACK_STABLE_MS) {
+            finalText = lastText;
+            source = 'dom';
+          }
+        } else if (domDoneSince !== null && now - domDoneSince >= API_PENDING_GRACE_MS) {
+          // The API has not confirmed the reply long after the DOM went quiet: stop waiting for it
+          finalText = lastText;
+          source = 'dom';
+        }
       }
     } finally {
       observer.disconnect();
     }
 
-    sendDelta(true);
+    // Show the final text before `done`, so the live view matches what gets stored
+    port.postMessage({ type: 'delta', text: finalText });
 
     // DeepSeek moves a new chat to /a/chat/s/<id> after the first message
     await waitFor(() => /\/a\/chat\/s\//.test(location.href), URL_WAIT_MS, '').catch(() => {});
-    port.postMessage({ type: 'done', text: lastText, deepseekUrl: location.href });
+    port.postMessage({ type: 'done', text: finalText, deepseekUrl: location.href, source });
+  }
+
+  // Whole history of the chat in the current tab, for repairing stored conversations
+  async function runHistory(deepseekUrl, port) {
+    const sessionId = sessionIdFromUrl(deepseekUrl);
+    if (!sessionId) throw new Error('La URL del chat de DeepSeek no es válida.');
+    let json;
+    try {
+      json = await fetchHistory(sessionId);
+    } catch (error) {
+      throw new Error(`No se pudo leer el historial de DeepSeek: ${error.message}`);
+    }
+    const messages = extractHistoryMessages(json);
+    if (!messages) throw new Error('DeepSeek devolvió un formato de historial inesperado.');
+    port.postMessage({ type: 'history', messages });
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -376,16 +595,20 @@ if (!window.__mecatubeBridgeLoaded) {
   });
 
   chrome.runtime.onConnect.addListener((port) => {
-    if (port.name !== 'mecatube-prompt') return;
+    if (port.name !== 'mecatube-prompt' && port.name !== 'mecatube-history') return;
+    const reportError = (error) => {
+      try {
+        port.postMessage({ type: 'error', message: error.message });
+      } catch {
+        // Port already closed
+      }
+    };
     port.onMessage.addListener((message) => {
-      if (message.type !== 'prompt') return;
-      runPrompt(message.text, port).catch((error) => {
-        try {
-          port.postMessage({ type: 'error', message: error.message });
-        } catch {
-          // Port already closed
-        }
-      });
+      if (port.name === 'mecatube-prompt' && message.type === 'prompt') {
+        runPrompt(message.text, port).catch(reportError);
+      } else if (port.name === 'mecatube-history' && message.type === 'history') {
+        runHistory(message.deepseekUrl, port).catch(reportError);
+      }
     });
   });
 }

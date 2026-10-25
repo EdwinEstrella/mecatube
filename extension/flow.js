@@ -34,6 +34,9 @@
   const STABLE_POLLS = 3;
   const JOB_TIMEOUT_MS = 5 * 60 * 1000;
   const MIN_CAPTCHA_SIZE = 200;
+  // After a submit, generation must visibly start (Detener / "NN %" / new images) within this time
+  const START_TIMEOUT_MS = 20000;
+  const IMAGE_FETCH_TIMEOUT_MS = 30000;
 
   // --- Pure helpers (exported for tests) -------------------------------------------------------
 
@@ -136,6 +139,60 @@
     return Boolean(button) && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
   }
 
+  // True once a submit took effect: "Detener" is shown, a "NN %" tile exists, or new images appeared
+  function hasStarted(doc, snapshot) {
+    return isGenerating(doc) || newImages(doc, snapshot).length > 0;
+  }
+
+  // Full pointer/mouse sequence at the center of the element, the way a real click arrives
+  function pointerClick(doc, el) {
+    const win = doc.defaultView;
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const Pointer = win.PointerEvent || win.MouseEvent;
+    const init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, view: win, button: 0 };
+    el.dispatchEvent(new Pointer('pointerdown', { ...init, buttons: 1, pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+    el.dispatchEvent(new win.MouseEvent('mousedown', { ...init, buttons: 1 }));
+    el.dispatchEvent(new Pointer('pointerup', { ...init, buttons: 0, pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+    el.dispatchEvent(new win.MouseEvent('mouseup', { ...init, buttons: 0 }));
+    el.dispatchEvent(new win.MouseEvent('click', { ...init, buttons: 0, detail: 1 }));
+  }
+
+  function pressEnter(doc, box) {
+    const win = doc.defaultView;
+    box.focus();
+    const init = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true };
+    for (const type of ['keydown', 'keypress', 'keyup']) box.dispatchEvent(new win.KeyboardEvent(type, init));
+  }
+
+  // Submits the prompt and confirms that Flow started generating. Tries a plain click first; if
+  // nothing starts within startTimeoutMs it retries ONCE with a full pointer sequence, then with
+  // Enter in the editor. Returns the method that worked, or null. A retry is only sent while the
+  // prompt is still in the box and the submit button is still enabled, so a slow but successful
+  // submit is never sent twice.
+  async function submitPrompt(doc, box, prompt, snapshot, { startTimeoutMs = START_TIMEOUT_MS, isAborted = () => false } = {}) {
+    const findSubmit = () => doc.querySelector(SELECTORS.submitButton);
+    const methods = [
+      ['click', () => findSubmit()?.click()],
+      ['pointer-sequence', () => findSubmit() && pointerClick(doc, findSubmit())],
+      ['enter-key', () => pressEnter(doc, box)],
+    ];
+    for (let index = 0; index < methods.length; index += 1) {
+      const [name, run] = methods[index];
+      if (index > 0) {
+        const stillPending = boxMatches(box, prompt) && isEnabled(findSubmit());
+        if (stillPending) run();
+      } else {
+        run();
+      }
+      const started = await waitFor(() => isAborted() || hasStarted(doc, snapshot), startTimeoutMs);
+      if (isAborted()) throw new Error('Flow job cancelled.');
+      if (started) return name;
+    }
+    return null;
+  }
+
   function bytesToBase64(bytes) {
     let binary = '';
     const chunk = 0x8000;
@@ -158,9 +215,18 @@
   // --- Jobs ------------------------------------------------------------------------------------
 
   async function fetchImage(entry) {
-    const response = await fetch(entry.src, { credentials: 'include' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const blob = await response.blob();
+    // A hanging download must not keep the job (and this tab's busy flag) alive forever
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+    let response;
+    let blob;
+    try {
+      response = await fetch(entry.src, { credentials: 'include', signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      blob = await response.blob();
+    } finally {
+      clearTimeout(timer);
+    }
     const bytes = new Uint8Array(await blob.arrayBuffer());
     return {
       mime: blob.type || response.headers.get('content-type') || 'image/webp',
@@ -172,7 +238,10 @@
   }
 
   // post(message) sends { type, ... } to the service worker; throws are reported by the caller
-  async function runGenerate({ prompt }, post, doc = document, now = Date.now) {
+  // Resolves to { images, submitMethod }. options.isAborted lets the caller stop a job whose port
+  // closed; options.startTimeoutMs tunes the "generation must start" window (tests).
+  async function runGenerate({ prompt }, post, doc = document, now = Date.now, options = {}) {
+    const isAborted = options.isAborted ?? (() => false);
     const box = await waitFor(() => doc.querySelector(SELECTORS.promptBox), BOX_TIMEOUT_MS);
     if (!box) throw new Error('Flow prompt box not found. Is the project open and signed in?');
 
@@ -188,7 +257,13 @@
     if (!submit) throw new Error('The Flow submit button never became available.');
 
     const startedAt = now();
-    submit.click();
+    const submitMethod = await submitPrompt(doc, box, prompt, snapshot, {
+      startTimeoutMs: options.startTimeoutMs,
+      isAborted,
+    });
+    if (!submitMethod) {
+      throw new Error('Flow no empezó a generar (el botón de generar no respondió).');
+    }
 
     let sawGenerating = false;
     let captchaShown = false;
@@ -198,6 +273,7 @@
 
     for (;;) {
       await sleep(POLL_MS);
+      if (isAborted()) throw new Error('Flow job cancelled.');
       if (now() - startedAt > JOB_TIMEOUT_MS) throw new Error('Timed out waiting for Flow to finish generating.');
 
       const captcha = isCaptchaVisible(doc);
@@ -236,7 +312,7 @@
         }
       }
       if (images.length === 0) throw new Error('Flow produced images but they could not be downloaded.');
-      return images;
+      return { images, submitMethod };
     }
   }
 
@@ -270,8 +346,10 @@
         if (message.type === 'new-project') {
           await runNewProject(post);
         } else {
-          const images = await runGenerate({ prompt: String(message.prompt ?? '') }, post);
-          post({ type: 'result', images });
+          const { images, submitMethod } = await runGenerate({ prompt: String(message.prompt ?? '') }, post, document, Date.now, {
+            isAborted: () => !open,
+          });
+          post({ type: 'result', images, submitMethod });
         }
       } catch (error) {
         post({ type: 'error', message: error?.message ?? String(error) });
@@ -294,6 +372,10 @@
     insertPrompt,
     boxMatches,
     isEnabled,
+    hasStarted,
+    pointerClick,
+    pressEnter,
+    submitPrompt,
     bytesToBase64,
     runGenerate,
     runNewProject,

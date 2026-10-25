@@ -12,6 +12,8 @@ const FLOW_HOME_URL = `${FLOW_ORIGIN}/`;
 const FLOW_PROJECT_PATTERN = /^https:\/\/flow\.google\.com\/project\/[0-9a-f-]{36}/;
 const FLOW_STEP_TIMEOUT_MS = 60000;
 const FLOW_JOB_TIMEOUT_MS = 6 * 60 * 1000;
+const DEEPSEEK_CHAT_PATTERN = /^https:\/\/chat\.deepseek\.com\/a\/chat\/s\/[\w-]+/;
+const HISTORY_TIMEOUT_MS = 60000;
 
 let socket = null;
 let backoff = 500;
@@ -48,6 +50,7 @@ function connect() {
     }
     if (message.type === 'prompt') handlePrompt(message);
     else if (message.type === 'flow-generate') handleFlowGenerate(message);
+    else if (message.type === 'deepseek-history') handleDeepseekHistory(message);
   };
 
   socket.onclose = () => {
@@ -129,7 +132,15 @@ async function ensureContentScript(tabId, file = 'content.js', label = 'DeepSeek
   throw new Error(`The ${label} page did not respond. Reload the ${label} tab and try again.`);
 }
 
+// The DeepSeek tab serves one job at a time: a prompt in flight or a history read
+let deepseekBusy = false;
+
 async function handlePrompt({ requestId, text, deepseekUrl }) {
+  if (deepseekBusy) {
+    send({ type: 'error', requestId, message: 'DeepSeek está ocupado con otra tarea. Inténtalo de nuevo en unos segundos.' });
+    return;
+  }
+  deepseekBusy = true;
   try {
     const tabId = await prepareTab(deepseekUrl);
     await ensureContentScript(tabId);
@@ -141,17 +152,47 @@ async function handlePrompt({ requestId, text, deepseekUrl }) {
       send({ ...message, requestId });
       if (message.type === 'done' || message.type === 'error') {
         finished = true;
+        deepseekBusy = false;
         port.disconnect();
       }
     });
     port.onDisconnect.addListener(() => {
       if (finished) return;
       finished = true;
+      deepseekBusy = false;
       send({ type: 'error', requestId, message: 'The DeepSeek page closed or reloaded before the reply finished.' });
     });
     port.postMessage({ type: 'prompt', text });
   } catch (error) {
+    deepseekBusy = false;
     send({ type: 'error', requestId, message: error.message });
+  }
+}
+
+// Reads the whole history of a chat so Mecatube can repair stored replies.
+// Job: { type: 'deepseek-history', requestId, deepseekUrl }. Replies: history | history-error.
+async function handleDeepseekHistory({ requestId, deepseekUrl }) {
+  if (deepseekBusy) {
+    send({ type: 'history-error', requestId, message: 'DeepSeek está ocupado con otra tarea. Inténtalo de nuevo en unos segundos.' });
+    return;
+  }
+  deepseekBusy = true;
+  try {
+    if (typeof deepseekUrl !== 'string' || !DEEPSEEK_CHAT_PATTERN.test(deepseekUrl)) {
+      throw new Error('La URL del chat de DeepSeek no es válida.');
+    }
+    const tabId = await prepareTab(deepseekUrl);
+    await ensureContentScript(tabId);
+    const result = await runTabStep(
+      tabId,
+      { type: 'history', deepseekUrl },
+      { portName: 'mecatube-history', label: 'DeepSeek', settleOn: 'history', timeoutMs: HISTORY_TIMEOUT_MS },
+    );
+    send({ type: 'history', requestId, messages: result.messages });
+  } catch (error) {
+    send({ type: 'history-error', requestId, message: error.message });
+  } finally {
+    deepseekBusy = false;
   }
 }
 
@@ -193,16 +234,28 @@ async function waitForProjectUrl(tabId) {
   throw new Error('Flow did not open the new project.');
 }
 
-// Runs one step in the Flow content script. onMessage sees every port message; the promise
-// settles on the first message for which settle(message) returns 'ok', or on error/disconnect.
-function runFlowStep(tabId, command, { settleOn, onMessage, timeoutMs }) {
+// Runs one step in a content script over a port. onMessage sees every port message; the promise
+// settles on the first message of type settleOn, and rejects on an error message, a port
+// disconnect, a timeout, or (when stayOn is set) the tab closing or leaving the stayOn URL prefix.
+// Every one of those paths becomes a flow-error / history-error upstream, never silence.
+function runTabStep(tabId, command, { portName = 'mecatube-flow', label = 'Flow', settleOn, onMessage, timeoutMs, stayOn = null }) {
   return new Promise((resolve, reject) => {
-    const port = chrome.tabs.connect(tabId, { name: 'mecatube-flow' });
+    const port = chrome.tabs.connect(tabId, { name: portName });
     let settled = false;
+    const onRemoved = (removedId) => {
+      if (removedId === tabId) finish(new Error(`The ${label} tab was closed before the job finished.`));
+    };
+    const onUpdated = (updatedId, info) => {
+      if (updatedId === tabId && stayOn && info.url && !info.url.startsWith(stayOn)) {
+        finish(new Error(`The ${label} tab navigated away before the job finished.`));
+      }
+    };
     const finish = (error, value) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      chrome.tabs.onRemoved.removeListener(onRemoved);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
       try {
         port.disconnect();
       } catch {
@@ -211,13 +264,15 @@ function runFlowStep(tabId, command, { settleOn, onMessage, timeoutMs }) {
       if (error) reject(error);
       else resolve(value);
     };
-    const timer = setTimeout(() => finish(new Error('Timed out waiting for Flow.')), timeoutMs);
+    const timer = setTimeout(() => finish(new Error(`Timed out waiting for ${label}.`)), timeoutMs);
+    chrome.tabs.onRemoved.addListener(onRemoved);
+    chrome.tabs.onUpdated.addListener(onUpdated);
     port.onMessage.addListener((message) => {
       onMessage?.(message);
       if (message.type === 'error') finish(new Error(message.message));
       else if (message.type === settleOn) finish(null, message);
     });
-    port.onDisconnect.addListener(() => finish(new Error('The Flow page closed or reloaded before the job finished.')));
+    port.onDisconnect.addListener(() => finish(new Error(`The ${label} page closed or reloaded before the job finished.`)));
     port.postMessage(command);
   });
 }
@@ -235,7 +290,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl }) {
 
     if (!currentProject) {
       // The click can navigate the page, which drops the port; the tab URL is the source of truth
-      await runFlowStep(tabId, { type: 'new-project' }, { settleOn: 'clicked', timeoutMs: FLOW_STEP_TIMEOUT_MS }).catch(
+      await runTabStep(tabId, { type: 'new-project' }, { settleOn: 'clicked', timeoutMs: FLOW_STEP_TIMEOUT_MS }).catch(
         (error) => {
           if (!/closed or reloaded/.test(error.message)) throw error;
         },
@@ -246,19 +301,20 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl }) {
       await ensureContentScript(tabId, 'flow.js', 'Flow');
     }
 
-    const result = await runFlowStep(
+    const result = await runTabStep(
       tabId,
       { type: 'generate', prompt },
       {
         settleOn: 'result',
         timeoutMs: FLOW_JOB_TIMEOUT_MS,
+        stayOn: currentProject,
         onMessage: (message) => {
           if (message.type === 'progress') send({ type: 'flow-progress', requestId, percent: message.percent });
           else if (message.type === 'captcha') send({ type: 'flow-captcha', requestId, active: message.active === true });
         },
       },
     );
-    send({ type: 'flow-result', requestId, projectUrl: currentProject, images: result.images });
+    send({ type: 'flow-result', requestId, projectUrl: currentProject, images: result.images, submitMethod: result.submitMethod ?? null });
   } catch (error) {
     send({ type: 'flow-error', requestId, message: error.message });
   } finally {

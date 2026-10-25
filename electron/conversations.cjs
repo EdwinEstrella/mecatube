@@ -12,6 +12,30 @@ function makeTitle(text) {
   return clean.length > TITLE_LENGTH ? `${clean.slice(0, TITLE_LENGTH).trimEnd()}…` : clean;
 }
 
+// Pure: which stored assistant replies should take DeepSeek's content. Messages are matched by
+// position from the start; alignment stops at the first role mismatch (everything after it would be
+// guesswork). Only assistant replies are rewritten: user messages are stored exactly as sent and only
+// serve to confirm the alignment. Empty remote replies never overwrite local text and local messages
+// are never removed.
+//   -> { updates: [{ index, content }], updated, aligned, localCount, remoteCount }
+function alignResync(localMessages, remoteMessages) {
+  const local = Array.isArray(localMessages) ? localMessages : [];
+  const remote = Array.isArray(remoteMessages) ? remoteMessages : [];
+  const limit = Math.min(local.length, remote.length);
+  const updates = [];
+  let aligned = 0;
+  for (let index = 0; index < limit; index += 1) {
+    if (local[index].role !== remote[index].role) break;
+    aligned += 1;
+    if (local[index].role !== 'assistant') continue;
+    const content = remote[index].content;
+    if (typeof content === 'string' && content.trim() !== '' && content !== local[index].content) {
+      updates.push({ index, content });
+    }
+  }
+  return { updates, updated: updates.length, aligned, localCount: local.length, remoteCount: remote.length };
+}
+
 function createConversationStore(dir) {
   fs.mkdirSync(dir, { recursive: true });
 
@@ -94,6 +118,20 @@ function createConversationStore(dir) {
     return save(conversation);
   }
 
+  // Replaces stored assistant replies with DeepSeek's history (see alignResync). Ids and timestamps
+  // are kept and the conversation does not move in the list.
+  function applyRemoteHistory(id, remoteMessages) {
+    const conversation = get(id);
+    if (!conversation) throw new Error('Conversation not found.');
+    const result = alignResync(conversation.messages, remoteMessages);
+    if (result.updated > 0) {
+      for (const { index, content } of result.updates) conversation.messages[index].content = content;
+      save(conversation);
+    }
+    const { updates, ...summary } = result;
+    return summary;
+  }
+
   function rename(id, title) {
     const clean = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_LENGTH).trim() : '';
     if (!clean) throw new Error('Title cannot be empty.');
@@ -114,7 +152,7 @@ function createConversationStore(dir) {
     }
   }
 
-  return { list, get, create, appendMessage, update, rename, delete: remove };
+  return { list, get, create, appendMessage, update, rename, applyRemoteHistory, delete: remove };
 }
 
-module.exports = { createConversationStore };
+module.exports = { createConversationStore, alignResync };

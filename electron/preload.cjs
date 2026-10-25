@@ -73,9 +73,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   savePrompt: (id, text) => ipcRenderer.invoke('prompts:save', { id, text }),
   resetPrompt: (id) => ipcRenderer.invoke('prompts:reset', { id }),
   sendChatMessage: (payload) => ipcRenderer.invoke('chat:send', payload),
+  resyncConversation: (conversationId) => ipcRenderer.invoke('chat:resync', { conversationId }),
+  onChatRefresh: (callback) => subscribe('chat:refresh', callback),
   getBridgeStatus: () => ipcRenderer.invoke('bridge:status'),
   onChatDelta: (callback) => subscribe('chat:delta', callback),
   onChatDone: (callback) => subscribe('chat:done', callback),
   onChatError: (callback) => subscribe('chat:error', callback),
-  onBridgeStatusChange: (callback) => subscribe('bridge:status-changed', callback)
+  onBridgeStatusChange: (callback) => subscribe('bridge:status-changed', callback),
+  getCurrentWorkspace: () => ipcRenderer.invoke('workspace:get-current'),
+  listWorkspaces: () => ipcRenderer.invoke('workspace:list'),
+  selectWorkspaceDirectory: () => ipcRenderer.invoke('workspace:select-directory'),
+  createWorkspace: (payload) => ipcRenderer.invoke('workspace:create', payload),
+  switchWorkspace: (id) => ipcRenderer.invoke('workspace:switch', { id }),
+  revealWorkspace: () => ipcRenderer.invoke('workspace:reveal'),
 });

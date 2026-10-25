@@ -82,69 +82,83 @@ function createVideoStore(dir) {
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'videos.json');
 
+  function getWorkspaceTitle() {
+    try {
+      const wsFile = path.join(dir, 'workspace.json');
+      if (fs.existsSync(wsFile)) {
+        const data = JSON.parse(fs.readFileSync(wsFile, 'utf8'));
+        if (data?.name) return data.name;
+      }
+    } catch {}
+    return DEFAULT_TITLE;
+  }
+
   function read() {
     try {
       const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-      return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
-    }
+      if (Array.isArray(data) && data.length > 0) return [data[0]];
+    } catch {}
+    return [];
   }
 
   function write(videos) {
+    const single = Array.isArray(videos) && videos.length > 0 ? [videos[0]] : [];
     const temp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temp, JSON.stringify(videos, null, 2), 'utf8');
+    fs.writeFileSync(temp, JSON.stringify(single, null, 2), 'utf8');
     fs.renameSync(temp, file);
   }
 
-  // Most recently updated first
-  function list() {
-    return read().sort((a, b) => b.updatedAt - a.updatedAt);
+  function ensureSingle() {
+    let videos = read();
+    if (videos.length === 0) {
+      const now = Date.now();
+      const record = {
+        id: crypto.randomUUID(),
+        title: getWorkspaceTitle(),
+        titleEdited: false,
+        ideaNumber: null,
+        scriptConversationId: null,
+        illustratorConversationId: null,
+        flowProjectUrl: null,
+        overrides: {},
+        createdAt: now,
+        updatedAt: now,
+      };
+      videos = [record];
+      write(videos);
+    }
+    return videos;
   }
 
-  // `titleEdited` records whether the user chose the title; an idea title never overwrites it
+  // Exactly 1 single video timeline per workspace
+  function list() {
+    return ensureSingle();
+  }
+
   function create(input = {}) {
     const fields = validateFields(input ?? {});
-    const now = Date.now();
-    const record = {
-      id: crypto.randomUUID(),
-      title: fields.title ?? DEFAULT_TITLE,
-      titleEdited: fields.titleEdited ?? false,
-      ideaNumber: fields.ideaNumber ?? null,
-      scriptConversationId: fields.scriptConversationId ?? null,
-      illustratorConversationId: fields.illustratorConversationId ?? null,
-      flowProjectUrl: fields.flowProjectUrl ?? null,
-      overrides: {},
-      createdAt: now,
-      updatedAt: now,
-    };
-    const videos = read();
-    videos.push(record);
-    write(videos);
-    return record;
-  }
-
-  // A title in the patch counts as a user edit unless the caller says titleEdited: false
-  function update(id, patch) {
-    validId(id, 'video id');
-    const fields = validateFields(patch);
-    if (fields.title !== undefined && fields.titleEdited === undefined) fields.titleEdited = true;
-    const videos = read();
-    const video = videos.find((item) => item.id === id);
-    if (!video) throw new Error('Video not found.');
+    const videos = ensureSingle();
+    const video = videos[0];
     Object.assign(video, fields, { updatedAt: Date.now() });
     write(videos);
     return video;
   }
 
-  // value true/false forces the stage; null clears the override so detection decides again
+  function update(id, patch) {
+    const fields = validateFields(patch);
+    if (fields.title !== undefined && fields.titleEdited === undefined) fields.titleEdited = true;
+    const videos = ensureSingle();
+    const video = videos[0];
+    Object.assign(video, fields, { updatedAt: Date.now() });
+    write(videos);
+    return video;
+  }
+
   function setStage(id, key, value) {
-    validId(id, 'video id');
     if (!STAGE_KEYS.includes(key)) throw new Error('Invalid stage.');
     if (value !== true && value !== false && value !== null) throw new Error('Invalid stage value.');
-    const videos = read();
-    const video = videos.find((item) => item.id === id);
-    if (!video) throw new Error('Video not found.');
+    const videos = ensureSingle();
+    const video = videos[0];
     const overrides = { ...(video.overrides && typeof video.overrides === 'object' ? video.overrides : {}) };
     if (value === null) delete overrides[key];
     else overrides[key] = value;
@@ -155,10 +169,20 @@ function createVideoStore(dir) {
   }
 
   function remove(id) {
-    validId(id, 'video id');
-    const videos = read();
-    const kept = videos.filter((video) => video.id !== id);
-    if (kept.length !== videos.length) write(kept);
+    const now = Date.now();
+    const reset = {
+      id: crypto.randomUUID(),
+      title: getWorkspaceTitle(),
+      titleEdited: false,
+      ideaNumber: null,
+      scriptConversationId: null,
+      illustratorConversationId: null,
+      flowProjectUrl: null,
+      overrides: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    write([reset]);
   }
 
   return { list, create, update, setStage, delete: remove };

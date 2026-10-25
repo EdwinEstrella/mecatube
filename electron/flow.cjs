@@ -17,7 +17,10 @@ const ROLE_MAX = 600;
 const PROMPT_MAX = 20000;
 const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGES = 8;
-const JOB_TIMEOUT_MS = 8 * 60 * 1000;
+// Watchdog for one job. The extension's own worst case is about 9 minutes (tab loads, new project,
+// a 6 minute generation); this stays just above it so the UI can never remain busy forever.
+const JOB_TIMEOUT_MS = 10 * 60 * 1000;
+const SUBMIT_METHOD = /^[\w-]{1,40}$/;
 
 function validVideoId(value) {
   if (typeof value !== 'string' || !VIDEO_ID.test(value)) throw new Error('Invalid video id.');
@@ -107,7 +110,7 @@ function createFlowStore(userDataDir) {
 
   // images: [{ mime, base64 }]. Writes every file, then records one generation; a new generation
   // resets the approval because the user has not seen it yet.
-  function addGeneration(videoId, key, { projectUrl = null, images }) {
+  function addGeneration(videoId, key, { projectUrl = null, images, submitMethod = null }) {
     validKey(key);
     if (!Array.isArray(images) || images.length === 0 || images.length > MAX_IMAGES) {
       throw new Error('The generation has no usable images.');
@@ -139,6 +142,8 @@ function createFlowStore(userDataDir) {
       at,
       files,
       projectUrl: projectUrl && FLOW_PROJECT_URL.test(projectUrl) ? projectUrl : null,
+      // Which submit method made Flow start (click / pointer-sequence / enter-key); diagnostics only
+      submitMethod: typeof submitMethod === 'string' && SUBMIT_METHOD.test(submitMethod) ? submitMethod : null,
     });
     character.approved = false;
     writeAll(videoId, characters);
@@ -231,6 +236,7 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
         const character = store.addGeneration(videoId, characterKey, {
           projectUrl: message.projectUrl,
           images: message.images,
+          submitMethod: message.submitMethod,
         });
         try {
           rememberProject(videoId, message.projectUrl);
@@ -257,7 +263,7 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
 
     store.upsert(videoId, { key: characterKey, name, role, prompt });
     const requestId = crypto.randomUUID();
-    const timer = setTimeout(() => failJob('Flow took too long to respond.'), jobTimeoutMs);
+    const timer = setTimeout(() => failJob('Flow tardó demasiado en responder. Revisa la pestaña de Flow e inténtalo de nuevo.'), jobTimeoutMs);
     timer.unref?.();
     job = { requestId, videoId, characterKey, timer };
     try {
