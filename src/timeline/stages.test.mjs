@@ -212,6 +212,19 @@ test('sheets answered 2 are not approved', () => {
   assert.notEqual(statusOf(deriveStages(video(), null, messages)).characters, 'done');
 });
 
+test('approved characters with images mark the characters stage done, even without a chat', () => {
+  const stages = deriveStages(video(), null, illustrator.sheets(), { charactersApproved: true });
+  const characters = stages.find((stage) => stage.key === 'characters');
+  assert.equal(characters.status, 'done');
+  assert.equal(characters.source, 'auto');
+  assert.notEqual(statusOf(deriveStages(video(), null, illustrator.sheets(), { charactersApproved: 'yes' })).characters, 'done');
+});
+
+test('a forced "not done" override beats approved characters', () => {
+  const stages = deriveStages(video({ characters: false }), null, null, { charactersApproved: true });
+  assert.notEqual(statusOf(stages).characters, 'done');
+});
+
 test('first image block delivered: characters done, images not yet', () => {
   const stages = deriveStages(video(), null, illustrator.approved());
   assert.equal(statusOf(stages).characters, 'done');
