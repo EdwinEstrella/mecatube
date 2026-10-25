@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+dist-electron/
+out/
+build/
+
+# Local Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Logs & Diagnostics
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Editor & IDE artifacts
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Agent & analysis artifacts
+graphify-out/
+odd/
+
+# Temporary files
+*.tmp
+*.tmp.*

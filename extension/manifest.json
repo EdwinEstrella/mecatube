@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Mecatube Bridge",
+  "version": "0.2.0",
+  "description": "Relays Mecatube prompts to chat.deepseek.com and Google Flow, and returns the replies and generated images.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabs", "scripting", "storage"],
+  "host_permissions": ["https://chat.deepseek.com/*", "https://flow.google.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chat.deepseek.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://flow.google.com/*"],
+      "js": ["flow.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

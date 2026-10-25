@@ -1,0 +1,81 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+// Subscribes to a main-process push channel and returns an unsubscribe function
+function subscribe(channel, callback) {
+  const listener = (_event, payload) => callback(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  closeWindow: () => ipcRenderer.send('window:close'),
+  minimizeWindow: () => ipcRenderer.send('window:minimize'),
+  toggleFullScreen: () => ipcRenderer.send('window:toggle-fullscreen'),
+  isFullScreen: () => ipcRenderer.invoke('window:is-fullscreen'),
+  onFullScreenChange: (callback) => {
+    const listener = (_event, isFullScreen) => callback(isFullScreen);
+    ipcRenderer.on('window:fullscreen-changed', listener);
+    return () => ipcRenderer.removeListener('window:fullscreen-changed', listener);
+  },
+  listConversations: () => ipcRenderer.invoke('chat:list'),
+  getConversation: (id) => ipcRenderer.invoke('chat:get', id),
+  deleteConversation: (id) => ipcRenderer.invoke('chat:delete', id),
+  renameConversation: (conversationId, title) => ipcRenderer.invoke('chat:rename', { conversationId, title }),
+  listIdeas: () => ipcRenderer.invoke('ideas:list'),
+  saveIdea: (idea) => ipcRenderer.invoke('ideas:save', idea),
+  deleteIdea: (id) => ipcRenderer.invoke('ideas:delete', { id }),
+  listVideos: () => ipcRenderer.invoke('videos:list'),
+  createVideo: (input) => ipcRenderer.invoke('videos:create', input),
+  updateVideo: (id, patch) => ipcRenderer.invoke('videos:update', { ...patch, id }),
+  setVideoStage: (id, key, value) => ipcRenderer.invoke('videos:set-stage', { id, key, value }),
+  deleteVideo: (id) => ipcRenderer.invoke('videos:delete', { id }),
+  getCartesiaStatus: () => ipcRenderer.invoke('secrets:cartesia-status'),
+  saveCartesiaKey: (key) => ipcRenderer.invoke('secrets:cartesia-save', { key }),
+  clearCartesiaKey: () => ipcRenderer.invoke('secrets:cartesia-clear'),
+  testCartesiaKey: () => ipcRenderer.invoke('secrets:cartesia-test'),
+  listOwnedVoices: (options) => ipcRenderer.invoke('voice:owned-voices', options),
+  lookupVoice: (id) => ipcRenderer.invoke('voice:lookup', { id }),
+  listSavedVoices: () => ipcRenderer.invoke('saved-voices:list'),
+  addSavedVoice: (voice) => ipcRenderer.invoke('saved-voices:add', voice),
+  renameSavedVoice: (id, label) => ipcRenderer.invoke('saved-voices:rename', { id, label }),
+  removeSavedVoice: (id) => ipcRenderer.invoke('saved-voices:remove', { id }),
+  generateVoice: (payload) => ipcRenderer.invoke('voice:generate', payload),
+  getVoicePrefs: () => ipcRenderer.invoke('voice:prefs-get'),
+  saveVoicePrefs: (prefs) => ipcRenderer.invoke('voice:prefs-set', prefs),
+  getVoiceBusy: () => ipcRenderer.invoke('voice:busy'),
+  generateVoiceover: (payload) => ipcRenderer.invoke('voiceover:generate', payload),
+  listVoiceovers: () => ipcRenderer.invoke('voiceover:list'),
+  deleteVoiceover: (id) => ipcRenderer.invoke('voiceover:delete', { id }),
+  openVoiceoverFolder: (id) => ipcRenderer.invoke('voiceover:open-folder', { id }),
+  getCreditSummary: () => ipcRenderer.invoke('credits:summary'),
+  saveCreditSettings: (settings) => ipcRenderer.invoke('credits:settings-save', settings),
+  calibrateCredits: (remaining) => ipcRenderer.invoke('credits:calibrate', { remaining }),
+  clearCreditCalibration: () => ipcRenderer.invoke('credits:clear-calibration'),
+  onCreditsChanged: (callback) => subscribe('credits:changed', callback),
+  cancelVoice: () => ipcRenderer.invoke('voice:cancel'),
+  getActiveVoice: () => ipcRenderer.invoke('voice:active'),
+  getVoice: (videoId) => ipcRenderer.invoke('voice:get', { videoId }),
+  openVoiceFolder: (videoId) => ipcRenderer.invoke('voice:open-folder', { videoId }),
+  onVoiceProgress: (callback) => subscribe('voice:progress', callback),
+  onVoiceFinished: (callback) => subscribe('voice:finished', callback),
+  generateCharacter: (payload) => ipcRenderer.invoke('flow:generate', payload),
+  getFlowStatus: () => ipcRenderer.invoke('flow:status'),
+  getCharacters: (videoId) => ipcRenderer.invoke('flow:characters', { videoId }),
+  selectCharacterImage: (videoId, characterKey, file) => ipcRenderer.invoke('flow:select', { videoId, characterKey, file }),
+  approveCharacters: (videoId, keys, approved) => ipcRenderer.invoke('flow:approve', { videoId, keys, approved }),
+  setFlowProject: (videoId, url) => ipcRenderer.invoke('flow:set-project', { videoId, url }),
+  openFlowProject: (videoId) => ipcRenderer.invoke('flow:open-project', { videoId }),
+  onFlowProgress: (callback) => subscribe('flow:progress', callback),
+  onFlowCaptcha: (callback) => subscribe('flow:captcha', callback),
+  onFlowResult: (callback) => subscribe('flow:result', callback),
+  onFlowError: (callback) => subscribe('flow:error', callback),
+  getPromptOverrides: () => ipcRenderer.invoke('prompts:get-overrides'),
+  savePrompt: (id, text) => ipcRenderer.invoke('prompts:save', { id, text }),
+  resetPrompt: (id) => ipcRenderer.invoke('prompts:reset', { id }),
+  sendChatMessage: (payload) => ipcRenderer.invoke('chat:send', payload),
+  getBridgeStatus: () => ipcRenderer.invoke('bridge:status'),
+  onChatDelta: (callback) => subscribe('chat:delta', callback),
+  onChatDone: (callback) => subscribe('chat:done', callback),
+  onChatError: (callback) => subscribe('chat:error', callback),
+  onBridgeStatusChange: (callback) => subscribe('bridge:status-changed', callback)
+});
