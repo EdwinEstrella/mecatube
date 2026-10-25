@@ -8,6 +8,7 @@ const { createConversationStore } = require('./conversations.cjs');
 const { createPromptStore } = require('./prompts.cjs');
 const { createIdeaStore } = require('./ideas.cjs');
 const { createVideoStore } = require('./videos.cjs');
+const { createConversationPurger } = require('./purge.cjs');
 const { createSecretStore } = require('./secrets.cjs');
 const deepseek = require('./deepseek.cjs');
 const { createVoiceService } = require('./cartesia.cjs');
@@ -167,9 +168,19 @@ ipcMain.handle('chat:list', () => conversations.list());
 
 ipcMain.handle('chat:get', (_event, id) => conversations.get(id));
 
+function conversationPurger() {
+  return createConversationPurger({
+    conversations,
+    videos,
+    workspaceDir: activeWorkspacePath,
+    isVideoBusy: (videoId) => Boolean(flowService?.isVideoBusy(videoId)) || voice?.activeVideoId() === videoId,
+  });
+}
+
+// Deletes the chat together with every video (and its folder) linked to it
 ipcMain.handle('chat:delete', (_event, id) => {
   if (inFlight?.conversationId === id) throw new Error('Espera a que termine la respuesta antes de eliminar.');
-  conversations.delete(id);
+  return conversationPurger().purge(id);
 });
 
 ipcMain.handle('chat:rename', (_event, { conversationId, title }) => conversations.rename(conversationId, title));
@@ -183,7 +194,8 @@ ipcMain.handle('ideas:save', (_event, idea) => ideas.save(idea));
 ipcMain.handle('ideas:delete', (_event, payload) => ideas.delete(payload?.id));
 
 ipcMain.handle('videos:list', () => videos.list());
-ipcMain.handle('videos:create', (_event, input) => videos.create(input));
+// A different illustrator chat taking over the workspace video starts with clean illustration data
+ipcMain.handle('videos:create', (_event, input) => conversationPurger().linkIllustrator(input ?? {}));
 ipcMain.handle('videos:update', (_event, { id, ...patch } = {}) => videos.update(id, patch));
 ipcMain.handle('videos:set-stage', (_event, { id, key, value } = {}) => videos.setStage(id, key, value));
 ipcMain.handle('videos:delete', (_event, payload) => {

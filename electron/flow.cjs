@@ -34,6 +34,14 @@ const FLOW_MODEL = 'nano-banana-pro';
 const FLOW_OUTPUTS = 2;
 const MIME_BY_EXTENSION = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg' };
 
+// Flow asset id inside a result image URL: https://flow-content.google/image/<uuid>?Expires=... ; null when absent
+const FLOW_ASSET_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function flowAssetId(url) {
+  if (typeof url !== 'string') return null;
+  const match = /\/image\/([^/?#]+)/.exec(url);
+  return match && FLOW_ASSET_ID.test(match[1]) ? match[1].toLowerCase() : null;
+}
+
 function validVideoId(value) {
   if (typeof value !== 'string' || !VIDEO_ID.test(value)) throw new Error('ID de video no válido.');
   return value;
@@ -82,9 +90,12 @@ function decodeImages(images) {
     if (typeof image.base64 !== 'string') throw new Error('Datos de imagen no válidos.');
     const bytes = Buffer.from(image.base64, 'base64');
     if (bytes.length === 0 || bytes.length > IMAGE_MAX_BYTES) throw new Error('Tamaño de imagen no válido.');
-    return { extension, bytes };
+    return { extension, bytes, assetId: flowAssetId(image.sourceUrl) };
   });
 }
+
+// Flow asset ids aligned with the stored files (null when Flow gave no usable URL)
+const assetIdsOf = (decoded) => decoded.map(({ assetId }) => assetId);
 
 // Writes the decoded images as <timestamp>-<n>.<ext> and returns the file names
 function writeImages(dir, decoded, at) {
@@ -167,6 +178,7 @@ function createFlowStore(userDataDir) {
       id: crypto.randomUUID(),
       at,
       files,
+      assetIds: assetIdsOf(decoded),
       projectUrl: projectUrl && FLOW_PROJECT_URL.test(projectUrl) ? projectUrl : null,
       // Which submit method made Flow start (click / pointer-sequence / enter-key); diagnostics only
       submitMethod: typeof submitMethod === 'string' && SUBMIT_METHOD.test(submitMethod) ? submitMethod : null,
@@ -212,13 +224,16 @@ function createFlowStore(userDataDir) {
     return full;
   }
 
-  // The selected sheet image of a character as a Flow reference: { name, mime, base64 }
+  // The selected sheet image of a character as a Flow reference: { name, mime, base64, assetId };
+  // assetId is the image's id inside Flow (null for data stored before ids were kept)
   function readReference(videoId, key) {
     const character = readAll(videoId).find((item) => item.key === validKey(key));
     if (!character?.selectedFile) throw new Error('El personaje no tiene una imagen seleccionada.');
     const file = filePath(videoId, key, character.selectedFile);
     const mime = MIME_BY_EXTENSION[character.selectedFile.split('.').pop()];
-    return { name: character.selectedFile, mime, base64: fs.readFileSync(file).toString('base64') };
+    const generation = character.generations.find((item) => item.files.includes(character.selectedFile));
+    const assetId = generation?.assetIds?.[generation.files.indexOf(character.selectedFile)] ?? null;
+    return { name: character.selectedFile, mime, base64: fs.readFileSync(file).toString('base64'), assetId };
   }
 
   // Scenes: videos/<id>/scenes.json holds [{ number, title, prompt, sheetRefs, generations }]
@@ -258,6 +273,7 @@ function createFlowStore(userDataDir) {
       id: crypto.randomUUID(),
       at,
       files,
+      assetIds: assetIdsOf(decoded),
       projectUrl: projectUrl && FLOW_PROJECT_URL.test(projectUrl) ? projectUrl : null,
       submitMethod: typeof submitMethod === 'string' && SUBMIT_METHOD.test(submitMethod) ? submitMethod : null,
     });
@@ -531,6 +547,10 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
     scenes: { busy: job?.kind === 'scene' || queue.length > 0, running: job?.kind === 'scene' ? job.scene.number : null, pending: queue.length },
   });
 
+  // True while a character or scene job for this video is running or queued
+  const isVideoBusy = (videoId) =>
+    job?.videoId === videoId || queue.some((item) => item.videoId === videoId);
+
   function setProject(videoId, url) {
     validVideoId(videoId);
     if (!findVideo(videoId)) throw new Error('Video no encontrado.');
@@ -552,7 +572,7 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
     failJob('La extensión del navegador se desconectó.');
   });
 
-  return { generate, generateScenes, cancelScenes, status, setProject, projectUrl, handleBridgeMessage, store };
+  return { generate, generateScenes, cancelScenes, status, isVideoBusy, setProject, projectUrl, handleBridgeMessage, store };
 }
 
 function registerFlowIpc({ ipcMain, shell, service }) {
@@ -607,4 +627,4 @@ function scenePromptForFlow(prompt, sheetRefs = []) {
   return `${rewritten.trim()} ${REFERENCE_GUARD}`;
 }
 
-module.exports = { createFlowStore, createFlowService, registerFlowIpc, scenePromptForFlow, CHARACTER_KEY };
+module.exports = { flowAssetId, createFlowStore, createFlowService, registerFlowIpc, scenePromptForFlow, CHARACTER_KEY };

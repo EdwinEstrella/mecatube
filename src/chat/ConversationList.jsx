@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 
 export default function ConversationList({ conversations, activeId, isLocked, onSelect, onNew, onDelete, onRename }) {
-  const [confirmingId, setConfirmingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
   // Guards against saving twice when Enter unmounts the input and blur fires afterwards
@@ -33,24 +32,7 @@ export default function ConversationList({ conversations, activeId, isLocked, on
             key={conversation.id}
             className={`chat-list__item${conversation.id === activeId ? ' chat-list__item--active' : ''}`}
           >
-            {confirmingId === conversation.id ? (
-              <div className="chat-list__confirm">
-                <span>¿Eliminar?</span>
-                <button
-                  type="button"
-                  className="chat-list__confirm-yes"
-                  onClick={() => {
-                    setConfirmingId(null);
-                    onDelete(conversation.id);
-                  }}
-                >
-                  Eliminar
-                </button>
-                <button type="button" onClick={() => setConfirmingId(null)}>
-                  Cancelar
-                </button>
-              </div>
-            ) : editingId === conversation.id ? (
+            {editingId === conversation.id ? (
               <input
                 className="chat-list__rename"
                 value={draft}
@@ -90,7 +72,7 @@ export default function ConversationList({ conversations, activeId, isLocked, on
                   aria-label={`Eliminar ${conversation.title}`}
                   title="Eliminar conversación"
                   disabled={isLocked && conversation.id === activeId}
-                  onClick={() => setConfirmingId(conversation.id)}
+                  onClick={() => onDelete(conversation.id)}
                 >
                   ×
                 </button>

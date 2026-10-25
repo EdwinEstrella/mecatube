@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ConversationList from './chat/ConversationList.jsx';
+import DeleteChatDialog from './chat/DeleteChatDialog.jsx';
 import MessageList from './chat/MessageList.jsx';
 import Composer from './chat/Composer.jsx';
 import PromptPresets from './chat/PromptPresets.jsx';
@@ -37,6 +38,8 @@ export default function ChatView({
   // DeepSeek chat URL of the active conversation (needed to resync it) and the resync state
   const [activeUrl, setActiveUrl] = useState(null);
   const [resync, setResync] = useState({ busy: false, message: '' });
+  // Chat waiting for delete confirmation: { id, title, hasVideo, busy, error }
+  const [deleteRequest, setDeleteRequest] = useState(null);
 
   const activeIdRef = useRef(null);
   const actionRunningRef = useRef(false);
@@ -219,13 +222,30 @@ export default function ChatView({
     refreshIdeas();
   };
 
+  // Opens the confirmation; nothing is deleted until the user accepts it
   const handleDelete = async (id) => {
+    let hasVideo = false;
+    try {
+      const videos = (await window.electronAPI.listVideos()) ?? [];
+      hasVideo = videos.some((video) => video.scriptConversationId === id || video.illustratorConversationId === id);
+    } catch {
+      // Unknown links: the dialog still works and the main process decides what is linked
+      hasVideo = true;
+    }
+    const title = conversations.find((item) => item.id === id)?.title ?? '';
+    setDeleteRequest({ id, title, hasVideo, busy: false, error: '' });
+  };
+
+  const confirmDelete = async () => {
+    const { id } = deleteRequest;
+    setDeleteRequest((current) => ({ ...current, busy: true, error: '' }));
     try {
       await window.electronAPI.deleteConversation(id);
     } catch (deleteError) {
-      setError(cleanError(deleteError));
+      setDeleteRequest((current) => ({ ...current, busy: false, error: cleanError(deleteError) }));
       return;
     }
+    setDeleteRequest(null);
     if (activeIdRef.current === id) await openConversation(null);
     refreshList();
   };
@@ -331,6 +351,16 @@ export default function ChatView({
         />
         <Composer disabled={!canChat || isBusy} placeholder={placeholder} onSend={handleSend} />
       </section>
+      {deleteRequest && (
+        <DeleteChatDialog
+          title={deleteRequest.title}
+          hasVideo={deleteRequest.hasVideo}
+          isBusy={deleteRequest.busy}
+          error={deleteRequest.error}
+          onCancel={() => setDeleteRequest(null)}
+          onConfirm={confirmDelete}
+        />
+      )}
     </div>
   );
 }

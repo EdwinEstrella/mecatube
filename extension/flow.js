@@ -46,6 +46,12 @@
     addToPromptButton: '.cdk-overlay-pane .detail-add-to-prompt-btn',
     ingredientChip: 'img[alt="Imagen del ingrediente"]',
     clearPromptButton: 'button[aria-label="Borrar petición"]',
+    // Project grid: virtualized tiles with a per-tile options menu
+    // The element that actually scrolls (the cdk viewport inside it grows with the content)
+    gridViewport: '.cdk-virtual-scrollable',
+    gridTile: 'flow-grid-tile-container',
+    tileMoreLabel: 'Más opciones',
+    tileAddToPromptLabel: 'Añadir a la petición',
     // Visible labels
     mediaLabel: 'Imagen',
     aspectLabel: '16:9',
@@ -67,6 +73,9 @@
   const START_TIMEOUT_MS = 20000;
   const IMAGE_FETCH_TIMEOUT_MS = 30000;
   const UI_TIMEOUT_MS = 5000;
+  // Bounded search for an existing asset: scroll steps of the lazy list and wait per step
+  const ASSET_SCROLL_STEPS = 8;
+  const ASSET_SCROLL_WAIT_MS = 600;
   const READY_TIMEOUT_MS = 3 * 60 * 1000;
   const BOX_RESTORE_TIMEOUT_MS = 60000;
   const UPLOAD_TIMEOUT_MS = 30000;
@@ -332,10 +341,22 @@
     }
   }
 
+  const ASSET_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // Flow asset id inside an image URL (https://flow-content.google/image/<uuid>?...); null when absent
+  function assetIdFromSrc(src) {
+    const match = /\/image\/([^/?#]+)/.exec(String(src ?? ''));
+    return match && ASSET_ID.test(match[1]) ? match[1].toLowerCase() : null;
+  }
+
+  // A reference is either an image already in the Flow project (assetId: it is selected, not
+  // uploaded) or file content to upload; base64 is the upload fallback when an assetId is present
   function normalizeReferences(references) {
     if (!Array.isArray(references)) return [];
     return references.map((ref, index) => {
-      if (!ref || typeof ref.base64 !== 'string' || !ref.base64) {
+      const assetId = typeof ref?.assetId === 'string' && ASSET_ID.test(ref.assetId) ? ref.assetId.toLowerCase() : null;
+      const base64 = typeof ref?.base64 === 'string' ? ref.base64 : '';
+      if (!ref || (!assetId && !base64)) {
         throw new Error(`La imagen de referencia ${index + 1} no tiene contenido.`);
       }
       // A unique name lets the job find its own upload in Flow's asset list (earlier uploads keep theirs)
@@ -345,7 +366,8 @@
       return {
         name: dot > 0 ? `${base.slice(0, dot)}${stamp}${base.slice(dot)}` : `${base}${stamp}`,
         mime: String(ref.mime || 'image/png'),
-        base64: ref.base64,
+        base64,
+        assetId,
       };
     });
   }
@@ -577,9 +599,72 @@
     return thumb && /^https?:/.test(thumb.currentSrc || thumb.src || '') ? row : null;
   }
 
-  async function attachReference(doc, bar, reference, hook) {
+  const isAssetOverlayOpen = (doc) =>
+    Boolean(doc.querySelector(SELECTORS.uploadButton) || doc.querySelector('input[aria-label="Buscar recursos"]'));
+
+  // The project grid tile of a Flow image. Tiles carry a stable data-media-id (the uuid also seen in
+  // flow-content.google URLs); asset-list rows do not, and their /asb/ URLs change between page loads.
+  function findTileImage(doc, assetId) {
+    return doc.querySelector(`${SELECTORS.resultImage}[data-media-id="${assetId}"], img[data-media-id="${assetId}"]`);
+  }
+
+  // The grid is virtualized: tiles exist only near the viewport, so scroll it from the top, bounded
+  async function findTileScrolling(doc, assetId) {
+    let tile = findTileImage(doc, assetId);
+    if (tile) return tile;
+    const viewport = doc.querySelector(SELECTORS.gridViewport);
+    if (!viewport) return null;
+    viewport.scrollTop = 0;
+    for (let step = 0; step <= ASSET_SCROLL_STEPS; step += 1) {
+      tile = await waitFor(() => findTileImage(doc, assetId), ASSET_SCROLL_WAIT_MS, 100);
+      if (tile) return tile;
+      const before = viewport.scrollTop;
+      viewport.scrollTop = before + Math.max(viewport.clientHeight * 0.8, 200);
+      if (viewport.scrollTop === before) return null;
+    }
+    return findTileImage(doc, assetId);
+  }
+
+  // Attaches an image that already lives in the Flow project: its tile → "Más opciones" → "Añadir a la
+  // petición". Returns false when the tile is not in this project so the caller can fall back to uploading.
+  async function attachBySelection(doc, bar, reference) {
     const before = attachmentCount(bar);
-    const isOpen = () => Boolean(doc.querySelector(SELECTORS.uploadButton) || doc.querySelector('input[aria-label="Buscar recursos"]'));
+    const isMenuOpen = () => overlayItems(doc, SELECTORS.menuItem).length > 0;
+    try {
+      const image = await findTileScrolling(doc, reference.assetId);
+      if (!image) return false;
+      image.scrollIntoView({ block: 'center' });
+      const tile = image.closest(SELECTORS.gridTile);
+      const more =
+        tile &&
+        Array.from(tile.querySelectorAll('button')).find((button) => labelMatches(button.getAttribute('aria-label'), SELECTORS.tileMoreLabel, true));
+      if (!more) throw new Error('No se encontró el menú de la hoja aprobada en Flow.');
+      press(doc, more);
+      const item = await waitFor(() => findByLabel(overlayItems(doc, SELECTORS.menuItem), SELECTORS.tileAddToPromptLabel, true), UI_TIMEOUT_MS);
+      if (!item) throw new Error('Flow no ofreció «Añadir a la petición» para la hoja aprobada.');
+      press(doc, item);
+      const attached = await waitFor(() => attachmentCount(bar) > before, UI_TIMEOUT_MS * 2);
+      if (!attached) throw new Error('La hoja aprobada no apareció adjunta en Flow.');
+      return true;
+    } finally {
+      await closeOverlays(doc, isMenuOpen);
+      // New results appear at the top of the grid
+      const viewport = doc.querySelector(SELECTORS.gridViewport);
+      if (viewport) viewport.scrollTop = 0;
+    }
+  }
+
+  async function attachReference(doc, bar, reference, hook) {
+    if (reference.assetId) {
+      if (await attachBySelection(doc, bar, reference)) return;
+      if (!reference.base64) throw new Error('La hoja aprobada no está en este proyecto de Flow.');
+    }
+    await attachByUpload(doc, bar, reference, hook);
+  }
+
+  async function attachByUpload(doc, bar, reference, hook) {
+    const before = attachmentCount(bar);
+    const isOpen = () => isAssetOverlayOpen(doc);
     await hook.arm(reference);
     try {
       const add = doc.querySelector(SELECTORS.addIngredientsButton);
@@ -873,6 +958,7 @@
     findByLabel,
     isFlowUrl,
     normalizeReferences,
+    assetIdFromSrc,
     isAgentModeOn,
     isBoxReady,
     runGenerate,

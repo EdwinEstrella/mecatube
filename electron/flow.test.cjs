@@ -8,7 +8,7 @@ const path = require('node:path');
 const { WebSocket } = require('ws');
 const { createBridge } = require('./bridge.cjs');
 const { createVideoStore } = require('./videos.cjs');
-const { createFlowStore, createFlowService, scenePromptForFlow } = require('./flow.cjs');
+const { flowAssetId, createFlowStore, createFlowService, scenePromptForFlow } = require('./flow.cjs');
 const { createMediaHandler } = require('./voice-ipc.cjs');
 
 const PORT = 47900 + Math.floor(Math.random() * 90);
@@ -287,7 +287,10 @@ async function waitUntil(check, label) {
 
   sceneStore.upsert(sceneVideo.id, { key: 'personaje-1-tomas', name: 'Personaje 1 — Tomás (protagonista)', role: '', prompt: 'sheet 1' });
   sceneStore.upsert(sceneVideo.id, { key: 'personaje-2-ana', name: 'Personaje 2 — Ana', role: '', prompt: 'sheet 2' });
-  sceneStore.addGeneration(sceneVideo.id, 'personaje-1-tomas', { images: [{ mime: 'image/png', base64: 'AQID' }, image] });
+  const SHEET_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
+  sceneStore.addGeneration(sceneVideo.id, 'personaje-1-tomas', {
+    images: [{ mime: 'image/png', base64: 'AQID', sourceUrl: `https://flow-content.google/image/${SHEET_ID}?Expires=1` }, image],
+  });
   const [tomas] = sceneStore.list(sceneVideo.id);
   sceneStore.select(sceneVideo.id, 'personaje-1-tomas', tomas.generations[0].files[0]);
 
@@ -295,7 +298,9 @@ async function waitUntil(check, label) {
     const { queued } = sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(1, ['1']), scene(2, ['1']), scene(3)] });
     assert.equal(queued, 3);
     assert.equal(sent.length, 1);
-    assert.equal(sent[0].prompt, 'scene 1');
+    // A scene with a sheet reference goes out with the reference guard appended
+    assert.equal(sent[0].prompt, scenePromptForFlow('scene 1', ['1']));
+    assert.ok(sent[0].prompt.startsWith('scene 1 '));
     assert.deepEqual(states(2), ['queued']);
     assert.deepEqual(sceneService.status().scenes, { busy: true, running: 1, pending: 2 });
     // a duplicate request for a queued or running scene is ignored
@@ -307,7 +312,7 @@ async function waitUntil(check, label) {
 
     finish(sent[0]);
     assert.equal(sent.length, 2);
-    assert.equal(sent[1].prompt, 'scene 2');
+    assert.equal(sent[1].prompt, scenePromptForFlow('scene 2', ['1']));
     assert.deepEqual(states(1), ['queued', 'running', 'running', 'done']);
     const stored = sceneStore.listScenes(sceneVideo.id);
     assert.deepEqual(stored.map((item) => item.number), [1]);
@@ -330,7 +335,8 @@ async function waitUntil(check, label) {
     assert.equal(job.model, 'nano-banana-pro');
     assert.equal(job.outputs, 2);
     assert.equal(job.references.length, 1);
-    assert.deepEqual(job.references[0], { name: tomas.generations[0].files[0], mime: 'image/png', base64: 'AQID' });
+    assert.deepEqual(job.references[0], { name: tomas.generations[0].files[0], mime: 'image/png', base64: 'AQID', assetId: SHEET_ID });
+    assert.deepEqual(tomas.generations[0].assetIds, [SHEET_ID, null]);
     assert.deepEqual(sent[2].references, [], 'a scene without sheet refs sends no references');
   });
 
@@ -447,6 +453,36 @@ async function waitUntil(check, label) {
     assert.match(out, /The character shown in attached reference image 1, a woman/);
     assert.match(out, /The character shown in attached reference image 2, a man/);
     assert.match(out, /their attached reference images/);
+  });
+
+  await test('asset ids from flow-result sourceUrl are persisted per file', async () => {
+    sent.length = 0;
+    const url = (id) => `https://flow-content.google/image/${id}?Expires=1`;
+    const ID_B = '11111111-2222-4333-8444-555555555555';
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(81)] });
+    finish(sent[0], { images: [{ ...image, sourceUrl: url(SHEET_ID) }, { ...image, sourceUrl: url(ID_B) }] });
+    const stored = sceneStore.listScenes(sceneVideo.id).find((item) => item.number === 81);
+    assert.deepEqual(stored.generations.at(-1).assetIds, [SHEET_ID, ID_B]);
+    sent.length = 0;
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(82)] });
+    finish(sent[0], { images: [{ ...image, sourceUrl: 'https://flow.google.com/asb/a' }, image] });
+    assert.deepEqual(sceneStore.listScenes(sceneVideo.id).find((item) => item.number === 82).generations.at(-1).assetIds, [null, null]);
+  });
+
+  await test('references of data stored without asset ids carry assetId null', async () => {
+    const file = path.join(sceneRoot, 'videos', sceneVideo.id, 'characters.json');
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    delete data[0].generations[0].assetIds;
+    fs.writeFileSync(file, JSON.stringify(data));
+    assert.equal(sceneStore.readReference(sceneVideo.id, 'personaje-1-tomas').assetId, null);
+  });
+
+  await test('flowAssetId parses the uuid of a Flow image URL', () => {
+    assert.equal(flowAssetId(`https://flow-content.google/image/${SHEET_ID}?Expires=1`), SHEET_ID);
+    assert.equal(flowAssetId(`https://flow-content.google/image/${SHEET_ID.toUpperCase()}`), SHEET_ID);
+    assert.equal(flowAssetId('https://flow.google.com/asb/a'), null);
+    assert.equal(flowAssetId('https://flow-content.google/image/nope?x=1'), null);
+    assert.equal(flowAssetId(undefined), null);
   });
 
   await test('scenePromptForFlow leaves prompts without references unchanged', () => {

@@ -71,6 +71,30 @@ test('normalizeReferences validates and fills defaults', () => {
   assert.throws(() => flow.normalizeReferences([{ name: 'a' }]), /sin contenido|no tiene contenido/);
 });
 
+test('normalizeReferences keeps assetId and accepts assetId-only references', () => {
+  const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
+  const [both, only] = flow.normalizeReferences([
+    { name: 'hoja.jpg', base64: 'AAAA', assetId: id.toUpperCase() },
+    { name: 'hoja.jpg', assetId: id },
+  ]);
+  assert.equal(both.assetId, id);
+  assert.equal(both.base64, 'AAAA');
+  assert.equal(only.assetId, id);
+  assert.equal(only.base64, '');
+  assert.equal(flow.normalizeReferences([{ base64: 'A' }])[0].assetId, null);
+  assert.equal(flow.normalizeReferences([{ base64: 'A', assetId: 'not-an-id' }])[0].assetId, null);
+  assert.throws(() => flow.normalizeReferences([{ assetId: 'not-an-id' }]), /no tiene contenido/);
+});
+
+test('assetIdFromSrc reads the uuid of a Flow image URL', () => {
+  const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
+  assert.equal(flow.assetIdFromSrc(`https://flow-content.google/image/${id}?Expires=1&Signature=x`), id);
+  assert.equal(flow.assetIdFromSrc(`https://flow-content.google/image/${id.toUpperCase()}`), id);
+  assert.equal(flow.assetIdFromSrc('https://flow.google.com/asb/abc'), null);
+  assert.equal(flow.assetIdFromSrc('https://flow-content.google/image/not-a-uuid?x=1'), null);
+  assert.equal(flow.assetIdFromSrc(undefined), null);
+});
+
 test('isAgentModeOn reads aria-pressed or the checked class', () => {
   const chip = (pressed, cls) => ({
     getAttribute: () => pressed,
