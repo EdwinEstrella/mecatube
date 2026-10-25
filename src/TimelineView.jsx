@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import VideoRow from './timeline/VideoRow.jsx';
-import { countDone, deriveStages, isPublished } from './timeline/stages.js';
+import VideoDetail from './timeline/VideoDetail.jsx';
+import { countDone, deriveStages } from './timeline/stages.js';
 import { charactersDone } from './flow/characterStatus.js';
-
-const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'progress', label: 'In progress' },
-  { id: 'published', label: 'Published' },
-];
 
 function cleanError(error) {
   return error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
@@ -19,18 +13,13 @@ function chatState(linkedId, chats) {
   return chats[linkedId] ? 'ok' : 'deleted';
 }
 
-// Container: loads videos plus the messages of their linked chats and derives the stages
-export default function TimelineView({ onOpenChat, onChatAction, initialVideoId = null, onInitialConsumed }) {
+// Container: 1 workspace = 1 video timeline project
+export default function TimelineView({ onOpenChat, onChatAction }) {
   const [videos, setVideos] = useState([]);
   const [conversations, setConversations] = useState([]);
-  // Messages of every linked chat by conversation id; null when the chat no longer exists
   const [chats, setChats] = useState({});
-  // Voice-over meta by video id; null when the video has no narration track yet
   const [voices, setVoices] = useState({});
-  // Stored Flow character records by video id
   const [characters, setCharacters] = useState({});
-  const [filter, setFilter] = useState('all');
-  const [openId, setOpenId] = useState(initialVideoId);
   const [error, setError] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -66,30 +55,17 @@ export default function TimelineView({ onOpenChat, onChatAction, initialVideoId 
     };
   }, [refresh]);
 
-  // Expands the video another view asked for (e.g. "Ver en Timeline" in the chat)
-  useEffect(() => {
-    if (!initialVideoId) return;
-    setOpenId(initialVideoId);
-    onInitialConsumed?.();
-  }, [initialVideoId, onInitialConsumed]);
+  const video = videos[0] ?? null;
 
-  const rows = useMemo(
-    () =>
-      videos.map((video) => {
-        const stages = deriveStages(video, chats[video.scriptConversationId], chats[video.illustratorConversationId], {
-          hasVoice: Boolean(voices[video.id]),
-          charactersApproved: charactersDone(characters[video.id]),
-        });
-        return { video, stages, doneCount: countDone(stages), published: isPublished(stages) };
-      }),
-    [videos, chats, voices, characters],
-  );
+  const stages = useMemo(() => {
+    if (!video) return [];
+    return deriveStages(video, chats[video.scriptConversationId], chats[video.illustratorConversationId], {
+      hasVoice: Boolean(voices[video.id]),
+      charactersApproved: charactersDone(characters[video.id]),
+    });
+  }, [video, chats, voices, characters]);
 
-  const visible = rows.filter((row) => {
-    if (filter === 'published') return row.published;
-    if (filter === 'progress') return !row.published;
-    return true;
-  });
+  const doneCount = countDone(stages);
 
   const run = async (action) => {
     setError('');
@@ -101,12 +77,11 @@ export default function TimelineView({ onOpenChat, onChatAction, initialVideoId 
     await refresh().catch(() => {});
   };
 
-  // Creates the video, then hands the Prompt 1 send to the chat; it links the new conversation afterwards
-  const handleNew = async () => {
+  const handleSendPrompt1 = async () => {
     setError('');
     try {
-      const video = await window.electronAPI.createVideo({});
-      onChatAction({ type: 'send-preset', presetId: 'prompt-1', videoId: video.id, role: 'script' });
+      const v = video ?? (await window.electronAPI.createVideo({}));
+      onChatAction({ type: 'send-preset', presetId: 'prompt-1', videoId: v.id, role: 'script' });
     } catch (createError) {
       setError(cleanError(createError));
     }
@@ -120,16 +95,14 @@ export default function TimelineView({ onOpenChat, onChatAction, initialVideoId 
       role,
     });
 
-  // Cycle: automatic -> forced done -> forced not done -> automatic
-  const handleToggleStage = (video, stage) => {
-    const current = video.overrides?.[stage.key];
+  const handleToggleStage = (targetVideo, stage) => {
+    const current = targetVideo.overrides?.[stage.key];
     const next = current === undefined ? true : current === true ? false : null;
-    return run(() => window.electronAPI.setVideoStage(video.id, stage.key, next));
+    return run(() => window.electronAPI.setVideoStage(targetVideo.id, stage.key, next));
   };
 
   const detail = {
     conversations,
-    // Saved quietly (no error banner reset); the refresh keeps the stored text in sync for later opens
     onSaveNarration: (id, narrationText) =>
       window.electronAPI
         .updateVideo(id, { narrationText })
@@ -142,69 +115,29 @@ export default function TimelineView({ onOpenChat, onChatAction, initialVideoId 
     onOpenChat,
     onStartPrompt: handleStartPrompt,
     onToggleStage: handleToggleStage,
-    onDelete: (id) => {
-      setOpenId(null);
-      return run(() => window.electronAPI.deleteVideo(id));
-    },
+    onDelete: (id) => run(() => window.electronAPI.deleteVideo(id)),
   };
 
   return (
     <div className="settings timeline">
-      <div className="timeline__header">
-        <h1 className="settings__title timeline__title">Timeline</h1>
-        <button type="button" className="settings__button settings__button--primary" onClick={handleNew}>
-          Send Prompt 1
-        </button>
-      </div>
-
-      <div className="timeline__filters" role="group" aria-label="Filter videos">
-        {FILTERS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`timeline__chip${filter === item.id ? ' timeline__chip--active' : ''}`}
-            aria-pressed={filter === item.id}
-            onClick={() => setFilter(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       {error && <p className="chat-messages__error">{error}</p>}
 
-      {isLoaded && videos.length === 0 && (
-        <div className="timeline__empty">
-          <p className="settings__empty">No videos yet. Start one and track it from idea to published.</p>
-          <button type="button" className="settings__button settings__button--primary" onClick={handleNew}>
-            Send Prompt 1
-          </button>
-        </div>
+      {isLoaded && video && (
+        <VideoDetail
+          video={video}
+          stages={stages}
+          doneCount={doneCount}
+          onSendPrompt1={handleSendPrompt1}
+          {...detail}
+          scriptMessages={chats[video.scriptConversationId]}
+          voice={voices[video.id]}
+          characters={characters[video.id] ?? []}
+          chatStates={{
+            script: chatState(video.scriptConversationId, chats),
+            illustrator: chatState(video.illustratorConversationId, chats),
+          }}
+        />
       )}
-      {isLoaded && videos.length > 0 && visible.length === 0 && <p className="settings__empty">No videos match this filter.</p>}
-
-      <ul className="video-list">
-        {visible.map(({ video, stages, doneCount }) => (
-          <VideoRow
-            key={video.id}
-            video={video}
-            stages={stages}
-            doneCount={doneCount}
-            isOpen={openId === video.id}
-            onToggleOpen={() => setOpenId((current) => (current === video.id ? null : video.id))}
-            detail={{
-              ...detail,
-              scriptMessages: chats[video.scriptConversationId],
-              voice: voices[video.id],
-              characters: characters[video.id] ?? [],
-              chatStates: {
-                script: chatState(video.scriptConversationId, chats),
-                illustrator: chatState(video.illustratorConversationId, chats),
-              },
-            }}
-          />
-        ))}
-      </ul>
     </div>
   );
 }

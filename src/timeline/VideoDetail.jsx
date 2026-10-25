@@ -34,15 +34,17 @@ function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onS
   );
 }
 
-// Presentational: rename, chat links, per-stage overrides and delete for one video
+// Presentational: 1 single timeline for the workspace
 export default function VideoDetail({
   video,
   stages,
+  doneCount = 0,
   chatStates,
   conversations,
   scriptMessages,
   voice,
   characters = [],
+  onSendPrompt1,
   onSetFlowProject,
   onOpenFlowProject,
   onSaveNarration,
@@ -56,7 +58,6 @@ export default function VideoDetail({
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [isConfirming, setIsConfirming] = useState(false);
-  // Guards against saving twice when Enter unmounts the input and blur fires afterwards
   const settledRef = useRef(false);
 
   const startEditing = () => {
@@ -74,37 +75,57 @@ export default function VideoDetail({
   };
 
   return (
-    <div className="video-detail">
-      <div className="video-detail__header">
-        {isEditing ? (
-          <input
-            className="chat-list__rename video-detail__rename"
-            value={draft}
-            maxLength={120}
-            autoFocus
-            aria-label="Video title"
-            onFocus={(event) => event.target.select()}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => finishEditing(true)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') finishEditing(true);
-              else if (event.key === 'Escape') finishEditing(false);
-            }}
-          />
-        ) : (
-          <>
-            <h3 className="video-detail__title">{video.title}</h3>
-            <button
-              type="button"
-              className="chat-list__rename-button video-detail__edit"
-              aria-label="Rename video"
-              title="Rename video"
-              onClick={startEditing}
-            >
-              ✎
-            </button>
-          </>
-        )}
+    <div className="video-detail" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+          {isEditing ? (
+            <input
+              className="chat-list__rename video-detail__rename"
+              style={{ fontSize: '1.4rem', fontWeight: 600, padding: '4px 8px' }}
+              value={draft}
+              maxLength={120}
+              autoFocus
+              aria-label="Video title"
+              onFocus={(event) => event.target.select()}
+              onChange={(event) => setDraft(event.target.value)}
+              onBlur={() => finishEditing(true)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') finishEditing(true);
+                else if (event.key === 'Escape') finishEditing(false);
+              }}
+            />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
+              <h1 className="settings__title" style={{ margin: 0, fontSize: '1.6rem' }}>
+                {video.title}
+              </h1>
+              <button
+                type="button"
+                className="chat-list__rename-button video-detail__edit"
+                aria-label="Rename video"
+                title="Rename video"
+                onClick={startEditing}
+              >
+                ✎
+              </button>
+              <span className="settings__card-text" style={{ fontSize: '0.82rem', opacity: 0.65 }}>
+                {doneCount}/{stages.length} stages completed
+              </span>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="settings__button settings__button--primary"
+          onClick={onSendPrompt1}
+        >
+          Send Prompt 1
+        </button>
+      </div>
+
+      <div style={{ marginBottom: '24px' }}>
+        <StageTrack stages={stages} onToggle={(stage) => onToggleStage(video, stage)} />
       </div>
 
       <ChatLink
@@ -139,18 +160,11 @@ export default function VideoDetail({
         onOpenProject={onOpenFlowProject}
       />
 
-      <div>
-        <p className="settings__card-text">
-          Click a stage to cycle: automatic, forced done, forced not done, back to automatic.
-        </p>
-        <StageTrack stages={stages} onToggle={(stage) => onToggleStage(video, stage)} />
-      </div>
-
-      <div className="saved-idea__actions">
+      <div className="saved-idea__actions" style={{ marginTop: '16px' }}>
         {isConfirming ? (
           <>
             <button type="button" className="settings__button settings__button--danger" onClick={() => onDelete(video.id)}>
-              Confirm delete
+              Confirm reset
             </button>
             <button type="button" className="settings__button settings__button--ghost" onClick={() => setIsConfirming(false)}>
               Cancel
@@ -158,7 +172,7 @@ export default function VideoDetail({
           </>
         ) : (
           <button type="button" className="settings__button settings__button--danger" onClick={() => setIsConfirming(true)}>
-            Delete video
+            Reset timeline
           </button>
         )}
       </div>

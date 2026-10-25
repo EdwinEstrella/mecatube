@@ -9,6 +9,7 @@ const { createPromptStore } = require('./prompts.cjs');
 const { createIdeaStore } = require('./ideas.cjs');
 const { createVideoStore } = require('./videos.cjs');
 const { createSecretStore } = require('./secrets.cjs');
+const deepseek = require('./deepseek.cjs');
 const { createVoiceService } = require('./cartesia.cjs');
 const { MEDIA_SCHEME, registerMediaScheme, createMediaHandler, registerVoiceIpc } = require('./voice-ipc.cjs');
 const { createVoicePrefsStore } = require('./voice-prefs.cjs');
@@ -198,10 +199,57 @@ ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
   if (content.trim() === '') throw new Error('Message is empty.');
   if (inFlight) throw new Error('A reply is already in progress.');
   if (resyncing) throw new Error('Se está resincronizando una conversación. Espera un momento.');
-  if (!bridge.isConnected()) throw new Error('The DeepSeek extension is not connected.');
+
+  const deepSeekKey = secrets.getDeepSeekKey();
+  if (!deepSeekKey && !bridge.isConnected()) {
+    throw new Error('Configura tu API Key de DeepSeek en Ajustes o conecta la extensión.');
+  }
 
   const conversation = (conversationId && conversations.get(conversationId)) || conversations.create();
   conversations.appendMessage(conversation.id, 'user', content);
+
+  if (deepSeekKey) {
+    const abortController = new AbortController();
+    inFlight = { conversationId: conversation.id, abortController };
+
+    (async () => {
+      try {
+        const fullConv = conversations.get(conversation.id);
+        const historyForApi = (fullConv?.messages || []).map((m) => ({
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.content,
+        }));
+
+        const finalContent = await deepseek.streamChat({
+          apiKey: deepSeekKey,
+          messages: historyForApi,
+          model: 'deepseek-chat',
+          signal: abortController.signal,
+          onDelta: (accumulated) => {
+            pushToWindow('chat:delta', { conversationId: conversation.id, text: accumulated });
+          },
+        });
+
+        const savedMessage = conversations.appendMessage(conversation.id, 'assistant', finalContent);
+        pushToWindow('chat:done', {
+          conversationId: conversation.id,
+          message: savedMessage,
+          source: 'api',
+        });
+      } catch (err) {
+        if (!abortController.signal.aborted) {
+          pushToWindow('chat:error', {
+            conversationId: conversation.id,
+            message: err.message || 'Error communicating with DeepSeek API.',
+          });
+        }
+      } finally {
+        inFlight = null;
+      }
+    })();
+
+    return { conversationId: conversation.id };
+  }
 
   const requestId = crypto.randomUUID();
   inFlight = { requestId, conversationId: conversation.id };
@@ -284,6 +332,21 @@ app.whenReady().then(() => {
   workspaceStore = createWorkspaceStore(app.getPath('userData'));
   secrets = createSecretStore(app.getPath('userData'), safeStorage);
   bridge = createBridge();
+
+  ipcMain.handle('secrets:deepseek-status', () => secrets.deepSeekStatus());
+  ipcMain.handle('secrets:deepseek-save', (_event, { key } = {}) => {
+    secrets.saveDeepSeekKey(key);
+    return secrets.deepSeekStatus();
+  });
+  ipcMain.handle('secrets:deepseek-clear', () => {
+    secrets.clearDeepSeekKey();
+    return secrets.deepSeekStatus();
+  });
+  ipcMain.handle('secrets:deepseek-test', async () => {
+    const key = secrets.getDeepSeekKey();
+    return await deepseek.testConnection(key);
+  });
+
   setupWorkspace(workspaceStore.getActive().path);
 
   registerVoiceIpc({

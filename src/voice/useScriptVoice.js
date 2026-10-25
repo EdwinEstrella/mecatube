@@ -3,13 +3,11 @@ import { cleanIpcError } from './constants.js';
 import { extractNarration } from './narration.js';
 import { ensureScriptVideo } from './scriptVideo.js';
 import { FALLBACK_PREFS, useVoicePrefs } from './useVoicePrefs.js';
-import { useCreditSummary } from './useCreditSummary.js';
 
 // Container logic for the "Generar voz en off" buttons of a script chat. All script messages share
 // one track: the video linked to the conversation.
 export function useScriptVoice(conversationId, messages) {
   const prefs = useVoicePrefs() ?? FALLBACK_PREFS;
-  const balance = useCreditSummary();
   const [configured, setConfigured] = useState(null);
   const [busy, setBusy] = useState(false);
   const [videoId, setVideoId] = useState(null);
@@ -106,7 +104,6 @@ export function useScriptVoice(conversationId, messages) {
     seconds,
     error,
     doneId,
-    balance,
     voiceName: prefs.voiceName,
     request,
     confirm,

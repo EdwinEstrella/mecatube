@@ -8,6 +8,13 @@ const FIELDS = [
   ['trigger', /^gatillo principal\s*:\s*(.*)$/i],
 ];
 const MIN_IDEAS = 3;
+const INLINE_LABEL = /\s+(?=(?:\*\*|__)?(?:formato|pregunta central|texto de miniatura|gatillo principal)\s*(?:\*\*|__)?\s*:)/gi;
+
+// Some replies put every field on the title line; break them apart so each field gets its own line
+function splitInlineFields(line) {
+  const labels = line.match(INLINE_LABEL);
+  return labels && labels.length >= 2 ? line.split(INLINE_LABEL) : [line];
+}
 
 // Removes heading, quote and list markers plus emphasis so labels match regardless of styling
 function normalize(line) {
@@ -33,7 +40,7 @@ function stripWrapping(value) {
 export function parseIdeas(markdown) {
   if (typeof markdown !== 'string' || !markdown) return null;
 
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n').flatMap(splitInlineFields);
   const intro = [];
   const outro = [];
   const ideas = [];

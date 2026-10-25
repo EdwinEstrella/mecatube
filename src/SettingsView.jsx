@@ -10,6 +10,7 @@ import {
 } from './prompts/presets.js';
 import { parseConnectors } from './prompts/connectors.js';
 import CartesiaSettings from './voice/CartesiaSettings.jsx';
+import DeepSeekSettings from './settings/DeepSeekSettings.jsx';
 
 
 // Edits one preset prompt; text is kept and saved exactly as typed, with no trimming or normalization
@@ -116,6 +117,8 @@ export default function SettingsView() {
       transition={{ duration: 0.3, ease: 'easeOut' }}
     >
       <h1 className="settings__title">Settings</h1>
+
+      <DeepSeekSettings />
 
       <CartesiaSettings />
 

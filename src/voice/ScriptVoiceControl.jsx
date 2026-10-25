@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
 import VoicePlayer from './VoicePlayer.jsx';
-import { formatCredits } from './creditsText.js';
-
-const LOCALE = 'es-ES';
 
 // Presentational: voice-over button, inline confirm, progress and player under one script message.
-// phase: 'idle' | 'confirm' | 'generating'; remaining: { left, over } estimate for this narration.
+// phase: 'idle' | 'confirm' | 'generating'.
 export default function ScriptVoiceControl({
   chars,
   voiceName,
@@ -47,11 +44,8 @@ export default function ScriptVoiceControl({
           </>
         ) : phase === 'confirm' ? (
           <>
-            <span className={`settings__card-text${remaining.over ? ' script-voice__warn' : ''}`}>
-              Esto gastará {formatCredits(chars, LOCALE)} créditos de Cartesia
-              {remaining.left !== null && ` · te quedarán ≈ ${formatCredits(remaining.left, LOCALE)}`}
-              {remaining.over && ' (supera tu saldo estimado)'}
-              {voiceName && ` · Voz: ${voiceName}`}
+            <span className="settings__card-text">
+              ¿Generar locución con Cartesia? ({chars.toLocaleString('es-ES')} caracteres{voiceName ? ` · Voz: ${voiceName}` : ''})
             </span>
             <button type="button" className="settings__button settings__button--primary" onClick={onConfirm}>
               Confirmar

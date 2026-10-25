@@ -29,6 +29,7 @@ export default function ChatView({
   const [pending, setPending] = useState(null);
   const [error, setError] = useState('');
   const [isConnected, setIsConnected] = useState(false);
+  const [isApiConfigured, setIsApiConfigured] = useState(false);
   // True once the first bridge status reply arrived, so a queued action does not run on the initial "false"
   const [bridgeChecked, setBridgeChecked] = useState(false);
   const [savedIdeas, setSavedIdeas] = useState([]);
@@ -259,9 +260,10 @@ export default function ChatView({
   const savedKeys = new Set(
     savedIdeas.filter((item) => item.conversationId === activeId).map((item) => `${item.messageId}:${item.number}`),
   );
-  const placeholder = isConnected
-    ? 'Message DeepSeek (Enter to send, Shift+Enter for a new line)'
-    : 'Waiting for the browser extension…';
+  const canChat = isApiConfigured || isConnected;
+  const placeholder = canChat
+    ? 'Mensaje a DeepSeek (Enter para enviar, Shift+Enter para nueva línea)'
+    : 'Configura la API Key de DeepSeek en Ajustes o conecta la extensión…';
 
   return (
     <div className="chat">
@@ -276,9 +278,13 @@ export default function ChatView({
       />
 
       <section className="chat__main">
-        <div className={`chat__status${isConnected ? ' chat__status--on' : ''}`}>
+        <div className={`chat__status${canChat ? ' chat__status--on' : ''}`}>
           <span className="chat__status-dot" />
-          {isConnected ? 'Extension connected' : 'Extension not connected — install it from the extension folder'}
+          {isApiConfigured
+            ? 'DeepSeek API conectada'
+            : isConnected
+              ? 'Extensión conectada'
+              : 'Sin conexión — ingresa tu API Key en Ajustes'}
           {activeId && (
             <button
               type="button"
@@ -299,7 +305,7 @@ export default function ChatView({
           isWaiting={isWaiting}
           error={error}
           savedKeys={savedKeys}
-          canSend={!isBusy && isConnected}
+          canSend={!isBusy && canChat}
           onSend={handleSend}
           onToggleIdea={handleToggleIdea}
           onChooseIdea={handleChooseIdea}
@@ -310,12 +316,12 @@ export default function ChatView({
         />
 
         <PromptPresets
-          disabled={isBusy || !isConnected}
+          disabled={!canChat || isBusy}
           hasActiveConversation={activeId !== null}
           onSend={handlePreset}
           onSendConnectors={handleSend}
         />
-        <Composer disabled={isBusy || !isConnected} placeholder={placeholder} onSend={handleSend} />
+        <Composer disabled={!canChat || isBusy} placeholder={placeholder} onSend={handleSend} />
       </section>
     </div>
   );

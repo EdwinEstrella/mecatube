@@ -71,6 +71,10 @@ function createSecretStore(dir, safeStorage) {
     cartesiaStatus: () => status('cartesia'),
     saveCartesiaKey: (value) => save('cartesia', value),
     clearCartesiaKey: () => clear('cartesia'),
+    getDeepSeekKey: () => decrypt('deepseek'),
+    deepSeekStatus: () => status('deepseek'),
+    saveDeepSeekKey: (value) => save('deepseek', value),
+    clearDeepSeekKey: () => clear('deepseek'),
   };
 }
 

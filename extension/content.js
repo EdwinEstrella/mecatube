@@ -10,7 +10,7 @@ const SELECTORS = {
   // Send button; DeepSeek uses a div[role="button"] next to the input
   sendButton: 'div[role="button"][aria-disabled], div[role="button"]',
   // Present only while a reply is being generated (turns the send button into "stop")
-  stopButton: 'div[role="button"] svg rect, [aria-label*="Stop" i]',
+  stopButton: 'div[role="button"] svg rect, button svg rect, [aria-label*="Stop" i], [aria-label*="Detener" i], [aria-label*="Parar" i], [title*="Stop" i], [title*="Detener" i], [title*="Parar" i]',
   // Rendered assistant reply (markdown container); one match per assistant message
   assistantMessage: '.ds-markdown',
   // "Thinking" block inside a reply; its text is skipped
@@ -39,15 +39,15 @@ const HISTORY_API = {
 };
 
 const DELTA_THROTTLE_MS = 150;
-const STABLE_MS = 1500;
+const STABLE_MS = 3500;
 const TIMEOUT_MS = 5 * 60 * 1000;
 const POLL_MS = 250;
 const URL_WAIT_MS = 3000;
-const API_POLL_MS = 1000;
+const API_POLL_MS = 2500;
 // Consecutive failed history reads before the reply falls back to the DOM text
-const API_MAX_FAILURES = 3;
+const API_MAX_FAILURES = 8;
 // Fallback without the API: the DOM text must stay untouched this long
-const DOM_FALLBACK_STABLE_MS = 5000;
+const DOM_FALLBACK_STABLE_MS = 8000;
 // The API keeps saying "pending" although the DOM has been done and still for this long: trust the DOM
 const API_PENDING_GRACE_MS = 60000;
 const HISTORY_FETCH_TIMEOUT_MS = 20000;

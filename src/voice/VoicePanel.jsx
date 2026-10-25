@@ -3,8 +3,6 @@ import VoiceOptions from './VoiceOptions.jsx';
 import VoicePlayer from './VoicePlayer.jsx';
 import { DEFAULT_MODEL, DEFAULT_VOICE, cleanIpcError } from './constants.js';
 import { narrationFromChat } from './narration.js';
-import { afterRemaining, formatCredits } from './creditsText.js';
-import { useCreditSummary } from './useCreditSummary.js';
 import { useVoicePrefs } from './useVoicePrefs.js';
 
 const SAVE_DELAY_MS = 700;
@@ -19,9 +17,6 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
   const characters = text.length;
 
   const prefs = useVoicePrefs();
-  const balance = useCreditSummary();
-  const spent = balance?.perVideo?.[video.id] ?? 0;
-  const remaining = afterRemaining(balance, characters);
   const [configured, setConfigured] = useState(null);
   const [voiceId, setVoiceId] = useState(voice?.voiceId || DEFAULT_VOICE.id);
   const [voiceName, setVoiceName] = useState(voice?.voiceName || DEFAULT_VOICE.name);
@@ -125,8 +120,7 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
       />
       <div className="voice-panel__meta">
         <span className="settings__card-text">
-          {characters.toLocaleString('en-US')} characters ≈ {characters.toLocaleString('en-US')} credits
-          {spent > 0 && ` · ${formatCredits(spent)} credits spent on this video`}
+          {characters.toLocaleString('en-US')} characters
         </span>
         <button
           type="button"
@@ -162,10 +156,8 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
           </>
         ) : isConfirming ? (
           <>
-            <span className={`settings__card-text${remaining.over ? ' script-voice__warn' : ''}`}>
-              {voice ? 'This replaces the current track and uses' : 'This will use'} {characters.toLocaleString('en-US')} credits
-              {remaining.left !== null && ` · about ${formatCredits(remaining.left)} left afterwards`}
-              {remaining.over ? ' (more than your estimated balance)' : '.'}
+            <span className="settings__card-text">
+              {voice ? 'This will replace the current track.' : 'Generate voice-over for this narration?'}
             </span>
             <button type="button" className="settings__button settings__button--primary" onClick={handleGenerate}>
               Confirm

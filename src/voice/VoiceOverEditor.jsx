@@ -1,9 +1,7 @@
 import VoiceOptions from './VoiceOptions.jsx';
 import CustomCheckbox from '../ui/CustomCheckbox.jsx';
-import { formatCredits } from './creditsText.js';
 
 // Presentational: paste any script, pick voice and model, confirm and generate.
-// phase: 'idle' | 'confirm' | 'generating'; remaining: { left, over } for the text that will be sent.
 export default function VoiceOverEditor({
   text,
   title,
@@ -76,8 +74,7 @@ export default function VoiceOverEditor({
       />
 
       <p className="settings__card-text">
-        {formatCredits(chars)} characters ≈ {formatCredits(chars)} credits
-        {remaining.left !== null && ` · ≈ ${formatCredits(remaining.left)} left after`}
+        {chars.toLocaleString('en-US')} characters
       </p>
 
       <div className="voice-panel__actions">
@@ -92,10 +89,8 @@ export default function VoiceOverEditor({
           </>
         ) : phase === 'confirm' ? (
           <>
-            <span className={`settings__card-text${remaining.over ? ' script-voice__warn' : ''}`}>
-              This will use {formatCredits(chars)} credits
-              {remaining.left !== null && ` · about ${formatCredits(remaining.left)} left afterwards`}
-              {remaining.over ? ' (more than your estimated balance)' : '.'}
+            <span className="settings__card-text">
+              Generate voice-over for this text?
             </span>
             <button type="button" className="settings__button settings__button--primary" onClick={onConfirm}>
               Confirm

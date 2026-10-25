@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { cleanIpcError } from './constants.js';
-import CreditsSettings from './CreditsSettings.jsx';
 import SavedVoicesSettings from './SavedVoicesSettings.jsx';
 
 const MASKED_KEY = '••••••••••••••••••••••••••••••••';
@@ -124,8 +123,6 @@ export default function CartesiaSettings() {
       )}
 
       <SavedVoicesSettings />
-
-      <CreditsSettings />
     </div>
   );
 }

@@ -208,6 +208,47 @@ async function waitUntil(check, label) {
     assert.equal(service.projectUrl(video.id), PROJECT);
   });
 
+  await test('watchdog: a job that never answers fails, frees the UI, and late messages are ignored', async () => {
+    let listener = null;
+    const fakeBridge = { isConnected: () => true, sendFlowJob: () => {}, onMessage: (fn) => (listener = fn), onStatusChange: () => {} };
+    const events = [];
+    const watched = createFlowService({ bridge: fakeBridge, store, videos, pushToWindow: (c, p) => events.push([c, p]), jobTimeoutMs: 80 });
+    const { requestId } = watched.generate({ videoId: video.id, characterKey: 'personaje-1-tomas', name: 'n', role: '', prompt: 'p' });
+    assert.equal(watched.status().busy, true);
+    await waitUntil(() => !watched.status().busy, 'watchdog');
+    const error = events.find(([channel]) => channel === 'flow:error');
+    assert.ok(error, 'flow:error must be pushed');
+    assert.equal(error[1].characterKey, 'personaje-1-tomas');
+    assert.match(error[1].message, /tardó demasiado/);
+    // The extension answering after the watchdog must not resurrect the job or store images
+    const before = store.list(video.id)[0].generations.length;
+    listener({ type: 'flow-result', requestId, images: [{ mime: 'image/webp', base64: WEBP.toString('base64') }] });
+    assert.equal(store.list(video.id)[0].generations.length, before);
+    // and a new job can start right away
+    watched.generate({ videoId: video.id, characterKey: 'personaje-1-tomas', name: 'n', role: '', prompt: 'p' });
+    assert.equal(watched.status().busy, true);
+    await waitUntil(() => !watched.status().busy, 'second watchdog');
+  });
+
+  await test('the extension\'s start-failure error reaches the UI verbatim and submitMethod is stored', async () => {
+    let listener = null;
+    const fakeBridge = { isConnected: () => true, sendFlowJob: () => {}, onMessage: (fn) => (listener = fn), onStatusChange: () => {} };
+    const events = [];
+    const relayed = createFlowService({ bridge: fakeBridge, store, videos, pushToWindow: (c, p) => events.push([c, p]), jobTimeoutMs: 60000 });
+    let { requestId } = relayed.generate({ videoId: video.id, characterKey: 'personaje-1-tomas', name: 'n', role: '', prompt: 'p' });
+    const text = 'Flow no empezó a generar (el botón de generar no respondió).';
+    listener({ type: 'flow-error', requestId, message: text });
+    assert.deepEqual(events.at(-1), ['flow:error', { videoId: video.id, characterKey: 'personaje-1-tomas', message: text }]);
+    assert.equal(relayed.status().busy, false);
+
+    ({ requestId } = relayed.generate({ videoId: video.id, characterKey: 'personaje-1-tomas', name: 'n', role: '', prompt: 'p' }));
+    listener({ type: 'flow-result', requestId, projectUrl: PROJECT, submitMethod: 'pointer-sequence', images: [{ mime: 'image/webp', base64: WEBP.toString('base64') }] });
+    const generations = store.list(video.id)[0].generations;
+    assert.equal(generations.at(-1).submitMethod, 'pointer-sequence');
+    listener({ type: 'flow-error', requestId: 'x', message: 'ignored' });
+    assert.equal(events.at(-1)[0], 'flow:result');
+  });
+
   bridge.stop();
   fs.rmSync(dir, { recursive: true, force: true });
   console.log(`\n${results.length} passed`);

@@ -7,7 +7,6 @@ import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
 import { chosenIdeaNumber, hasUserMessageAfter } from './chosenIdea.js';
 import { isScriptMessage } from '../timeline/stages.js';
 import { extractNarration } from '../voice/narration.js';
-import { afterRemaining } from '../voice/creditsText.js';
 import ScriptVoiceControl from '../voice/ScriptVoiceControl.jsx';
 import CopyScriptButton from './CopyScriptButton.jsx';
 
@@ -132,7 +131,6 @@ export default function MessageList({
                   phase={scriptVoice.phase?.messageId === message.id ? scriptVoice.phase.kind : 'idle'}
                   seconds={scriptVoice.seconds}
                   error={scriptVoice.error?.messageId === message.id ? scriptVoice.error.text : ''}
-                  remaining={afterRemaining(scriptVoice.balance, narrationLengths[index])}
                   expandPlayer={scriptVoice.doneId === message.id}
                   onRequest={() => scriptVoice.request(message.id)}
                   onConfirm={() => scriptVoice.confirm(message)}

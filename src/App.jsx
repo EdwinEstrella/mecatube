@@ -6,6 +6,7 @@ import IdeasView from './IdeasView.jsx';
 import TimelineView from './TimelineView.jsx';
 import SettingsView from './SettingsView.jsx';
 import VoiceOverView from './VoiceOverView.jsx';
+import ErrorBoundary from './ui/ErrorBoundary.jsx';
 
 export default function App() {
   const [activeView, setActiveView] = useState('chat');
@@ -42,6 +43,7 @@ export default function App() {
         <Sidebar activeView={activeView} onNavigate={setActiveView} />
 
         <main className="app">
+          <ErrorBoundary>
           {activeView === 'chat' && (
             <ChatView
               initialConversationId={pendingConversationId}
@@ -63,6 +65,7 @@ export default function App() {
           )}
           {activeView === 'voiceover' && <VoiceOverView onOpenSettings={() => setActiveView('settings')} />}
           {activeView === 'settings' && <SettingsView />}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

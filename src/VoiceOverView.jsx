@@ -3,8 +3,7 @@ import VoiceOverEditor from './voice/VoiceOverEditor.jsx';
 import VoiceOverHistory from './voice/VoiceOverHistory.jsx';
 import { cleanIpcError } from './voice/constants.js';
 import { extractNarration } from './voice/narration.js';
-import { afterRemaining, voiceoverText } from './voice/creditsText.js';
-import { useCreditSummary } from './voice/useCreditSummary.js';
+import { voiceoverText } from './voice/creditsText.js';
 import { FALLBACK_PREFS, useVoicePrefs } from './voice/useVoicePrefs.js';
 
 const DRAFT_KEY = 'mecatube.voiceover.draft';
@@ -26,7 +25,6 @@ function loadDraft() {
 export default function VoiceOverView({ onOpenSettings }) {
   const api = window.electronAPI;
   const prefs = useVoicePrefs();
-  const balance = useCreditSummary();
   const [draft, setDraft] = useState(loadDraft);
   const [configured, setConfigured] = useState(null);
   const [voiceId, setVoiceId] = useState(FALLBACK_PREFS.voiceId);
@@ -39,7 +37,6 @@ export default function VoiceOverView({ onOpenSettings }) {
   const [items, setItems] = useState([]);
 
   const sent = voiceoverText(draft.text, draft.clean, extractNarration);
-  const remaining = afterRemaining(balance, sent.length);
 
   useEffect(() => {
     try {
@@ -119,7 +116,6 @@ export default function VoiceOverView({ onOpenSettings }) {
         phase={phase}
         seconds={seconds}
         error={error}
-        remaining={remaining}
         onTextChange={(text) => setDraft((current) => ({ ...current, text }))}
         onTitleChange={(title) => setDraft((current) => ({ ...current, title }))}
         onCleanChange={(clean) => setDraft((current) => ({ ...current, clean }))}

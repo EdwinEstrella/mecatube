@@ -82,6 +82,21 @@ test('wrapped trigger continues on a lowercase line', () => {
   assert.equal(result.ideas[0].trigger, 'curiosidad / miedo / indignación');
 });
 
+test('all fields inline on the title line', () => {
+  const item = (n) =>
+    `**${n}. ¿Tema ${n}?** Formato: Narrativo Pregunta central: ¿Cómo era ${n}? Texto de miniatura: "¿EN EL BAÑO?" Gatillo principal: curiosidad / contraste`;
+  const result = parseIdeas(`## 10 IDEAS DE VIDEO\n\n${[1, 2, 3].map(item).join('\n\n')}`);
+  assert.equal(result.ideas.length, 3);
+  assert.deepEqual(result.ideas[0], {
+    number: 1,
+    title: '¿Tema 1?',
+    format: 'Narrativo',
+    question: '¿Cómo era 1?',
+    thumbnailText: '¿EN EL BAÑO?',
+    trigger: 'curiosidad / contraste',
+  });
+});
+
 test('non-idea replies return null', () => {
   assert.equal(parseIdeas('Hola, ¿en qué te ayudo?'), null);
   assert.equal(parseIdeas('1. Primero\n2. Segundo\n3. Tercero\n4. Cuarto'), null);

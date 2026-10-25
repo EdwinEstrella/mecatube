@@ -32,7 +32,7 @@ function progressText(job) {
 }
 
 // Presentational: one card per character sheet. The container owns jobs, records and sending.
-function CharacterCard({ card, record, videoId, job, canStart, hasProject, error, onGenerate, onSelect, onOpenFlow }) {
+function CharacterCard({ card, record, videoId, job, canStart, hasProject, error, onGenerate, onSelect, onOpenFlow, onPreview }) {
   const running = Boolean(job) && job.characterKey === card.key;
   const files = (record?.generations ?? []).flatMap((generation) => generation.files);
   const hasGenerations = files.length > 0;
@@ -81,8 +81,9 @@ function CharacterCard({ card, record, videoId, job, canStart, hasProject, error
         <ul className="char-card__grid" aria-label={`Imágenes de ${card.title}`}>
           {files.map((file) => {
             const selected = record.selectedFile === file;
+            const url = characterImageUrl(videoId, card.key, file);
             return (
-              <li key={file}>
+              <li key={file} className="char-card__item">
                 <button
                   type="button"
                   className={`char-card__image${selected ? ' char-card__image--selected' : ''}`}
@@ -90,7 +91,29 @@ function CharacterCard({ card, record, videoId, job, canStart, hasProject, error
                   aria-label={selected ? 'Imagen seleccionada' : 'Seleccionar esta imagen'}
                   onClick={() => onSelect(card.key, file)}
                 >
-                  <img src={characterImageUrl(videoId, card.key, file)} alt="" loading="lazy" />
+                  <img src={url} alt="" loading="lazy" />
+                  {selected && (
+                    <span className="char-card__selected-badge">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Seleccionada
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="char-card__zoom-btn"
+                  title="Ampliar imagen"
+                  aria-label="Ampliar imagen"
+                  onClick={() => onPreview({ url, title: card.title })}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    <line x1="11" y1="8" x2="11" y2="14" />
+                    <line x1="8" y1="11" x2="14" y2="11" />
+                  </svg>
                 </button>
               </li>
             );
@@ -106,6 +129,16 @@ export default function CharacterCards({ characters, flow, isOpen, canSend, onAp
   const keys = characters.map((card) => card.key);
   const busy = flow.job !== null;
   const canStart = flow.connected && !busy;
+  const [previewImage, setPreviewImage] = useState(null);
+
+  useEffect(() => {
+    if (!previewImage) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setPreviewImage(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewImage]);
 
   return (
     <div className="char-cards">
@@ -123,6 +156,7 @@ export default function CharacterCards({ characters, flow, isOpen, canSend, onAp
             onGenerate={flow.generate}
             onSelect={flow.select}
             onOpenFlow={flow.openProject}
+            onPreview={setPreviewImage}
           />
         ))}
       </ol>
@@ -143,6 +177,27 @@ export default function CharacterCards({ characters, flow, isOpen, canSend, onAp
             Pedir cambios
           </button>
           {!allSelected(flow.records, keys) && <span className="char-card__hint">Elige una imagen por personaje para aprobar.</span>}
+        </div>
+      )}
+
+      {previewImage && (
+        <div className="char-lightbox" onClick={() => setPreviewImage(null)}>
+          <div className="char-lightbox__content" onClick={(e) => e.stopPropagation()}>
+            <div className="char-lightbox__header">
+              <span className="char-lightbox__title">{previewImage.title}</span>
+              <button
+                type="button"
+                className="char-lightbox__close"
+                onClick={() => setPreviewImage(null)}
+                aria-label="Cerrar vista previa"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="char-lightbox__body">
+              <img src={previewImage.url} alt={previewImage.title} className="char-lightbox__img" />
+            </div>
+          </div>
         </div>
       )}
     </div>
