@@ -36,8 +36,8 @@ export default function VoiceOverEditor({
         className="prompt-editor__text voice-panel__text voiceover__text"
         value={text}
         spellCheck={false}
-        placeholder="Paste any script here. It is spoken exactly as written."
-        aria-label="Script to narrate"
+        placeholder="Pega aquí cualquier guion. Se narra exactamente como está escrito."
+        aria-label="Guion a narrar"
         disabled={isLocked}
         onChange={(event) => onTextChange(event.target.value)}
       />
@@ -46,19 +46,19 @@ export default function VoiceOverEditor({
         <CustomCheckbox
           checked={clean}
           disabled={isLocked}
-          label="Clean markdown/labels"
+          label="Limpiar markdown y etiquetas"
           onChange={onCleanChange}
         />
       </div>
 
       <label className="voice-panel__field">
-        <span className="video-detail__chat-label">Title</span>
+        <span className="video-detail__chat-label">Título</span>
         <input
           className="chat-list__rename voiceover__title"
           value={title}
           maxLength={120}
-          placeholder="Optional (defaults to the first words of the text)"
-          aria-label="Voice-over title"
+          placeholder="Opcional (por defecto, las primeras palabras del texto)"
+          aria-label="Título de la voz en off"
           disabled={isLocked}
           onChange={(event) => onTitleChange(event.target.value)}
         />
@@ -74,42 +74,42 @@ export default function VoiceOverEditor({
       />
 
       <p className="settings__card-text">
-        {chars.toLocaleString('en-US')} characters
+        {chars.toLocaleString('es-ES')} caracteres
       </p>
 
       <div className="voice-panel__actions">
         {phase === 'generating' ? (
           <>
             <span className="settings__card-text">
-              Generating… {seconds > 0 ? `${seconds.toFixed(1)} s of audio so far` : 'waiting for Cartesia'}
+              Generating… {seconds > 0 ? `${seconds.toFixed(1)} s de audio hasta ahora` : 'esperando a Cartesia'}
             </span>
             <button type="button" className="settings__button settings__button--ghost" onClick={onCancelGeneration}>
-              Cancel
+              Cancelar
             </button>
           </>
         ) : phase === 'confirm' ? (
           <>
             <span className="settings__card-text">
-              Generate voice-over for this text?
+              ¿Generar la voz en off para este texto?
             </span>
             <button type="button" className="settings__button settings__button--primary" onClick={onConfirm}>
-              Confirm
+              Confirmar
             </button>
             <button type="button" className="settings__button settings__button--ghost" onClick={onCancelConfirm}>
-              Cancel
+              Cancelar
             </button>
           </>
         ) : (
           <>
             <button type="button" className="settings__button settings__button--primary" disabled={!canGenerate} onClick={onRequest}>
-              Generate
+              Generar
             </button>
             {configured === false && (
               <button type="button" className="script-voice__hint" onClick={onOpenSettings}>
-                Add your Cartesia API key in Settings → Cartesia to generate.
+                Para generar, añade tu clave de API de Cartesia en Configuración → Cartesia.
               </button>
             )}
-            {configured && busyElsewhere && <span className="settings__card-text">Another voice-over is being generated.</span>}
+            {configured && busyElsewhere && <span className="settings__card-text">Se está generando otra voz en off.</span>}
           </>
         )}
       </div>

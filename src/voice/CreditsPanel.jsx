@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { formatCredits } from './creditsText.js';
 
-const formatDay = (ms) => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const formatDay = (ms) => new Date(ms).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
 const formatDateTime = (ms) =>
-  new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  new Date(ms).toLocaleString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 // Presentational: estimated Cartesia balance, plan settings, calibration and recent usage
 export default function CreditsPanel({ summary, isBusy, message, onSaveSettings, onCalibrate, onClearCalibration }) {
@@ -17,44 +17,44 @@ export default function CreditsPanel({ summary, isBusy, message, onSaveSettings,
     setDay(String(summary.cycleStartDay));
   }, [summary?.planCredits, summary?.cycleStartDay]);
 
-  if (!summary) return <p className="settings__card-text">Loading credits…</p>;
+  if (!summary) return <p className="settings__card-text">Cargando créditos…</p>;
 
   const share = summary.planCredits > 0 ? Math.min(100, (summary.usedThisCycle / summary.planCredits) * 100) : 0;
 
   return (
     <div className="credits">
-      <h3 className="credits__title">Credits</h3>
-      <p className="credits__big">≈ {formatCredits(summary.remaining)} remaining (estimate)</p>
+      <h3 className="credits__title">Créditos</h3>
+      <p className="credits__big">≈ {formatCredits(summary.remaining)} restantes (estimado)</p>
       <div className="credits__bar" role="progressbar" aria-valuemin={0} aria-valuemax={summary.planCredits} aria-valuenow={summary.usedThisCycle}>
         <div className="credits__bar-fill" style={{ width: `${share}%` }} />
       </div>
       <p className="settings__card-text">
-        Used this cycle: {formatCredits(summary.usedThisCycle)} of {formatCredits(summary.planCredits)} ·{' '}
-        {formatDay(summary.cycleStart)} – {formatDay(summary.cycleEnd)} · All time: {formatCredits(summary.totalAllTime)}
-        {summary.calibrationActive && ` · Calibrated on ${formatDateTime(summary.calibration.at)}`}
+        Usados en este ciclo: {formatCredits(summary.usedThisCycle)} de {formatCredits(summary.planCredits)} ·{' '}
+        {formatDay(summary.cycleStart)} – {formatDay(summary.cycleEnd)} · Total histórico: {formatCredits(summary.totalAllTime)}
+        {summary.calibrationActive && ` · Calibrado el ${formatDateTime(summary.calibration.at)}`}
       </p>
 
       <div className="prompt-editor__actions">
         <label className="credits__field">
-          <span className="settings__card-text">Plan credits</span>
+          <span className="settings__card-text">Créditos del plan</span>
           <input
             className="chat-list__rename credits__input"
             type="number"
             min="1"
             value={plan}
-            aria-label="Plan credits"
+            aria-label="Créditos del plan"
             onChange={(event) => setPlan(event.target.value)}
           />
         </label>
         <label className="credits__field">
-          <span className="settings__card-text">Cycle start day (1–28)</span>
+          <span className="settings__card-text">Día de inicio del ciclo (1–28)</span>
           <input
             className="chat-list__rename credits__input credits__input--short"
             type="number"
             min="1"
             max="28"
             value={day}
-            aria-label="Cycle start day"
+            aria-label="Día de inicio del ciclo"
             onChange={(event) => setDay(event.target.value)}
           />
         </label>
@@ -64,20 +64,20 @@ export default function CreditsPanel({ summary, isBusy, message, onSaveSettings,
           disabled={isBusy}
           onClick={() => onSaveSettings({ planCredits: Number(plan), cycleStartDay: Number(day) })}
         >
-          Save plan
+          Guardar plan
         </button>
       </div>
 
       <div className="prompt-editor__actions">
         <label className="credits__field">
-          <span className="settings__card-text">Calibrate: I have</span>
+          <span className="settings__card-text">Calibrar: me quedan</span>
           <input
             className="chat-list__rename credits__input"
             type="number"
             min="0"
             value={left}
-            placeholder="credits left"
-            aria-label="Credits left on the Cartesia dashboard"
+            placeholder="créditos restantes"
+            aria-label="Créditos restantes en el panel de Cartesia"
             onChange={(event) => setLeft(event.target.value)}
           />
         </label>
@@ -90,7 +90,7 @@ export default function CreditsPanel({ summary, isBusy, message, onSaveSettings,
             setLeft('');
           }}
         >
-          Save
+          Guardar
         </button>
         <button
           type="button"
@@ -98,33 +98,33 @@ export default function CreditsPanel({ summary, isBusy, message, onSaveSettings,
           disabled={isBusy || !summary.calibration}
           onClick={onClearCalibration}
         >
-          Clear calibration
+          Borrar calibración
         </button>
       </div>
 
       {message && <p className="prompt-editor__error">{message}</p>}
 
       <p className="settings__card-text">
-        Cartesia doesn&apos;t report your balance through the API; this is calculated from Mecatube&apos;s own usage. Usage
-        from other apps with the same key isn&apos;t included — calibrate with the number shown on your Cartesia dashboard.
-        Cancelled or failed generations may still be charged by Cartesia and are not counted.
+        Cartesia no informa tu saldo a través de la API; se calcula a partir del uso propio de Mecatube. El uso
+        de otras aplicaciones con la misma clave no se incluye: calibra con el número que aparece en tu panel de Cartesia.
+        Las generaciones canceladas o fallidas pueden ser cobradas igualmente por Cartesia y no se cuentan.
       </p>
 
       {summary.recent.length > 0 && (
         <table className="credits__table">
           <thead>
             <tr>
-              <th>Date</th>
+              <th>Fecha</th>
               <th>Video</th>
-              <th className="credits__num">Characters</th>
-              <th>Model</th>
+              <th className="credits__num">Caracteres</th>
+              <th>Modelo</th>
             </tr>
           </thead>
           <tbody>
             {summary.recent.map((entry) => (
               <tr key={entry.id}>
                 <td>{formatDateTime(entry.at)}</td>
-                <td className="credits__video">{entry.videoTitle || (entry.videoId ? 'Video' : 'Voice-over')}</td>
+                <td className="credits__video">{entry.videoTitle || (entry.videoId ? 'Video' : 'Voz en off')}</td>
                 <td className="credits__num">{formatCredits(entry.chars)}</td>
                 <td>{entry.model}</td>
               </tr>

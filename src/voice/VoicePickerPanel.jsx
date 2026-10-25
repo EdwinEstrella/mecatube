@@ -4,9 +4,9 @@ import VoiceRow from './VoiceRow.jsx';
 import { isKnownVoice, voiceDetail } from './voiceDetail.js';
 
 const TABS = [
-  { id: 'owned', label: 'My Cartesia voices' },
-  { id: 'saved', label: 'Saved in Mecatube' },
-  { id: 'id', label: 'Voice ID' },
+  { id: 'owned', label: 'Mis voces de Cartesia' },
+  { id: 'saved', label: 'Guardadas en Mecatube' },
+  { id: 'id', label: 'ID de voz' },
 ];
 
 // Presentational: the three voice sources in one compact panel
@@ -18,12 +18,12 @@ export default function VoicePickerPanel({ library, tab, onTab, voiceId, voiceNa
     <div className="voice-picker__panel">
       {!isKnownVoice(voiceId, owned, saved) && (
         <p className="settings__card-text">
-          Current: {voiceName && voiceName !== voiceId ? `${voiceName} · ` : ''}
+          Actual: {voiceName && voiceName !== voiceId ? `${voiceName} · ` : ''}
           <code>{voiceId}</code>
         </p>
       )}
 
-      <div className="timeline__filters" role="tablist" aria-label="Voice source">
+      <div className="timeline__filters" role="tablist" aria-label="Origen de la voz">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -47,13 +47,13 @@ export default function VoicePickerPanel({ library, tab, onTab, voiceId, voiceNa
               disabled={isLoadingOwned || configured !== true}
               onClick={() => library.loadOwned(true)}
             >
-              {isLoadingOwned ? 'Loading…' : 'Refresh'}
+              {isLoadingOwned ? 'Cargando…' : 'Actualizar'}
             </button>
-            {configured === false && <span className="settings__card-text">Add your Cartesia API key in Settings first.</span>}
+            {configured === false && <span className="settings__card-text">Primero añade tu clave de API de Cartesia en Configuración.</span>}
           </div>
           {ownedError && <p className="prompt-editor__error">{ownedError}</p>}
           {hasLoadedOwned && owned.length === 0 && !ownedError && (
-            <p className="settings__empty">No voices in your Cartesia account yet. Clone one there, or paste a voice ID.</p>
+            <p className="settings__empty">Aún no hay voces en tu cuenta de Cartesia. Clona una allí o pega un ID de voz.</p>
           )}
           <ul className="voice-picker__list">
             {owned.map((voice) => (
@@ -61,7 +61,7 @@ export default function VoicePickerPanel({ library, tab, onTab, voiceId, voiceNa
                 key={voice.id}
                 name={voice.name}
                 detail={voiceDetail(voice)}
-                badge={voice.isPro ? 'Pro clone' : ''}
+                badge={voice.isPro ? 'Clon Pro' : ''}
                 previewUrl={voice.previewUrl}
                 isSelected={voice.id === voiceId}
                 onSelect={() => select(voice)}
@@ -73,7 +73,7 @@ export default function VoicePickerPanel({ library, tab, onTab, voiceId, voiceNa
 
       {tab === 'saved' && (
         <div className="voice-picker__section">
-          {saved.length === 0 && <p className="settings__empty">Nothing saved yet. Check a voice ID and save it.</p>}
+          {saved.length === 0 && <p className="settings__empty">Aún no hay nada guardado. Verifica un ID de voz y guárdalo.</p>}
           <ul className="voice-picker__list">
             {saved.map((voice) => (
               <SavedVoiceRow
@@ -92,7 +92,7 @@ export default function VoicePickerPanel({ library, tab, onTab, voiceId, voiceNa
       {tab === 'id' && (
         <div className="voice-picker__section">
           <VoiceIdLookup onLookup={library.lookup} onUse={onSelect} onSave={library.save} disabled={configured !== true} />
-          {configured === false && <p className="settings__card-text">Add your Cartesia API key in Settings first.</p>}
+          {configured === false && <p className="settings__card-text">Primero añade tu clave de API de Cartesia en Configuración.</p>}
         </div>
       )}
 

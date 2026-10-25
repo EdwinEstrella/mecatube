@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const ID_PATTERN = /^[\w-]{1,100}$/;
 const TITLE_MAX = 120;
 const NARRATION_MAX = 200000;
-const DEFAULT_TITLE = 'Untitled video';
+const DEFAULT_TITLE = 'Video sin título';
 const FLOW_PROJECT_URL = /^https:\/\/flow\.google\.com\/project\/[0-9a-f-]{36}$/;
 // Must match the stage keys in src/timeline/stages.js
 const STAGE_KEYS = [
@@ -23,15 +23,15 @@ const STAGE_KEYS = [
 ];
 
 function validId(value, label) {
-  if (typeof value !== 'string' || !ID_PATTERN.test(value)) throw new Error(`Invalid ${label}.`);
+  if (typeof value !== 'string' || !ID_PATTERN.test(value)) throw new Error(`${label} no válido.`);
   return value;
 }
 
 function validTitle(value) {
-  if (typeof value !== 'string') throw new Error('Invalid video title.');
+  if (typeof value !== 'string') throw new Error('Título de video no válido.');
   const title = value.trim();
-  if (!title) throw new Error('Video title is required.');
-  if (title.length > TITLE_MAX) throw new Error('Video title is too long.');
+  if (!title) throw new Error('El título del video es obligatorio.');
+  if (title.length > TITLE_MAX) throw new Error('El título del video es demasiado largo.');
   return title;
 }
 
@@ -41,13 +41,13 @@ function validLink(value, label) {
 
 function validIdeaNumber(value) {
   if (value === null) return null;
-  if (!Number.isInteger(value) || value < 1 || value > 999) throw new Error('Invalid idea number.');
+  if (!Number.isInteger(value) || value < 1 || value > 999) throw new Error('Número de idea no válido.');
   return value;
 }
 
 // Validates only the fields present in `input`; absent fields are left out of the result
 function validateFields(input) {
-  if (!input || typeof input !== 'object') throw new Error('Invalid video.');
+  if (!input || typeof input !== 'object') throw new Error('Video no válido.');
   const fields = {};
   if (input.title !== undefined) fields.title = validTitle(input.title);
   if (input.scriptConversationId !== undefined) {
@@ -58,20 +58,20 @@ function validateFields(input) {
   }
   if (input.ideaNumber !== undefined) fields.ideaNumber = validIdeaNumber(input.ideaNumber);
   if (input.titleEdited !== undefined) {
-    if (typeof input.titleEdited !== 'boolean') throw new Error('Invalid titleEdited flag.');
+    if (typeof input.titleEdited !== 'boolean') throw new Error('Indicador titleEdited no válido.');
     fields.titleEdited = input.titleEdited;
   }
   // null clears the edited narration so the text follows the script again
   if (input.narrationText !== undefined) {
     if (input.narrationText !== null && (typeof input.narrationText !== 'string' || input.narrationText.length > NARRATION_MAX)) {
-      throw new Error('Invalid narration text.');
+      throw new Error('Texto de narración no válido.');
     }
     fields.narrationText = input.narrationText;
   }
   // null clears the Google Flow project this video's characters are generated in
   if (input.flowProjectUrl !== undefined) {
     if (input.flowProjectUrl !== null && !(typeof input.flowProjectUrl === 'string' && FLOW_PROJECT_URL.test(input.flowProjectUrl))) {
-      throw new Error('Invalid Flow project URL.');
+      throw new Error('URL del proyecto de Flow no válida.');
     }
     fields.flowProjectUrl = input.flowProjectUrl;
   }
@@ -155,8 +155,8 @@ function createVideoStore(dir) {
   }
 
   function setStage(id, key, value) {
-    if (!STAGE_KEYS.includes(key)) throw new Error('Invalid stage.');
-    if (value !== true && value !== false && value !== null) throw new Error('Invalid stage value.');
+    if (!STAGE_KEYS.includes(key)) throw new Error('Etapa no válida.');
+    if (value !== true && value !== false && value !== null) throw new Error('Valor de etapa no válido.');
     const videos = ensureSingle();
     const video = videos[0];
     const overrides = { ...(video.overrides && typeof video.overrides === 'object' ? video.overrides : {}) };

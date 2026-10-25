@@ -83,7 +83,7 @@ const msg = (role, content, id = `${role}-${content}`) => ({ id, role, content, 
     assert.equal(after.messages[1].content, 'complete ```text\nbody\n```');
     assert.equal(after.updatedAt, before.updatedAt);
     assert.equal(store.applyRemoteHistory(conversation.id, after.messages).updated, 0);
-    assert.throws(() => store.applyRemoteHistory('missing', []), /not found/);
+    assert.throws(() => store.applyRemoteHistory('missing', []), /Conversación no encontrada/);
   });
 
   const bridge = createBridge({ port: PORT });

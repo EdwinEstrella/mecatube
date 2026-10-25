@@ -22,7 +22,7 @@ export default function VoicePicker({ voiceId, voiceName, disabled, onChange }) 
   return (
     <div className="voice-picker">
       <div className="voice-panel__field">
-        <span className="video-detail__chat-label">Voice</span>
+        <span className="video-detail__chat-label">Voz</span>
         <button
           type="button"
           className="settings__button settings__button--ghost voice-picker__current"

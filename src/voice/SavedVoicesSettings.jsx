@@ -9,12 +9,12 @@ export default function SavedVoicesSettings() {
 
   return (
     <div className="credits">
-      <h3 className="credits__title">My voices</h3>
+      <h3 className="credits__title">Mis voces</h3>
       <p className="settings__card-text">
-        Voices saved in Mecatube show up in every voice picker. Paste a Cartesia voice ID to check it and add it.
+        Las voces guardadas en Mecatube aparecen en todos los selectores de voz. Pega el ID de una voz de Cartesia para verificarla y añadirla.
       </p>
       {saved.length === 0 ? (
-        <p className="settings__empty">No saved voices yet.</p>
+        <p className="settings__empty">Aún no hay voces guardadas.</p>
       ) : (
         <ul className="voice-picker__list">
           {saved.map((voice) => (
@@ -23,7 +23,7 @@ export default function SavedVoicesSettings() {
         </ul>
       )}
       <VoiceIdLookup onLookup={library.lookup} onSave={library.save} disabled={configured !== true} />
-      {configured === false && <p className="settings__card-text">Save your Cartesia API key above to check voice IDs.</p>}
+      {configured === false && <p className="settings__card-text">Guarda arriba tu clave de API de Cartesia para verificar IDs de voz.</p>}
       {error && <p className="prompt-editor__error">{error}</p>}
     </div>
   );

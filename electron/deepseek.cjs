@@ -5,7 +5,7 @@ const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 
 async function testConnection(apiKey) {
   if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
-    return { ok: false, error: 'No API key provided.' };
+    return { ok: false, error: 'No se proporcionó ninguna API key.' };
   }
   try {
     const response = await fetch(`${DEEPSEEK_BASE_URL}/models`, {
@@ -19,17 +19,17 @@ async function testConnection(apiKey) {
       return { ok: true };
     }
     if (response.status === 401) {
-      return { ok: false, error: 'Invalid API key or unauthorized.' };
+      return { ok: false, error: 'API key no válida o sin autorización.' };
     }
-    return { ok: false, error: `DeepSeek returned HTTP ${response.status}` };
+    return { ok: false, error: `DeepSeek devolvió HTTP ${response.status}` };
   } catch (err) {
-    return { ok: false, error: err.message || 'Network error connecting to DeepSeek.' };
+    return { ok: false, error: err.message || 'Error de red al conectar con DeepSeek.' };
   }
 }
 
 // Streams chat completion using Server-Sent Events (SSE)
 async function streamChat({ apiKey, messages, model = 'deepseek-chat', onDelta, signal }) {
-  if (!apiKey) throw new Error('DeepSeek API key is not configured.');
+  if (!apiKey) throw new Error('La API key de DeepSeek no está configurada.');
 
   const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
     method: 'POST',
@@ -51,7 +51,7 @@ async function streamChat({ apiKey, messages, model = 'deepseek-chat', onDelta, 
       const errJson = await response.json();
       errorDetail = errJson?.error?.message || '';
     } catch {}
-    throw new Error(`DeepSeek API error (${response.status}): ${errorDetail || response.statusText}`);
+    throw new Error(`Error de la API de DeepSeek (${response.status}): ${errorDetail || response.statusText}`);
   }
 
   const reader = response.body.getReader();

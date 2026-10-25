@@ -95,7 +95,7 @@ function createCreditStore(dir, { now = () => Date.now() } = {}) {
   }
 
   function record({ videoId = null, videoTitle, chars, model, voiceName }) {
-    integerInRange(chars, 1, PLAN_MAX, 'Invalid character count.');
+    integerInRange(chars, 1, PLAN_MAX, 'Cantidad de caracteres no válida.');
     const data = read();
     const entry = {
       id: crypto.randomUUID(),
@@ -117,8 +117,8 @@ function createCreditStore(dir, { now = () => Date.now() } = {}) {
   };
 
   function saveSettings({ planCredits, cycleStartDay } = {}) {
-    integerInRange(planCredits, 1, PLAN_MAX, 'Plan credits must be a whole number above 0.');
-    integerInRange(cycleStartDay, 1, 28, 'The cycle start day must be between 1 and 28.');
+    integerInRange(planCredits, 1, PLAN_MAX, 'Los créditos del plan deben ser un número entero mayor que 0.');
+    integerInRange(cycleStartDay, 1, 28, 'El día de inicio del ciclo debe estar entre 1 y 28.');
     const data = read();
     data.settings = { ...data.settings, planCredits, cycleStartDay };
     write(data);
@@ -126,7 +126,7 @@ function createCreditStore(dir, { now = () => Date.now() } = {}) {
   }
 
   function calibrate({ remaining } = {}) {
-    integerInRange(remaining, 0, REMAINING_MAX, 'Remaining credits must be a whole number, 0 or more.');
+    integerInRange(remaining, 0, REMAINING_MAX, 'Los créditos restantes deben ser un número entero igual o mayor que 0.');
     const data = read();
     data.settings = { ...data.settings, calibration: { remaining, at: now() } };
     write(data);

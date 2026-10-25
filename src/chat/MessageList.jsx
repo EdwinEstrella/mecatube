@@ -27,7 +27,7 @@ function UserMessage({ content }) {
       {isLong && !expanded ? preview : content}
       {isLong && (
         <button type="button" className="chat-message__toggle" onClick={() => setExpanded((value) => !value)}>
-          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? 'Ver menos' : 'Ver más'}
         </button>
       )}
     </div>
@@ -83,7 +83,7 @@ export default function MessageList({
   return (
     <div className="chat-messages">
       {messages.length === 0 && !isWaiting && (
-        <p className="chat-messages__empty">Send a message to start a conversation with DeepSeek.</p>
+        <p className="chat-messages__empty">Envía un mensaje para iniciar una conversación con DeepSeek.</p>
       )}
 
       {messages.map((message, index) => {
@@ -123,7 +123,9 @@ export default function MessageList({
               {scriptVoice && narrationLengths[index] !== null && (
                 <ScriptVoiceControl
                   chars={narrationLengths[index]}
+                  voiceId={scriptVoice.voiceId}
                   voiceName={scriptVoice.voiceName}
+                  onVoiceChange={scriptVoice.chooseVoice}
                   videoId={scriptVoice.videoId}
                   track={scriptVoice.track}
                   configured={scriptVoice.configured}
@@ -168,7 +170,7 @@ export default function MessageList({
             {result.outro && <Markdown>{result.outro}</Markdown>}
             {isOpen && (
               <button type="button" className="idea-more" disabled={!canSend} onClick={() => onSend(MORE_IDEAS_TEXT)}>
-                More ideas
+                Más ideas
               </button>
             )}
           </div>
@@ -177,7 +179,7 @@ export default function MessageList({
 
       {isWaiting && (
         <div className="chat-message chat-message--assistant chat-message--streaming">
-          {streamingText ? <Markdown>{streamingText}</Markdown> : 'Waiting for DeepSeek…'}
+          {streamingText ? <Markdown>{streamingText}</Markdown> : 'Esperando a DeepSeek…'}
         </div>
       )}
 

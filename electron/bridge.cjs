@@ -159,16 +159,27 @@ function createBridge({ port = BRIDGE_PORT, host = BRIDGE_HOST } = {}) {
 
   function sendPrompt({ requestId, text, deepseekUrl }) {
     if (!client || client.readyState !== client.OPEN) {
-      throw new Error('The DeepSeek extension is not connected.');
+      throw new Error('La extensión de DeepSeek no está conectada.');
     }
     client.send(JSON.stringify({ type: 'prompt', requestId, text, deepseekUrl: deepseekUrl ?? null }));
   }
 
-  function sendFlowJob({ requestId, prompt, projectUrl }) {
+  // model / outputs / references (see flow.cjs) are applied by the extension inside the Flow page
+  function sendFlowJob({ requestId, prompt, projectUrl, model, outputs, references }) {
     if (!client || client.readyState !== client.OPEN) {
-      throw new Error('The browser extension is not connected.');
+      throw new Error('La extensión del navegador no está conectada.');
     }
-    client.send(JSON.stringify({ type: 'flow-generate', requestId, prompt, projectUrl: projectUrl ?? null }));
+    client.send(
+      JSON.stringify({
+        type: 'flow-generate',
+        requestId,
+        prompt,
+        projectUrl: projectUrl ?? null,
+        model: model ?? null,
+        outputs: outputs ?? null,
+        references: references ?? [],
+      }),
+    );
   }
 
   // Asks the extension for the full history of a DeepSeek chat; resolves to [{ role, content }]

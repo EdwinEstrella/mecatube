@@ -49,7 +49,7 @@ function PromptEditor({ preset, override, onChanged, countConnectors = false }) 
       <div className="prompt-editor__header">
         <h3 className="prompt-editor__label">{preset.label}</h3>
         <span className={`prompt-editor__badge${hasOverride ? ' prompt-editor__badge--edited' : ''}`}>
-          {hasOverride ? 'Edited' : 'Original'}
+          {hasOverride ? 'Editado' : 'Original'}
         </span>
       </div>
 
@@ -57,12 +57,12 @@ function PromptEditor({ preset, override, onChanged, countConnectors = false }) 
         className="prompt-editor__text"
         value={text}
         spellCheck={false}
-        aria-label={`${preset.label} text`}
+        aria-label={`Texto de ${preset.label}`}
         onChange={(event) => setText(event.target.value)}
       />
 
       {countConnectors && (
-        <p className="settings__card-text">{parseConnectors(text).length} connectors</p>
+        <p className="settings__card-text">{parseConnectors(text).length} conectores</p>
       )}
 
       {error && <p className="prompt-editor__error">{error}</p>}
@@ -74,16 +74,16 @@ function PromptEditor({ preset, override, onChanged, countConnectors = false }) 
           disabled={text === saved}
           onClick={handleSave}
         >
-          Save
+          Guardar
         </button>
         {isConfirming ? (
           <>
-            <span className="settings__card-text">Discard your edits and restore the original?</span>
+            <span className="settings__card-text">¿Descartar tus cambios y restaurar el original?</span>
             <button type="button" className="settings__button settings__button--danger" onClick={handleReset}>
-              Restore
+              Restaurar
             </button>
             <button type="button" className="settings__button settings__button--ghost" onClick={() => setIsConfirming(false)}>
-              Cancel
+              Cancelar
             </button>
           </>
         ) : (
@@ -93,7 +93,7 @@ function PromptEditor({ preset, override, onChanged, countConnectors = false }) 
             disabled={!hasOverride}
             onClick={() => setIsConfirming(true)}
           >
-            Restore original
+            Restaurar original
           </button>
         )}
       </div>
@@ -116,7 +116,7 @@ export default function SettingsView() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
     >
-      <h1 className="settings__title">Settings</h1>
+      <h1 className="settings__title">Configuración</h1>
 
       <DeepSeekSettings />
 
@@ -126,8 +126,8 @@ export default function SettingsView() {
         <div>
           <h2 className="settings__card-title">Prompts</h2>
           <p className="settings__card-text">
-            The text of the Prompt 1 and Prompt 2 buttons in the chat. It is sent exactly as saved here, with
-            nothing added or removed.
+            El texto de los botones Prompt 1 y Prompt 2 del chat. Se envía exactamente como se guarda aquí, sin
+            añadir ni quitar nada.
           </p>
         </div>
         {PRESETS.map((preset) => (
@@ -142,10 +142,10 @@ export default function SettingsView() {
 
       <div className="settings__card settings__card--spaced">
         <div>
-          <h2 className="settings__card-title">Connector words</h2>
+          <h2 className="settings__card-title">Palabras conectoras</h2>
           <p className="settings__card-text">
-            The “Agregar palabras conectoras” button sends the instruction followed by the list below (one per line,
-            blanks and duplicates ignored) into the open conversation.
+            El botón «Agregar palabras conectoras» envía la instrucción seguida de la lista de abajo (una por línea,
+            se ignoran las líneas vacías y los duplicados) a la conversación abierta.
           </p>
         </div>
         <PromptEditor

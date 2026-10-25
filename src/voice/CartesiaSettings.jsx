@@ -36,13 +36,13 @@ export default function CartesiaSettings() {
       setStatus(newStatus);
       setKey('');
       setIsEditing(false);
-      setMessage({ kind: 'ok', text: 'Key saved.' });
+      setMessage({ kind: 'ok', text: 'Clave guardada.' });
     });
 
   const handleTest = () =>
     run(async () => {
       const result = await window.electronAPI.testCartesiaKey();
-      setMessage(result.ok ? { kind: 'ok', text: 'Connection works.' } : { kind: 'error', text: result.error });
+      setMessage(result.ok ? { kind: 'ok', text: 'La conexión funciona.' } : { kind: 'error', text: result.error });
     });
 
   const handleClear = () =>
@@ -50,7 +50,7 @@ export default function CartesiaSettings() {
       setStatus(await window.electronAPI.clearCartesiaKey());
       setKey('');
       setIsEditing(false);
-      setMessage({ kind: 'ok', text: 'Key removed.' });
+      setMessage({ kind: 'ok', text: 'Clave eliminada.' });
     });
 
   const handleFocus = () => {
@@ -73,8 +73,8 @@ export default function CartesiaSettings() {
       <div>
         <h2 className="settings__card-title">Cartesia</h2>
         <p className="settings__card-text">
-          API key for generating voice-overs. It is stored encrypted on this computer and is never shown again.{' '}
-          {status && (configured ? `Configured (…${status.last4}).` : 'Not configured.')}
+          Clave de API para generar voces en off. Se guarda cifrada en este equipo y no se vuelve a mostrar.{' '}
+          {status && (configured ? `Configurada (…${status.last4}).` : 'Sin configurar.')}
         </p>
       </div>
       <div className="prompt-editor__actions">
@@ -84,8 +84,8 @@ export default function CartesiaSettings() {
           value={inputValue}
           autoComplete="off"
           spellCheck={false}
-          placeholder={configured ? 'Paste a new key to replace it' : 'Paste your Cartesia API key'}
-          aria-label="Cartesia API key"
+          placeholder={configured ? 'Pega una clave nueva para reemplazarla' : 'Pega tu clave de API de Cartesia'}
+          aria-label="Clave de API de Cartesia"
           onFocus={handleFocus}
           onBlur={handleBlur}
           onChange={(event) => {
@@ -99,7 +99,7 @@ export default function CartesiaSettings() {
           disabled={isBusy || !isEditing || key.trim() === ''}
           onClick={handleSave}
         >
-          Save
+          Guardar
         </button>
         <button
           type="button"
@@ -107,7 +107,7 @@ export default function CartesiaSettings() {
           disabled={isBusy || !configured}
           onClick={handleTest}
         >
-          Test connection
+          Probar conexión
         </button>
         <button
           type="button"
@@ -115,7 +115,7 @@ export default function CartesiaSettings() {
           disabled={isBusy || !configured}
           onClick={handleClear}
         >
-          Clear
+          Eliminar
         </button>
       </div>
       {message.text && (

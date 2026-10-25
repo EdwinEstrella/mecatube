@@ -65,7 +65,7 @@ function createTake() {
       if (!event || typeof event !== 'object') return;
       if (event.type === 'error' || event.error) {
         const detail = typeof event.error === 'string' ? event.error : event.message || 'unknown error';
-        throw new Error(`Cartesia error: ${String(detail).slice(0, 200)}`);
+        throw new Error(`Error de Cartesia: ${String(detail).slice(0, 200)}`);
       }
       if (typeof event.data === 'string' && event.data) {
         const chunk = Buffer.from(event.data, 'base64');
@@ -116,7 +116,7 @@ function buildGenerationConfig(model, speed) {
   if (!GENERATION_CONFIG_MODELS.includes(model)) return null;
   if (speed === undefined || speed === null) return null;
   const value = Number(speed);
-  if (!Number.isFinite(value)) throw new Error('Invalid speed.');
+  if (!Number.isFinite(value)) throw new Error('Velocidad no válida.');
   const clamped = Math.min(SPEED_MAX, Math.max(SPEED_MIN, value));
   return Math.abs(clamped - 1) < 1e-9 ? null : { speed: Math.round(clamped * 1000) / 1000 };
 }
@@ -228,7 +228,7 @@ async function errorFromResponse(response) {
   } catch {
     // The status code alone is enough
   }
-  return new Error(`Cartesia returned HTTP ${response.status}${body ? `: ${body}` : ''}`);
+  return new Error(`Cartesia devolvió HTTP ${response.status}${body ? `: ${body}` : ''}`);
 }
 
 // --- Service -----------------------------------------------------------------------------------
@@ -251,14 +251,14 @@ function createVoiceService({
 
   function validVideoId(videoId) {
     if (typeof videoId !== 'string' || !ID_PATTERN.test(videoId) || !videoExists(videoId)) {
-      throw new Error('Video not found.');
+      throw new Error('Video no encontrado.');
     }
     return videoId;
   }
 
   // Standalone voice-overs live in voiceovers/<id>/; ID_PATTERN excludes dots and separators
   function validVoiceoverId(id) {
-    if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new Error('Voice-over not found.');
+    if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new Error('Voz en off no encontrada.');
     return id;
   }
 
@@ -271,7 +271,7 @@ function createVoiceService({
 
   function requireKey() {
     const key = getApiKey();
-    if (!key) throw new Error('Add your Cartesia API key in Settings first.');
+    if (!key) throw new Error('Primero añade tu clave de API de Cartesia en Configuración.');
     return key;
   }
 
@@ -306,7 +306,7 @@ function createVoiceService({
 
   function deleteVoiceover(id) {
     const dir = voiceoverDir(id);
-    if (active?.voiceoverId === id) throw new Error('That voice-over is being generated.');
+    if (active?.voiceoverId === id) throw new Error('Esa voz en off se está generando.');
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
@@ -410,7 +410,7 @@ function createVoiceService({
 
   // One voice by id, or null when Cartesia does not know it
   async function lookupVoice(id) {
-    if (typeof id !== 'string' || !VOICE_ID_PATTERN.test(id)) throw new Error('That does not look like a voice ID.');
+    if (typeof id !== 'string' || !VOICE_ID_PATTERN.test(id)) throw new Error('Eso no parece un ID de voz.');
     const apiKey = requireKey();
     const url = new URL(`/voices/${id}`, baseUrl);
     url.searchParams.append('expand[]', 'preview_file_url');
@@ -428,7 +428,7 @@ function createVoiceService({
       signal: run.controller.signal,
     });
     if (!response.ok) throw await errorFromResponse(response);
-    if (!response.body) throw new Error('Cartesia returned an empty response.');
+    if (!response.body) throw new Error('Cartesia devolvió una respuesta vacía.');
 
     const take = createTake();
     const decoder = new TextDecoder();
@@ -460,14 +460,14 @@ function createVoiceService({
     speed,
   }) {
     const isVoiceover = kind === 'voiceover';
-    if (kind !== 'video' && !isVoiceover) throw new Error('Unknown generation target.');
+    if (kind !== 'video' && !isVoiceover) throw new Error('Destino de generación desconocido.');
     if (!isVoiceover) validVideoId(videoId);
-    if (active) throw new Error('A voice generation is already in progress.');
-    if (typeof text !== 'string' || !text.trim()) throw new Error('There is no narration text to speak.');
-    if (text.length > TEXT_MAX) throw new Error('The narration text is too long.');
-    if (typeof voiceId !== 'string' || !ID_PATTERN.test(voiceId)) throw new Error('Invalid voice.');
-    if (!MODELS.includes(model)) throw new Error('Unknown voice model.');
-    if (typeof language !== 'string' || !/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(language)) throw new Error('Invalid language.');
+    if (active) throw new Error('Ya hay una generación de voz en curso.');
+    if (typeof text !== 'string' || !text.trim()) throw new Error('No hay texto de narración para locutar.');
+    if (text.length > TEXT_MAX) throw new Error('El texto de la narración es demasiado largo.');
+    if (typeof voiceId !== 'string' || !ID_PATTERN.test(voiceId)) throw new Error('Voz no válida.');
+    if (!MODELS.includes(model)) throw new Error('Modelo de voz desconocido.');
+    if (typeof language !== 'string' || !/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(language)) throw new Error('Idioma no válido.');
     const apiKey = simulate ? null : requireKey();
 
     const voiceoverId = isVoiceover ? crypto.randomUUID() : null;
@@ -485,8 +485,8 @@ function createVoiceService({
         pcm = take.pcm();
         words = take.words;
       }
-      if (run.cancelled) throw new Error('Generation cancelled.');
-      if (pcm.length === 0) throw new Error('Cartesia returned no audio.');
+      if (run.cancelled) throw new Error('Generación cancelada.');
+      if (pcm.length === 0) throw new Error('Cartesia no devolvió audio.');
 
       const meta = {
         model,
@@ -508,8 +508,8 @@ function createVoiceService({
       writeAtomic(path.join(dir, 'voice_meta.json'), JSON.stringify(meta, null, 2));
       return meta;
     } catch (error) {
-      if (run.cancelled) throw new Error('Generation cancelled.');
-      if (error?.name === 'AbortError') throw new Error('Cartesia took too long to respond.');
+      if (run.cancelled) throw new Error('Generación cancelada.');
+      if (error?.name === 'AbortError') throw new Error('Cartesia tardó demasiado en responder.');
       throw error;
     } finally {
       clearTimeout(timer);

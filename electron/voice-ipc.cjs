@@ -38,10 +38,11 @@ function parseRange(header, size) {
 // Serves only a video's voice/narration.wav (mecatube-media://voice/<videoId>) or a standalone
 // voiceovers/<id>/narration.wav (mecatube-media://voiceover/<id>), with range support for seeking.
 // With `characterFile(videoId, key, file)` it also serves a Flow character image
-// (mecatube-media://character/<videoId>/<characterKey>/<file>); the resolver validates every part.
+// (mecatube-media://character/<videoId>/<characterKey>/<file>); `sceneFile(videoId, number, file)` does
+// the same for scene images (mecatube-media://scene/<videoId>/<number>/<file>). Resolvers validate every part.
 const IMAGE_TYPES = { '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
 
-function createMediaHandler(voice, { characterFile } = {}) {
+function createMediaHandler(voice, { characterFile, sceneFile } = {}) {
   return async (request) => {
     let file;
     let contentType = 'audio/wav';
@@ -53,8 +54,12 @@ function createMediaHandler(voice, { characterFile } = {}) {
       else if (url.hostname === 'character' && characterFile && parts.length === 3) {
         file = characterFile(parts[0], parts[1], parts[2]);
         contentType = IMAGE_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()];
-        if (!contentType) throw new Error('not found');
-      } else throw new Error('not found');
+        if (!contentType) throw new Error('No encontrado');
+      } else if (url.hostname === 'scene' && sceneFile && parts.length === 3) {
+        file = sceneFile(parts[0], parts[1], parts[2]);
+        contentType = IMAGE_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()];
+        if (!contentType) throw new Error('No encontrado');
+      } else throw new Error('No encontrado');
     } catch {
       return new Response('Not found', { status: 404 });
     }
@@ -154,7 +159,7 @@ function registerVoiceIpc({ ipcMain, shell, voice, secrets, pushToWindow, prefs,
   ipcMain.handle('voiceover:delete', (_event, { id } = {}) => voice.deleteVoiceover(id));
   ipcMain.handle('voiceover:open-folder', async (_event, { id } = {}) => {
     const dir = voice.voiceoverDir(id);
-    if (!fs.existsSync(dir)) throw new Error('That voice-over no longer exists.');
+    if (!fs.existsSync(dir)) throw new Error('Esa voz en off ya no existe.');
     const failure = await shell.openPath(dir);
     if (failure) throw new Error(failure);
   });
@@ -186,7 +191,7 @@ function registerVoiceIpc({ ipcMain, shell, voice, secrets, pushToWindow, prefs,
 
   ipcMain.handle('voice:open-folder', async (_event, { videoId } = {}) => {
     const dir = voice.voiceDir(videoId);
-    if (!fs.existsSync(dir)) throw new Error('There is no voice track for this video yet.');
+    if (!fs.existsSync(dir)) throw new Error('Este video aún no tiene una pista de voz.');
     const failure = await shell.openPath(dir);
     if (failure) throw new Error(failure);
   });

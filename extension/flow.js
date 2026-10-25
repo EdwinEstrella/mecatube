@@ -187,7 +187,7 @@
         run();
       }
       const started = await waitFor(() => isAborted() || hasStarted(doc, snapshot), startTimeoutMs);
-      if (isAborted()) throw new Error('Flow job cancelled.');
+      if (isAborted()) throw new Error('Trabajo de Flow cancelado.');
       if (started) return name;
     }
     return null;
@@ -243,18 +243,18 @@
   async function runGenerate({ prompt }, post, doc = document, now = Date.now, options = {}) {
     const isAborted = options.isAborted ?? (() => false);
     const box = await waitFor(() => doc.querySelector(SELECTORS.promptBox), BOX_TIMEOUT_MS);
-    if (!box) throw new Error('Flow prompt box not found. Is the project open and signed in?');
+    if (!box) throw new Error('No se encontró el cuadro de prompt de Flow. ¿Está abierto el proyecto y con la sesión iniciada?');
 
     const snapshot = new Set(imageSources(doc));
     insertPrompt(doc, box, prompt);
     await sleep(150);
-    if (!boxMatches(box, prompt)) throw new Error('Flow did not accept the prompt text.');
+    if (!boxMatches(box, prompt)) throw new Error('Flow no aceptó el texto del prompt.');
 
     const submit = await waitFor(() => {
       const button = doc.querySelector(SELECTORS.submitButton);
       return isEnabled(button) ? button : null;
     }, SUBMIT_ENABLE_TIMEOUT_MS);
-    if (!submit) throw new Error('The Flow submit button never became available.');
+    if (!submit) throw new Error('El botón de enviar de Flow nunca estuvo disponible.');
 
     const startedAt = now();
     const submitMethod = await submitPrompt(doc, box, prompt, snapshot, {
@@ -273,8 +273,8 @@
 
     for (;;) {
       await sleep(POLL_MS);
-      if (isAborted()) throw new Error('Flow job cancelled.');
-      if (now() - startedAt > JOB_TIMEOUT_MS) throw new Error('Timed out waiting for Flow to finish generating.');
+      if (isAborted()) throw new Error('Trabajo de Flow cancelado.');
+      if (now() - startedAt > JOB_TIMEOUT_MS) throw new Error('Se agotó el tiempo esperando a que Flow terminara de generar.');
 
       const captcha = isCaptchaVisible(doc);
       if (captcha !== captchaShown) {
@@ -311,14 +311,14 @@
           // A single failed download should not lose the others
         }
       }
-      if (images.length === 0) throw new Error('Flow produced images but they could not be downloaded.');
+      if (images.length === 0) throw new Error('Flow generó imágenes, pero no se pudieron descargar.');
       return { images, submitMethod };
     }
   }
 
   async function runNewProject(post, doc = document) {
     const button = await waitFor(() => findNewProjectButton(doc), BOX_TIMEOUT_MS);
-    if (!button) throw new Error('The "Nuevo proyecto" button was not found. Is Flow open and signed in?');
+    if (!button) throw new Error('No se encontró el botón «Nuevo proyecto». ¿Está Flow abierto y con la sesión iniciada?');
     button.click();
     post({ type: 'clicked' });
   }
@@ -338,7 +338,7 @@
     port.onMessage.addListener(async (message) => {
       if (message?.type !== 'generate' && message?.type !== 'new-project') return;
       if (busy) {
-        post({ type: 'error', message: 'Flow is already running a job in this tab.' });
+        post({ type: 'error', message: 'Flow ya está ejecutando un trabajo en esta pestaña.' });
         return;
       }
       busy = true;

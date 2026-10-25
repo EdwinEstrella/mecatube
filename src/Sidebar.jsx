@@ -79,7 +79,7 @@ function SidebarButton({ label, isActive, onClick, children }) {
 
 export default function Sidebar({ activeView, onNavigate }) {
   return (
-    <nav className="sidebar" aria-label="Main navigation">
+    <nav className="sidebar" aria-label="Navegación principal">
       <SidebarButton
         label="Chat"
         isActive={activeView === 'chat'}
@@ -89,7 +89,7 @@ export default function Sidebar({ activeView, onNavigate }) {
       </SidebarButton>
 
       <SidebarButton
-        label="Voice-over"
+        label="Voz en off"
         isActive={activeView === 'voiceover'}
         onClick={() => onNavigate('voiceover')}
       >
@@ -105,7 +105,7 @@ export default function Sidebar({ activeView, onNavigate }) {
       </SidebarButton>
 
       <SidebarButton
-        label="Timeline"
+        label="Línea de tiempo"
         isActive={activeView === 'timeline'}
         onClick={() => onNavigate('timeline')}
       >
@@ -115,7 +115,7 @@ export default function Sidebar({ activeView, onNavigate }) {
       <div className="sidebar__spacer" />
 
       <SidebarButton
-        label="Settings"
+        label="Configuración"
         isActive={activeView === 'settings'}
         onClick={() => onNavigate('settings')}
       >

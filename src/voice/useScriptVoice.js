@@ -8,6 +8,10 @@ import { FALLBACK_PREFS, useVoicePrefs } from './useVoicePrefs.js';
 // one track: the video linked to the conversation.
 export function useScriptVoice(conversationId, messages) {
   const prefs = useVoicePrefs() ?? FALLBACK_PREFS;
+  // Voice picked in the confirm step ({ id, name }); null falls back to the last voice used
+  const [chosenVoice, setChosenVoice] = useState(null);
+  const voiceId = chosenVoice?.id ?? prefs.voiceId;
+  const voiceName = chosenVoice?.name ?? prefs.voiceName;
   const [configured, setConfigured] = useState(null);
   const [busy, setBusy] = useState(false);
   const [videoId, setVideoId] = useState(null);
@@ -84,7 +88,7 @@ export function useScriptVoice(conversationId, messages) {
       setVideoId(video.id);
       // The Timeline voice panel shows exactly what was spoken
       await api.updateVideo(video.id, { narrationText: text });
-      await api.generateVoice({ videoId: video.id, text, voiceId: prefs.voiceId, voiceName: prefs.voiceName, model: prefs.model });
+      await api.generateVoice({ videoId: video.id, text, voiceId, voiceName, model: prefs.model });
       setDoneId(message.id);
     } catch (generateError) {
       setError({ messageId: message.id, text: cleanIpcError(generateError) });
@@ -104,7 +108,9 @@ export function useScriptVoice(conversationId, messages) {
     seconds,
     error,
     doneId,
-    voiceName: prefs.voiceName,
+    voiceId,
+    voiceName,
+    chooseVoice: setChosenVoice,
     request,
     confirm,
     cancelConfirm: () => setPhase(null),

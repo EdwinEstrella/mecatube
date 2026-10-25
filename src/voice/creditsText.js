@@ -1,6 +1,6 @@
 // Pure helpers for credit messages (1 credit = 1 character)
 
-export function formatCredits(value, locale = 'en-US') {
+export function formatCredits(value, locale = 'es-ES') {
   return Math.max(0, Math.round(Number(value) || 0)).toLocaleString(locale);
 }
 

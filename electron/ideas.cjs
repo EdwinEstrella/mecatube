@@ -8,19 +8,19 @@ const ID_PATTERN = /^[\w-]{1,100}$/;
 const LIMITS = { title: 300, format: 100, question: 1000, thumbnailText: 200, trigger: 500, conversationTitle: 200 };
 
 function text(value, field, { required = false } = {}) {
-  if (typeof value !== 'string') throw new Error(`Invalid idea ${field}.`);
+  if (typeof value !== 'string') throw new Error(`Idea no válida: ${field}.`);
   const clean = value.trim();
-  if (required && !clean) throw new Error(`Idea ${field} is required.`);
-  if (clean.length > LIMITS[field]) throw new Error(`Idea ${field} is too long.`);
+  if (required && !clean) throw new Error(`El campo de la idea «${field}» es obligatorio.`);
+  if (clean.length > LIMITS[field]) throw new Error(`El campo de la idea «${field}» es demasiado largo.`);
   return clean;
 }
 
 function validate(input) {
-  if (!input || typeof input !== 'object') throw new Error('Invalid idea.');
+  if (!input || typeof input !== 'object') throw new Error('Idea no válida.');
   const { number, conversationId, messageId } = input;
-  if (!Number.isInteger(number) || number < 1 || number > 999) throw new Error('Invalid idea number.');
-  if (typeof conversationId !== 'string' || !ID_PATTERN.test(conversationId)) throw new Error('Invalid conversation id.');
-  if (typeof messageId !== 'string' || !ID_PATTERN.test(messageId)) throw new Error('Invalid message id.');
+  if (!Number.isInteger(number) || number < 1 || number > 999) throw new Error('Número de idea no válido.');
+  if (typeof conversationId !== 'string' || !ID_PATTERN.test(conversationId)) throw new Error('ID de conversación no válido.');
+  if (typeof messageId !== 'string' || !ID_PATTERN.test(messageId)) throw new Error('ID de mensaje no válido.');
   return {
     number,
     title: text(input.title, 'title', { required: true }),
@@ -73,7 +73,7 @@ function createIdeaStore(dir) {
   }
 
   function remove(id) {
-    if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new Error('Invalid idea id.');
+    if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new Error('ID de idea no válido.');
     const ideas = read();
     const kept = ideas.filter((idea) => idea.id !== id);
     if (kept.length !== ideas.length) write(kept);

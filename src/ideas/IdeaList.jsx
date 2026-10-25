@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 function formatDate(timestamp) {
-  return new Date(timestamp).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(timestamp).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function SavedIdea({ idea, onOpenChat, onRemove, onCopy }) {
@@ -25,39 +25,39 @@ function SavedIdea({ idea, onOpenChat, onRemove, onCopy }) {
       <dl className="idea-card__meta">
         {idea.thumbnailText && (
           <div>
-            <dt>Thumbnail</dt>
+            <dt>Miniatura</dt>
             <dd>{idea.thumbnailText}</dd>
           </div>
         )}
         {idea.trigger && (
           <div>
-            <dt>Trigger</dt>
+            <dt>Gatillo</dt>
             <dd>{idea.trigger}</dd>
           </div>
         )}
       </dl>
       <p className="saved-idea__source">
-        {idea.conversationTitle || 'Untitled chat'} · {formatDate(idea.savedAt)}
+        {idea.conversationTitle || 'Chat sin título'} · {formatDate(idea.savedAt)}
       </p>
       <div className="saved-idea__actions">
         <button type="button" className="settings__button settings__button--ghost" onClick={() => onOpenChat(idea.conversationId)}>
-          Open chat
+          Abrir chat
         </button>
         <button type="button" className="settings__button settings__button--ghost" onClick={handleCopy}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? 'Copiado' : 'Copiar'}
         </button>
         {isConfirming ? (
           <>
             <button type="button" className="settings__button settings__button--danger" onClick={() => onRemove(idea.id)}>
-              Confirm remove
+              Confirmar eliminación
             </button>
             <button type="button" className="settings__button settings__button--ghost" onClick={() => setIsConfirming(false)}>
-              Cancel
+              Cancelar
             </button>
           </>
         ) : (
           <button type="button" className="settings__button settings__button--danger" onClick={() => setIsConfirming(true)}>
-            Remove
+            Eliminar
           </button>
         )}
       </div>
@@ -68,7 +68,7 @@ function SavedIdea({ idea, onOpenChat, onRemove, onCopy }) {
 // Presentational list of saved ideas, newest first (order comes from the container)
 export default function IdeaList({ ideas, onOpenChat, onRemove, onCopy }) {
   if (ideas.length === 0) {
-    return <p className="settings__empty">No saved ideas yet. Tap the heart on an idea in a chat to keep it here.</p>;
+    return <p className="settings__empty">Aún no hay ideas guardadas. Toca el corazón en una idea de un chat para conservarla aquí.</p>;
   }
   return (
     <ul className="saved-ideas">

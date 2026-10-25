@@ -157,8 +157,8 @@ export default function TitleBar() {
           <button
             type="button"
             className="title-bar__button"
-            aria-label="Minimize"
-            title="Minimize"
+            aria-label="Minimizar"
+            title="Minimizar"
             onClick={() => window.electronAPI?.minimizeWindow()}
           >
             <MinimizeIcon />
@@ -166,8 +166,8 @@ export default function TitleBar() {
           <button
             type="button"
             className="title-bar__button"
-            aria-label={isFullScreen ? 'Restore' : 'Maximize'}
-            title={isFullScreen ? 'Restore' : 'Maximize'}
+            aria-label={isFullScreen ? 'Restaurar' : 'Maximizar'}
+            title={isFullScreen ? 'Restaurar' : 'Maximizar'}
             onClick={() => window.electronAPI?.toggleFullScreen()}
           >
             {isFullScreen ? <RestoreIcon /> : <MaximizeIcon />}
@@ -175,8 +175,8 @@ export default function TitleBar() {
           <button
             type="button"
             className="title-bar__button title-bar__button--close"
-            aria-label="Close"
-            title="Close"
+            aria-label="Cerrar"
+            title="Cerrar"
             onClick={() => window.electronAPI?.closeWindow()}
           >
             <CloseIcon />

@@ -70,10 +70,23 @@ async function waitUntil(check, label) {
   await test('new project: flow-generate goes out with projectUrl null and the exact prompt', async () => {
     const { requestId } = generate();
     await waitUntil(() => received.length === 1, 'job received');
-    assert.deepEqual(received[0], { type: 'flow-generate', requestId, prompt: 'Line one\nLine two', projectUrl: null });
+    assert.deepEqual(received[0], {
+      type: 'flow-generate',
+      requestId,
+      prompt: 'Line one\nLine two',
+      projectUrl: null,
+      model: 'nano-banana-pro',
+      outputs: 2,
+      references: [],
+    });
 
-    assert.throws(() => generate({ characterKey: 'otro' }), /already running/);
-    assert.deepEqual(service.status(), { busy: true, videoId: video.id, characterKey: 'personaje-1-tomas' });
+    assert.throws(() => generate({ characterKey: 'otro' }), /otra generación de Flow en curso/);
+    assert.deepEqual(service.status(), {
+      busy: true,
+      videoId: video.id,
+      characterKey: 'personaje-1-tomas',
+      scenes: { busy: false, running: null, pending: 0 },
+    });
 
     ext.send(JSON.stringify({ type: 'flow-project', requestId, projectUrl: PROJECT }));
     ext.send(JSON.stringify({ type: 'flow-progress', requestId, percent: 42 }));
@@ -140,8 +153,8 @@ async function waitUntil(check, label) {
   });
 
   await test('select / approve rules', async () => {
-    assert.throws(() => store.setApproved(video.id, undefined, true), /Select an image/);
-    assert.throws(() => store.select(video.id, character.key, '1700000000000-9.webp'), /does not belong/);
+    assert.throws(() => store.setApproved(video.id, undefined, true), /selecciona una imagen/);
+    assert.throws(() => store.select(video.id, character.key, '1700000000000-9.webp'), /no pertenece/);
     const file = character.generations[0].files[1];
     assert.equal(store.select(video.id, character.key, file).selectedFile, file);
     assert.equal(store.setApproved(video.id, [character.key], true)[0].approved, true);
@@ -177,14 +190,14 @@ async function waitUntil(check, label) {
   });
 
   await test('store validation: ids, keys, mime and payload', async () => {
-    for (const id of ['../x', 'a/b', '', 'x'.repeat(101)]) assert.throws(() => store.list(id), /Invalid video id/);
+    for (const id of ['../x', 'a/b', '', 'x'.repeat(101)]) assert.throws(() => store.list(id), /ID de video no válido/);
     for (const key of ['Up', '../x', 'a b', '', 'k'.repeat(65)]) {
-      assert.throws(() => store.upsert(video.id, { key, name: 'n', role: '', prompt: 'p' }), /Invalid character key/);
+      assert.throws(() => store.upsert(video.id, { key, name: 'n', role: '', prompt: 'p' }), /Clave de personaje no válida/);
     }
-    assert.throws(() => store.addGeneration(video.id, 'personaje-1-tomas', { images: [{ mime: 'text/html', base64: 'AAAA' }] }), /Unsupported/);
-    assert.throws(() => store.addGeneration(video.id, 'personaje-1-tomas', { images: [] }), /no usable images/);
-    assert.throws(() => store.addGeneration(video.id, 'nobody', { images: [{ mime: 'image/webp', base64: 'AAAA' }] }), /not found/);
-    assert.throws(() => store.upsert(video.id, { key: 'ok', name: 'n', role: '', prompt: '   ' }), /empty/);
+    assert.throws(() => store.addGeneration(video.id, 'personaje-1-tomas', { images: [{ mime: 'text/html', base64: 'AAAA' }] }), /no compatible/);
+    assert.throws(() => store.addGeneration(video.id, 'personaje-1-tomas', { images: [] }), /imágenes utilizables/);
+    assert.throws(() => store.addGeneration(video.id, 'nobody', { images: [{ mime: 'image/webp', base64: 'AAAA' }] }), /Personaje no encontrado/);
+    assert.throws(() => store.upsert(video.id, { key: 'ok', name: 'n', role: '', prompt: '   ' }), /vacío/);
   });
 
   await test('flow-error and a disconnect fail the job; bad project URLs are refused', async () => {
@@ -198,11 +211,11 @@ async function waitUntil(check, label) {
     ({ requestId } = generate());
     ext.close();
     await waitUntil(() => !service.status().busy, 'disconnect');
-    assert.match(pushed.at(-1)[1].message, /disconnected/);
-    assert.throws(() => generate(), /not connected/);
+    assert.match(pushed.at(-1)[1].message, /se desconectó/);
+    assert.throws(() => generate(), /no está conectada/);
 
-    assert.throws(() => service.setProject(video.id, 'https://evil.com/project/12345678-1234-1234-1234-123456789abc'), /Invalid Flow project URL/);
-    assert.throws(() => service.setProject(video.id, `${PROJECT}/edit/x`), /Invalid Flow project URL/);
+    assert.throws(() => service.setProject(video.id, 'https://evil.com/project/12345678-1234-1234-1234-123456789abc'), /URL del proyecto de Flow no válida/);
+    assert.throws(() => service.setProject(video.id, `${PROJECT}/edit/x`), /URL del proyecto de Flow no válida/);
     assert.equal(service.setProject(video.id, ' ').flowProjectUrl, null);
     assert.equal(service.setProject(video.id, PROJECT).flowProjectUrl, PROJECT);
     assert.equal(service.projectUrl(video.id), PROJECT);
@@ -249,8 +262,170 @@ async function waitUntil(check, label) {
     assert.equal(events.at(-1)[0], 'flow:result');
   });
 
+  // --- Scenes: serial queue, references, cancel ---
+  const sceneVideo = videos.create({ title: 'Scenes video' });
+  const sent = [];
+  let sceneListener = null;
+  let statusListener = null;
+  let connected = true;
+  const sceneBridge = {
+    isConnected: () => connected,
+    sendFlowJob: (job) => sent.push(job),
+    onMessage: (fn) => (sceneListener = fn),
+    onStatusChange: (fn) => (statusListener = fn),
+  };
+  const sceneEvents = [];
+  const sceneService = createFlowService({ bridge: sceneBridge, store, videos, pushToWindow: (c, p) => sceneEvents.push([c, p]), jobTimeoutMs: 60000 });
+  const states = (number) => sceneEvents.filter(([c, p]) => c === 'flow:scene-status' && p.number === number).map(([, p]) => p.state);
+  const image = { mime: 'image/webp', base64: WEBP.toString('base64') };
+  const finish = (job, extra = {}) => sceneListener({ type: 'flow-result', requestId: job.requestId, projectUrl: PROJECT, images: [image, image], ...extra });
+  const scene = (number, sheetRefs = [], prompt = `scene ${number}`) => ({ number, title: `Escena ${number}`, prompt, sheetRefs });
+
+  store.upsert(sceneVideo.id, { key: 'personaje-1-tomas', name: 'Personaje 1 — Tomás (protagonista)', role: '', prompt: 'sheet 1' });
+  store.upsert(sceneVideo.id, { key: 'personaje-2-ana', name: 'Personaje 2 — Ana', role: '', prompt: 'sheet 2' });
+  store.addGeneration(sceneVideo.id, 'personaje-1-tomas', { images: [{ mime: 'image/png', base64: 'AQID' }, image] });
+  const [tomas] = store.list(sceneVideo.id);
+  store.select(sceneVideo.id, 'personaje-1-tomas', tomas.generations[0].files[0]);
+
+  await test('scene queue is serial: the next job goes out only after the previous result', async () => {
+    const { queued } = sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(1, ['1']), scene(2, ['1']), scene(3)] });
+    assert.equal(queued, 3);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].prompt, 'scene 1');
+    assert.deepEqual(states(2), ['queued']);
+    assert.deepEqual(sceneService.status().scenes, { busy: true, running: 1, pending: 2 });
+    // a duplicate request for a queued or running scene is ignored
+    assert.equal(sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(2), scene(1)] }).queued, 0);
+
+    sceneListener({ type: 'flow-progress', requestId: sent[0].requestId, percent: 55 });
+    assert.equal(sceneEvents.filter(([c]) => c === 'flow:progress').length, 0, 'scene traffic must not reach the character cards');
+    assert.equal(sceneEvents.findLast(([c, p]) => c === 'flow:scene-status' && p.number === 1)[1].percent, 55);
+
+    finish(sent[0]);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[1].prompt, 'scene 2');
+    assert.deepEqual(states(1), ['queued', 'running', 'running', 'done']);
+    const stored = store.listScenes(sceneVideo.id);
+    assert.deepEqual(stored.map((item) => item.number), [1]);
+    assert.equal(stored[0].generations[0].files.length, 2);
+    assert.ok(fs.existsSync(store.sceneFilePath(sceneVideo.id, 1, stored[0].generations[0].files[0])));
+    assert.equal(sceneEvents.findLast(([, p]) => p.number === 1)[1].scene.number, 1);
+
+    // an error also releases the queue
+    sceneListener({ type: 'flow-error', requestId: sent[1].requestId, message: 'Flow se quedó sin créditos.' });
+    assert.deepEqual(states(2).slice(-1), ['error']);
+    assert.equal(sceneEvents.findLast(([, p]) => p.number === 2)[1].error, 'Flow se quedó sin créditos.');
+    assert.equal(sent.length, 3);
+    assert.equal(sent[2].prompt, 'scene 3');
+    finish(sent[2]);
+    assert.deepEqual(sceneService.status().scenes, { busy: false, running: null, pending: 0 });
+  });
+
+  await test('scene jobs carry the selected sheet as reference plus model and outputs', async () => {
+    const job = sent[0];
+    assert.equal(job.model, 'nano-banana-pro');
+    assert.equal(job.outputs, 2);
+    assert.equal(job.references.length, 1);
+    assert.deepEqual(job.references[0], { name: tomas.generations[0].files[0], mime: 'image/png', base64: 'AQID' });
+    assert.deepEqual(sent[2].references, [], 'a scene without sheet refs sends no references');
+  });
+
+  await test('scenes whose sheet is unknown or has no selected image fail alone and the queue moves on', async () => {
+    sent.length = 0;
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(4, ['2']), scene(5, ['7']), scene(6, ['1B']), scene(7, ['1', '2'])] });
+    // 4: Ana has no selected image; 5: no sheet 7; 6: no variant B; 7: Ana again -> all fail, none sent
+    assert.equal(sent.length, 0);
+    assert.deepEqual([4, 5, 6, 7].map((n) => states(n).slice(-1)[0]), ['error', 'error', 'error', 'error']);
+    assert.match(sceneEvents.findLast(([, p]) => p.number === 4)[1].error, /hoja 2 .*no tiene una imagen seleccionada/);
+    assert.match(sceneEvents.findLast(([, p]) => p.number === 5)[1].error, /No encuentro el personaje de la hoja 7/);
+
+    store.addGeneration(sceneVideo.id, 'personaje-2-ana', { images: [image] });
+    store.select(sceneVideo.id, 'personaje-2-ana', store.list(sceneVideo.id)[1].generations[0].files[0]);
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(8, ['1', '2', '1'])] });
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].references.map((ref) => ref.mime), ['image/png', 'image/webp'], 'two sheets, the repeated one only once');
+    finish(sent[0]);
+  });
+
+  await test('cancelScenes clears the waiting scenes and keeps the running one', async () => {
+    sent.length = 0;
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(10), scene(11), scene(12)] });
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sceneService.cancelScenes(), { cancelled: 2 });
+    assert.deepEqual(states(11).slice(-1), ['cancelled']);
+    assert.deepEqual(states(12).slice(-1), ['cancelled']);
+    assert.deepEqual(sceneService.status().scenes, { busy: true, running: 10, pending: 0 });
+    finish(sent[0]);
+    assert.equal(sent.length, 1, 'nothing else is sent after the running scene ends');
+    assert.deepEqual(states(10).slice(-1), ['done']);
+  });
+
+  await test('a character job is rejected while the scene queue is busy, and scenes while a character runs', async () => {
+    sent.length = 0;
+    const characterArgs = { videoId: sceneVideo.id, characterKey: 'personaje-1-tomas', name: 'Personaje 1 — Tomás (protagonista)', role: '', prompt: 'sheet 1' };
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(20)] });
+    assert.throws(() => sceneService.generate(characterArgs), /cola de escenas/);
+    finish(sent[0]);
+    assert.equal(sceneService.status().scenes.busy, false);
+
+    sceneService.generate(characterArgs);
+    assert.throws(() => sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(21)] }), /generación de personaje en curso/);
+    sceneListener({ type: 'flow-error', requestId: sent.at(-1).requestId, message: 'x' });
+  });
+
+  await test('scene payload validation, disconnect and old generations pruning', async () => {
+    const bad = (scenes, pattern) => assert.throws(() => sceneService.generateScenes({ videoId: sceneVideo.id, scenes }), pattern);
+    bad([], /Lista de escenas no válida/);
+    bad([{ number: 0, prompt: 'p' }], /Número de escena no válido/);
+    bad([{ number: 1.5, prompt: 'p' }], /Número de escena no válido/);
+    bad([{ number: 1, prompt: '  ' }], /prompt de la escena está vacío/);
+    bad([{ number: 1, prompt: 'p', sheetRefs: ['../x'] }], /Referencias de hoja no válidas/);
+    assert.throws(() => sceneService.generateScenes({ videoId: 'nope', scenes: [scene(1)] }), /Video no encontrado/);
+    assert.throws(() => store.sceneFilePath(sceneVideo.id, 1, '../x.webp'), /Archivo de imagen no válido/);
+    assert.throws(() => store.sceneFilePath(sceneVideo.id, 'abc', '1700000000000-1.webp'), /Número de escena no válido/);
+
+    sent.length = 0;
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(30), scene(31)] });
+    statusListener(false);
+    assert.deepEqual(states(30).slice(-1), ['error']);
+    assert.deepEqual(states(31).slice(-1), ['error']);
+    assert.match(sceneEvents.findLast(([, p]) => p.number === 31)[1].error, /se desconectó/);
+    assert.equal(sceneService.status().scenes.busy, false);
+    connected = false;
+    assert.throws(() => sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(32)] }), /no está conectada/);
+    connected = true;
+
+    // Only the latest generations of a scene are kept, older files are deleted
+    const dirOf = path.join(dir, 'videos', sceneVideo.id, 'scenes', '40');
+    const firstFiles = [];
+    for (let i = 0; i < 6; i += 1) {
+      const saved = store.addSceneGeneration(sceneVideo.id, { number: 40, title: 'T', prompt: 'p', images: [image, image] });
+      if (i === 0) firstFiles.push(...saved.generations[0].files);
+      await sleep(3);
+    }
+    const kept = store.listScenes(sceneVideo.id).find((item) => item.number === 40);
+    assert.equal(kept.generations.length, 4);
+    assert.equal(fs.readdirSync(dirOf).length, 8);
+    for (const file of firstFiles) assert.equal(fs.existsSync(path.join(dirOf, file)), false);
+  });
+
+  await test('media protocol serves scene images and rejects malformed scene paths', async () => {
+    const [{ generations }] = store.listScenes(sceneVideo.id);
+    const file = generations[0].files[0];
+    const ok = await createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { sceneFile: store.sceneFilePath })({
+      url: `mecatube-media://scene/${sceneVideo.id}/1/${file}`,
+      headers: new Headers(),
+    });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.headers.get('content-type'), 'image/webp');
+    const handler = createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { sceneFile: store.sceneFilePath });
+    for (const url of [`mecatube-media://scene/${sceneVideo.id}/..%2F1/${file}`, `mecatube-media://scene/${sceneVideo.id}/x/${file}`, `mecatube-media://scene/${sceneVideo.id}/1`]) {
+      assert.equal((await handler({ url, headers: new Headers() })).status, 404, url);
+    }
+  });
+
   bridge.stop();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir,{ recursive: true, force: true });
   console.log(`\n${results.length} passed`);
   process.exit(0);
 })().catch((error) => {

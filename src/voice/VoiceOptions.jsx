@@ -7,12 +7,12 @@ export default function VoiceOptions({ voiceId, voiceName, model, disabled, onVo
     <div className="voice-panel__options">
       <VoicePicker voiceId={voiceId} voiceName={voiceName} disabled={disabled} onChange={onVoiceChange} />
       <label className="voice-panel__field">
-        <span className="video-detail__chat-label">Model</span>
+        <span className="video-detail__chat-label">Modelo</span>
         <select
           className="video-detail__select"
           value={model}
           disabled={disabled}
-          aria-label="Voice model"
+          aria-label="Modelo de voz"
           onChange={(event) => onModelChange(event.target.value)}
         >
           {MODELS.map((item) => (

@@ -23,11 +23,11 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
   const handleCreate = async (e) => {
     e?.preventDefault();
     if (!name.trim()) {
-      setError('Por favor ingresá un nombre para el espacio de trabajo.');
+      setError('Por favor ingresa un nombre para el espacio de trabajo.');
       return;
     }
     if (!targetPath.trim()) {
-      setError('Por favor seleccioná una carpeta para guardar tus trabajos.');
+      setError('Por favor selecciona una carpeta para guardar tus trabajos.');
       return;
     }
 
@@ -80,7 +80,7 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
             Nuevo Espacio de Trabajo
           </h2>
           <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.4 }}>
-            Configurá una carpeta donde se guardarán todos tus videos, audios de voz en off, ideas y proyectos.
+            Configura una carpeta donde se guardarán todos tus videos, audios de voz en off, ideas y proyectos.
           </p>
         </div>
 

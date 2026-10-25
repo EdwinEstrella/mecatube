@@ -75,13 +75,13 @@ await test('ensureScriptVideo: title and number come from the chosen idea', asyn
 });
 
 await test('ensureScriptVideo: refuses without a conversation', async () => {
-  await assert.rejects(ensureScriptVideo(fakeApi(), null, []), /saved conversation/);
+  await assert.rejects(ensureScriptVideo(fakeApi(), null, []), /conversación guardada/);
 });
 
 await test('voiceDetail: tagline and creation date, tolerant of missing data', () => {
   assert.equal(voiceDetail({}), '');
   assert.equal(voiceDetail({ tagline: 'calida', createdAt: 'nope' }), 'calida');
-  assert.match(voiceDetail({ tagline: 'calida', createdAt: '2026-03-05T12:00:00Z' }), /^calida · created .*2026/);
+  assert.match(voiceDetail({ tagline: 'calida', createdAt: '2026-03-05T12:00:00Z' }), /^calida · creada el .*2026/);
 });
 
 await test('isKnownVoice: looks in both lists', () => {

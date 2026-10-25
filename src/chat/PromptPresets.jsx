@@ -42,7 +42,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
         type="button"
         className="chat-presets__button"
         disabled={disabled || !hasActiveConversation}
-        title={hasActiveConversation ? undefined : 'Open a conversation first'}
+        title={hasActiveConversation ? undefined : 'Abre primero una conversación'}
         onClick={() =>
           onSendConnectors(
             composeConnectorsMessage(

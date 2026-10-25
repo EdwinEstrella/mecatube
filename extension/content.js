@@ -440,7 +440,7 @@ if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__
   // Full chat history JSON for a session. Throws a generic Error (no token, no response body).
   async function fetchHistory(sessionId) {
     const token = readToken();
-    if (!token) throw new Error('DeepSeek token not available.');
+    if (!token) throw new Error('Token de DeepSeek no disponible.');
     const url = `${location.origin}${HISTORY_API.path}?${HISTORY_API.sessionParam}=${encodeURIComponent(sessionId)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), HISTORY_FETCH_TIMEOUT_MS);
@@ -451,7 +451,7 @@ if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__
         headers: { Authorization: `Bearer ${token}` },
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`DeepSeek history request failed (HTTP ${response.status}).`);
+      if (!response.ok) throw new Error(`Falló la solicitud del historial de DeepSeek (HTTP ${response.status}).`);
       return await response.json();
     } finally {
       clearTimeout(timer);
@@ -469,7 +469,7 @@ if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__
   }
 
   async function runPrompt(text, port) {
-    const input = await waitFor(findInput, 15000, 'DeepSeek input box not found.');
+    const input = await waitFor(findInput, 15000, 'No se encontró el cuadro de entrada de DeepSeek.');
     const countBefore = assistantContainers().length;
     // Messages already in the chat: the final reply must come after them. If the baseline cannot be
     // read, each earlier assistant message is assumed to have a user message before it.
@@ -486,7 +486,7 @@ if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__
         return all.length > countBefore ? all[all.length - 1] : null;
       },
       60000,
-      'No reply appeared in DeepSeek.',
+      'DeepSeek no mostró ninguna respuesta.',
     );
 
     let lastText = '';
@@ -524,7 +524,7 @@ if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__
 
     try {
       while (finalText === null) {
-        if (Date.now() - startedAt > TIMEOUT_MS) throw new Error('Timed out waiting for the DeepSeek reply.');
+        if (Date.now() - startedAt > TIMEOUT_MS) throw new Error('Se agotó el tiempo esperando la respuesta de DeepSeek.');
         await sleep(POLL_MS);
         sendDelta(false);
 

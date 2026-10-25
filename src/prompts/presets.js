@@ -13,10 +13,10 @@ export const PRESETS = [
 // Editable text behind the "Agregar palabras conectoras" button; stored through the same overrides
 export const CONNECTORS_INSTRUCTION = {
   id: 'connectors-instruction',
-  label: 'Connectors instruction',
+  label: 'Instrucción de conectores',
   defaultText: connectorsInstruction,
 };
-export const CONNECTORS_LIST = { id: 'connectors', label: 'Connector words (one per line)', defaultText: connectorsList };
+export const CONNECTORS_LIST = { id: 'connectors', label: 'Palabras conectoras (una por línea)', defaultText: connectorsList };
 
 export const PROMPTS_CHANGED_EVENT = 'mecatube:prompts-changed';
 

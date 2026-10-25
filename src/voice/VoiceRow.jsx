@@ -29,7 +29,7 @@ export default function VoiceRow({ name, detail, badge, previewUrl, isSelected, 
           <button
             type="button"
             className="voice-row__play"
-            aria-label={`${isPlaying ? 'Stop' : 'Play'} preview of ${name}`}
+            aria-label={`${isPlaying ? 'Detener' : 'Reproducir'} vista previa de ${name}`}
             onClick={togglePreview}
           >
             {isPlaying ? '■' : '▶'}
@@ -51,7 +51,7 @@ export default function VoiceRow({ name, detail, badge, previewUrl, isSelected, 
           disabled={isSelected}
           onClick={onSelect}
         >
-          {isSelected ? 'Selected' : 'Select'}
+          {isSelected ? 'Seleccionada' : 'Seleccionar'}
         </button>
       )}
     </li>

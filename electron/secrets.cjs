@@ -36,10 +36,10 @@ function createSecretStore(dir, safeStorage) {
   }
 
   function validKey(value) {
-    if (typeof value !== 'string') throw new Error('Invalid API key.');
+    if (typeof value !== 'string') throw new Error('API key no válida.');
     const key = value.trim();
-    if (!key) throw new Error('The API key is empty.');
-    if (key.length > KEY_MAX || /[\s\u0000-\u001f]/.test(key)) throw new Error('The API key looks invalid.');
+    if (!key) throw new Error('La API key está vacía.');
+    if (key.length > KEY_MAX || /[\s\u0000-\u001f]/.test(key)) throw new Error('La API key no parece válida.');
     return key;
   }
 
@@ -47,7 +47,7 @@ function createSecretStore(dir, safeStorage) {
   function save(name, value) {
     const key = validKey(value);
     if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error('Secure storage is not available on this system, so the key was not saved.');
+      throw new Error('El almacenamiento seguro no está disponible en este sistema, por lo que la clave no se guardó.');
     }
     const data = read();
     data[name] = safeStorage.encryptString(key).toString('base64');

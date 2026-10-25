@@ -2,7 +2,7 @@
 const TITLE_MAX = 120;
 
 export async function ensureIllustratorVideo(api, conversationId, title = '') {
-  if (!api || !conversationId) throw new Error('Open a saved conversation first.');
+  if (!api || !conversationId) throw new Error('Abre primero una conversación guardada.');
   const videos = (await api.listVideos()) ?? [];
   const linked = videos.find((video) => video.illustratorConversationId === conversationId);
   if (linked) return linked;

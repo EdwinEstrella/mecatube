@@ -29,7 +29,7 @@ export default function Composer({ disabled, placeholder, onSend }) {
         onKeyDown={handleKeyDown}
       />
       <button type="button" className="chat-composer__send" disabled={disabled || !text.trim()} onClick={submit}>
-        Send
+        Enviar
       </button>
     </div>
   );

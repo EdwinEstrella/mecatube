@@ -7,8 +7,8 @@ import CharactersPanel from '../flow/CharactersPanel.jsx';
 // state: 'ok' | 'deleted' | 'none' for one linked chat
 function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onStart, openLabel, startLabel }) {
   const options = [
-    { value: '', label: 'Not linked' },
-    ...(state === 'deleted' ? [{ value: linkedId, label: 'Chat deleted' }] : []),
+    { value: '', label: 'Sin vincular' },
+    ...(state === 'deleted' ? [{ value: linkedId, label: 'Chat eliminado' }] : []),
     ...conversations.map((conversation) => ({ value: conversation.id, label: conversation.title })),
   ];
 
@@ -18,7 +18,7 @@ function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onS
       <CustomSelect
         value={linkedId ?? ''}
         options={options}
-        ariaLabel={`${label} chat`}
+        ariaLabel={`Chat de ${label}`}
         onChange={(val) => onChange(val || null)}
       />
       {state === 'ok' && (
@@ -26,7 +26,7 @@ function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onS
           {openLabel}
         </button>
       )}
-      {state === 'deleted' && <span className="video-detail__note">chat deleted</span>}
+      {state === 'deleted' && <span className="video-detail__note">chat eliminado</span>}
       <button type="button" className="settings__button settings__button--primary" onClick={onStart}>
         {startLabel}
       </button>
@@ -85,7 +85,7 @@ export default function VideoDetail({
               value={draft}
               maxLength={120}
               autoFocus
-              aria-label="Video title"
+              aria-label="Título del video"
               onFocus={(event) => event.target.select()}
               onChange={(event) => setDraft(event.target.value)}
               onBlur={() => finishEditing(true)}
@@ -102,14 +102,14 @@ export default function VideoDetail({
               <button
                 type="button"
                 className="chat-list__rename-button video-detail__edit"
-                aria-label="Rename video"
-                title="Rename video"
+                aria-label="Renombrar video"
+                title="Renombrar video"
                 onClick={startEditing}
               >
                 ✎
               </button>
               <span className="settings__card-text" style={{ fontSize: '0.82rem', opacity: 0.65 }}>
-                {doneCount}/{stages.length} stages completed
+                {doneCount}/{stages.length} etapas completadas
               </span>
             </div>
           )}
@@ -120,7 +120,7 @@ export default function VideoDetail({
           className="settings__button settings__button--primary"
           onClick={onSendPrompt1}
         >
-          Send Prompt 1
+          Enviar Prompt 1
         </button>
       </div>
 
@@ -129,26 +129,26 @@ export default function VideoDetail({
       </div>
 
       <ChatLink
-        label="Script"
+        label="Guion"
         linkedId={video.scriptConversationId}
         state={chatStates.script}
         conversations={conversations}
         onChange={(id) => onLink(video.id, 'scriptConversationId', id)}
         onOpen={onOpenChat}
         onStart={() => onStartPrompt(video.id, 'script')}
-        openLabel="Open script chat"
-        startLabel="Send Prompt 1"
+        openLabel="Abrir chat del guion"
+        startLabel="Enviar Prompt 1"
       />
       <ChatLink
-        label="Illustrator"
+        label="Ilustrador"
         linkedId={video.illustratorConversationId}
         state={chatStates.illustrator}
         conversations={conversations}
         onChange={(id) => onLink(video.id, 'illustratorConversationId', id)}
         onOpen={onOpenChat}
         onStart={() => onStartPrompt(video.id, 'illustrator')}
-        openLabel="Open illustrator chat"
-        startLabel="Send Prompt 2"
+        openLabel="Abrir chat del ilustrador"
+        startLabel="Enviar Prompt 2"
       />
 
       <VoicePanel video={video} scriptMessages={scriptMessages} voice={voice} onSaveNarration={onSaveNarration} />
@@ -164,15 +164,15 @@ export default function VideoDetail({
         {isConfirming ? (
           <>
             <button type="button" className="settings__button settings__button--danger" onClick={() => onDelete(video.id)}>
-              Confirm reset
+              Confirmar reinicio
             </button>
             <button type="button" className="settings__button settings__button--ghost" onClick={() => setIsConfirming(false)}>
-              Cancel
+              Cancelar
             </button>
           </>
         ) : (
           <button type="button" className="settings__button settings__button--danger" onClick={() => setIsConfirming(true)}>
-            Reset timeline
+            Reiniciar línea de tiempo
           </button>
         )}
       </div>

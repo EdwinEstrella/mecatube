@@ -71,7 +71,7 @@ function waitForTabComplete(tabId, label = 'DeepSeek') {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(listener);
-      reject(new Error(`Timed out waiting for the ${label} tab to load.`));
+      reject(new Error(`Se agotó el tiempo esperando a que cargara la pestaña de ${label}.`));
     }, TAB_LOAD_TIMEOUT_MS);
 
     function listener(updatedId, info) {
@@ -129,7 +129,7 @@ async function ensureContentScript(tabId, file = 'content.js', label = 'DeepSeek
     }
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
-  throw new Error(`The ${label} page did not respond. Reload the ${label} tab and try again.`);
+  throw new Error(`La página de ${label} no respondió. Recarga la pestaña de ${label} e inténtalo de nuevo.`);
 }
 
 // The DeepSeek tab serves one job at a time: a prompt in flight or a history read
@@ -160,7 +160,7 @@ async function handlePrompt({ requestId, text, deepseekUrl }) {
       if (finished) return;
       finished = true;
       deepseekBusy = false;
-      send({ type: 'error', requestId, message: 'The DeepSeek page closed or reloaded before the reply finished.' });
+      send({ type: 'error', requestId, message: 'La página de DeepSeek se cerró o se recargó antes de terminar la respuesta.' });
     });
     port.postMessage({ type: 'prompt', text });
   } catch (error) {
@@ -231,7 +231,7 @@ async function waitForProjectUrl(tabId) {
     if (match) return match[0];
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  throw new Error('Flow did not open the new project.');
+  throw new Error('Flow no abrió el nuevo proyecto.');
 }
 
 // Runs one step in a content script over a port. onMessage sees every port message; the promise
@@ -243,11 +243,11 @@ function runTabStep(tabId, command, { portName = 'mecatube-flow', label = 'Flow'
     const port = chrome.tabs.connect(tabId, { name: portName });
     let settled = false;
     const onRemoved = (removedId) => {
-      if (removedId === tabId) finish(new Error(`The ${label} tab was closed before the job finished.`));
+      if (removedId === tabId) finish(new Error(`La pestaña de ${label} se cerró antes de terminar el trabajo.`));
     };
     const onUpdated = (updatedId, info) => {
       if (updatedId === tabId && stayOn && info.url && !info.url.startsWith(stayOn)) {
-        finish(new Error(`The ${label} tab navigated away before the job finished.`));
+        finish(new Error(`La pestaña de ${label} cambió de página antes de terminar el trabajo.`));
       }
     };
     const finish = (error, value) => {
@@ -264,7 +264,7 @@ function runTabStep(tabId, command, { portName = 'mecatube-flow', label = 'Flow'
       if (error) reject(error);
       else resolve(value);
     };
-    const timer = setTimeout(() => finish(new Error(`Timed out waiting for ${label}.`)), timeoutMs);
+    const timer = setTimeout(() => finish(new Error(`Se agotó el tiempo esperando a ${label}.`)), timeoutMs);
     chrome.tabs.onRemoved.addListener(onRemoved);
     chrome.tabs.onUpdated.addListener(onUpdated);
     port.onMessage.addListener((message) => {
@@ -272,14 +272,15 @@ function runTabStep(tabId, command, { portName = 'mecatube-flow', label = 'Flow'
       if (message.type === 'error') finish(new Error(message.message));
       else if (message.type === settleOn) finish(null, message);
     });
-    port.onDisconnect.addListener(() => finish(new Error(`The ${label} page closed or reloaded before the job finished.`)));
+    port.onDisconnect.addListener(() => finish(new Error(`La página de ${label} se cerró o se recargó antes de terminar el trabajo.`)));
     port.postMessage(command);
   });
 }
 
-async function handleFlowGenerate({ requestId, prompt, projectUrl }) {
+// model / outputs / references travel to the Flow tab untouched; flow.js decides what to do with them
+async function handleFlowGenerate({ requestId, prompt, projectUrl, model, outputs, references }) {
   if (flowBusy) {
-    send({ type: 'flow-error', requestId, message: 'Another Flow job is already running.' });
+    send({ type: 'flow-error', requestId, message: 'Ya hay otro trabajo de Flow en curso.' });
     return;
   }
   flowBusy = true;
@@ -303,7 +304,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl }) {
 
     const result = await runTabStep(
       tabId,
-      { type: 'generate', prompt },
+      { type: 'generate', prompt, model, outputs, references },
       {
         settleOn: 'result',
         timeoutMs: FLOW_JOB_TIMEOUT_MS,

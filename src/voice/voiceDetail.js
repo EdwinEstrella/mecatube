@@ -4,7 +4,7 @@ export function voiceDetail(voice) {
   if (voice.tagline) parts.push(voice.tagline);
   const created = voice.createdAt ? new Date(voice.createdAt) : null;
   if (created && !Number.isNaN(created.getTime())) {
-    parts.push(`created ${created.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`);
+    parts.push(`creada el ${created.toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' })}`);
   }
   return parts.join(' · ');
 }

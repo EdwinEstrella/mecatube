@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import VoicePicker from './VoicePicker.jsx';
 import VoicePlayer from './VoicePlayer.jsx';
 
 // Presentational: voice-over button, inline confirm, progress and player under one script message.
 // phase: 'idle' | 'confirm' | 'generating'.
 export default function ScriptVoiceControl({
   chars,
+  voiceId,
   voiceName,
   videoId,
   track,
@@ -15,6 +17,7 @@ export default function ScriptVoiceControl({
   error,
   remaining,
   expandPlayer,
+  onVoiceChange,
   onRequest,
   onConfirm,
   onCancelConfirm,
@@ -66,13 +69,17 @@ export default function ScriptVoiceControl({
             </button>
             {configured === false && (
               <button type="button" className="script-voice__hint" onClick={onOpenSettings}>
-                Configura tu clave de Cartesia en Ajustes
+                Configura tu clave de Cartesia en Configuración
               </button>
             )}
             {configured && busyElsewhere && <span className="settings__card-text">Hay otra voz en off generándose.</span>}
           </>
         )}
       </div>
+
+      {phase === 'confirm' && (
+        <VoicePicker voiceId={voiceId} voiceName={voiceName} onChange={onVoiceChange} />
+      )}
 
       {error && <p className="prompt-editor__error">{error}</p>}
 
@@ -82,7 +89,7 @@ export default function ScriptVoiceControl({
           {isPlayerOpen && (
             <VoicePlayer videoId={videoId} voice={track} openLabel="Abrir carpeta" onOpenFolder={onOpenFolder}>
               <button type="button" className="settings__button settings__button--ghost" onClick={onOpenTimeline}>
-                Ver en Timeline
+                Ver en la línea de tiempo
               </button>
             </VoicePlayer>
           )}

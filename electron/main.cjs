@@ -90,7 +90,7 @@ function handleBridgeMessage(message) {
       pushToWindow('chat:error', { conversationId, message: error.message });
     }
   } else if (message.type === 'error') {
-    failInFlight(String(message.message ?? 'The extension reported an error.'));
+    failInFlight(String(message.message ?? 'La extensión informó de un error.'));
   }
 }
 
@@ -168,7 +168,7 @@ ipcMain.handle('chat:list', () => conversations.list());
 ipcMain.handle('chat:get', (_event, id) => conversations.get(id));
 
 ipcMain.handle('chat:delete', (_event, id) => {
-  if (inFlight?.conversationId === id) throw new Error('Wait for the reply to finish before deleting.');
+  if (inFlight?.conversationId === id) throw new Error('Espera a que termine la respuesta antes de eliminar.');
   conversations.delete(id);
 });
 
@@ -196,13 +196,13 @@ ipcMain.handle('videos:delete', (_event, payload) => {
 ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
   // The text is sent and stored exactly as received; trim() is only used to detect an empty message
   const content = typeof text === 'string' ? text : '';
-  if (content.trim() === '') throw new Error('Message is empty.');
-  if (inFlight) throw new Error('A reply is already in progress.');
+  if (content.trim() === '') throw new Error('El mensaje está vacío.');
+  if (inFlight) throw new Error('Ya hay una respuesta en curso.');
   if (resyncing) throw new Error('Se está resincronizando una conversación. Espera un momento.');
 
   const deepSeekKey = secrets.getDeepSeekKey();
   if (!deepSeekKey && !bridge.isConnected()) {
-    throw new Error('Configura tu API Key de DeepSeek en Ajustes o conecta la extensión.');
+    throw new Error('Configura tu API Key de DeepSeek en Configuración o conecta la extensión.');
   }
 
   const conversation = (conversationId && conversations.get(conversationId)) || conversations.create();
@@ -240,7 +240,7 @@ ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
         if (!abortController.signal.aborted) {
           pushToWindow('chat:error', {
             conversationId: conversation.id,
-            message: err.message || 'Error communicating with DeepSeek API.',
+            message: err.message || 'Error al comunicarse con la API de DeepSeek.',
           });
         }
       } finally {
@@ -402,10 +402,16 @@ app.whenReady().then(() => {
     if (ws?.path) shell.openPath(ws.path);
   });
 
-  protocol.handle(MEDIA_SCHEME, createMediaHandler(voiceProxy, { characterFile: (videoId, key, file) => flowStoreProxy.filePath(videoId, key, file) }));
+  protocol.handle(
+    MEDIA_SCHEME,
+    createMediaHandler(voiceProxy, {
+      characterFile: (videoId, key, file) => flowStoreProxy.filePath(videoId, key, file),
+      sceneFile: (videoId, number, file) => flowStoreProxy.sceneFilePath(videoId, number, file),
+    }),
+  );
   bridge.onMessage(handleBridgeMessage);
   bridge.onStatusChange((connected) => {
-    if (!connected) failInFlight('The DeepSeek extension disconnected.');
+    if (!connected) failInFlight('La extensión de DeepSeek se desconectó.');
     pushToWindow('bridge:status-changed', connected);
   });
   bridge.start();

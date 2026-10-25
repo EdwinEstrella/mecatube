@@ -8,7 +8,7 @@ function createPromptStore(dir) {
   fs.mkdirSync(dir, { recursive: true });
 
   const fileFor = (id) => {
-    if (!PROMPT_IDS.includes(id)) throw new Error('Unknown prompt.');
+    if (!PROMPT_IDS.includes(id)) throw new Error('Prompt desconocido.');
     return path.join(dir, `${id}.txt`);
   };
 
@@ -27,7 +27,7 @@ function createPromptStore(dir) {
 
   // The text is written as received: no trimming and no line-ending changes
   function save(id, text) {
-    if (typeof text !== 'string') throw new Error('Prompt text must be a string.');
+    if (typeof text !== 'string') throw new Error('El texto del prompt debe ser una cadena.');
     const file = fileFor(id);
     const temp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(temp, text, 'utf8');

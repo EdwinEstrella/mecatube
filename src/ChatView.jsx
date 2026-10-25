@@ -58,7 +58,7 @@ export default function ChatView({
     if (activeIdRef.current !== id) return;
     setMessages(conversation?.messages ?? []);
     setActiveUrl(conversation?.deepseekUrl ?? null);
-    if (!conversation) setError('That conversation no longer exists.');
+    if (!conversation) setError('Esa conversación ya no existe.');
   }, []);
 
   const refreshIdeas = useCallback(async () => {
@@ -162,7 +162,7 @@ export default function ChatView({
       try {
         if (!isConnected) {
           await openConversation(null);
-          setError('Connect the browser extension to start this prompt, then try again from the Timeline.');
+          setError('Conecta la extensión del navegador para iniciar este prompt y vuelve a intentarlo desde la línea de tiempo.');
           return;
         }
         const preset = PRESETS.find((item) => item.id === action.presetId);
@@ -263,7 +263,7 @@ export default function ChatView({
   const canChat = isApiConfigured || isConnected;
   const placeholder = canChat
     ? 'Mensaje a DeepSeek (Enter para enviar, Shift+Enter para nueva línea)'
-    : 'Configura la API Key de DeepSeek en Ajustes o conecta la extensión…';
+    : 'Configura la API Key de DeepSeek en Configuración o conecta la extensión…';
 
   return (
     <div className="chat">
@@ -284,7 +284,7 @@ export default function ChatView({
             ? 'DeepSeek API conectada'
             : isConnected
               ? 'Extensión conectada'
-              : 'Sin conexión — ingresa tu API Key en Ajustes'}
+              : 'Sin conexión — ingresa tu API Key en Configuración'}
           {activeId && (
             <button
               type="button"

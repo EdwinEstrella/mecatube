@@ -16,14 +16,14 @@ export default function CharactersPanel({ video, characters, onSetProject, onOpe
 
   return (
     <div className="char-panel">
-      <h4 className="char-panel__title">Characters</h4>
+      <h4 className="char-panel__title">Personajes</h4>
 
       <div className="char-panel__project">
         <input
           className="chat-list__rename char-panel__input"
           value={draft}
           placeholder="https://flow.google.com/project/…"
-          aria-label="Flow project URL"
+          aria-label="URL del proyecto de Flow"
           spellCheck={false}
           onChange={(event) => setDraft(event.target.value)}
         />
@@ -33,7 +33,7 @@ export default function CharactersPanel({ video, characters, onSetProject, onOpe
           disabled={!changed}
           onClick={() => onSetProject(video.id, draft.trim())}
         >
-          Save
+          Guardar
         </button>
         {stored && (
           <button type="button" className="settings__button settings__button--ghost" onClick={() => onOpenProject(video.id)}>
@@ -43,7 +43,7 @@ export default function CharactersPanel({ video, characters, onSetProject, onOpe
       </div>
 
       {characters.length === 0 ? (
-        <p className="settings__card-text">No characters yet. Generate them from the illustrator chat.</p>
+        <p className="settings__card-text">Aún no hay personajes. Genéralos desde el chat del ilustrador.</p>
       ) : (
         <ul className="char-panel__list">
           {characters.map((character) => (
@@ -56,10 +56,10 @@ export default function CharactersPanel({ video, characters, onSetProject, onOpe
                   loading="lazy"
                 />
               ) : (
-                <div className="char-panel__image char-panel__image--empty">No image</div>
+                <div className="char-panel__image char-panel__image--empty">Sin imagen</div>
               )}
               <span className="char-panel__name">{character.name}</span>
-              <span className="char-panel__state">{character.approved ? 'Approved' : character.selectedFile ? 'Selected' : 'Pending'}</span>
+              <span className="char-panel__state">{character.approved ? 'Aprobado' : character.selectedFile ? 'Seleccionado' : 'Pendiente'}</span>
             </li>
           ))}
         </ul>

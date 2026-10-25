@@ -13,11 +13,11 @@ const NAME_MAX = 200;
 
 // Returns a clean prefs object or throws; unknown fields are dropped
 function validatePrefs(input) {
-  if (!input || typeof input !== 'object') throw new Error('Invalid voice preferences.');
+  if (!input || typeof input !== 'object') throw new Error('Preferencias de voz no válidas.');
   const { voiceId, voiceName, model } = input;
-  if (typeof voiceId !== 'string' || !VOICE_ID_PATTERN.test(voiceId)) throw new Error('Invalid voice id.');
-  if (typeof voiceName !== 'string' || voiceName.length > NAME_MAX) throw new Error('Invalid voice name.');
-  if (!MODELS.includes(model)) throw new Error('Unknown voice model.');
+  if (typeof voiceId !== 'string' || !VOICE_ID_PATTERN.test(voiceId)) throw new Error('ID de voz no válido.');
+  if (typeof voiceName !== 'string' || voiceName.length > NAME_MAX) throw new Error('Nombre de voz no válido.');
+  if (!MODELS.includes(model)) throw new Error('Modelo de voz desconocido.');
   return { voiceId, voiceName: voiceName.trim() || voiceId, model };
 }
 

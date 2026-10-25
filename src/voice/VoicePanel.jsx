@@ -102,25 +102,25 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
   const handleOpenFolder = () => api.openVoiceFolder(video.id).catch((openError) => setError(cleanIpcError(openError)));
 
   const canGenerate = configured === true && text.trim() !== '' && !isGenerating;
-  const verb = voice ? 'Regenerate' : 'Generate';
+  const verb = voice ? 'Regenerar' : 'Generar';
 
   return (
     <div className="voice-panel">
-      <h4 className="voice-panel__title">Voice</h4>
+      <h4 className="voice-panel__title">Voz</h4>
 
       <textarea
         className="prompt-editor__text voice-panel__text"
         value={text}
         spellCheck={false}
-        placeholder="Narration text. It is filled from the script chat once a script exists."
-        aria-label="Narration text"
+        placeholder="Texto de la narración. Se completa desde el chat del guion cuando existe un guion."
+        aria-label="Texto de la narración"
         disabled={isGenerating}
         onChange={(event) => handleChange(event.target.value)}
         onBlur={flush}
       />
       <div className="voice-panel__meta">
         <span className="settings__card-text">
-          {characters.toLocaleString('en-US')} characters
+          {characters.toLocaleString('es-ES')} caracteres
         </span>
         <button
           type="button"
@@ -128,7 +128,7 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
           disabled={isGenerating || text === derived}
           onClick={handleReset}
         >
-          Reset from script
+          Restaurar desde el guion
         </button>
       </div>
 
@@ -148,22 +148,22 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
         {isGenerating ? (
           <>
             <span className="settings__card-text">
-              Generating… {seconds > 0 ? `${seconds.toFixed(1)} s of audio so far` : 'waiting for Cartesia'}
+              Generando… {seconds > 0 ? `${seconds.toFixed(1)} s de audio hasta ahora` : 'esperando a Cartesia'}
             </span>
             <button type="button" className="settings__button settings__button--ghost" onClick={() => api.cancelVoice()}>
-              Cancel
+              Cancelar
             </button>
           </>
         ) : isConfirming ? (
           <>
             <span className="settings__card-text">
-              {voice ? 'This will replace the current track.' : 'Generate voice-over for this narration?'}
+              {voice ? 'Esto reemplazará la pista actual.' : '¿Generar la voz en off para esta narración?'}
             </span>
             <button type="button" className="settings__button settings__button--primary" onClick={handleGenerate}>
-              Confirm
+              Confirmar
             </button>
             <button type="button" className="settings__button settings__button--ghost" onClick={() => setIsConfirming(false)}>
-              Cancel
+              Cancelar
             </button>
           </>
         ) : (
@@ -177,7 +177,7 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
               {verb}
             </button>
             {configured === false && (
-              <span className="settings__card-text">Add your Cartesia API key in Settings → Cartesia to generate.</span>
+              <span className="settings__card-text">Para generar, añade tu clave de API de Cartesia en Configuración → Cartesia.</span>
             )}
           </>
         )}

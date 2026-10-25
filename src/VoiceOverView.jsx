@@ -100,8 +100,8 @@ export default function VoiceOverView({ onOpenSettings }) {
 
   return (
     <div className="settings voiceover">
-      <h1 className="settings__title">Voice-over</h1>
-      <p className="settings__card-text">Paste any script and turn it into a voice-over with Cartesia.</p>
+      <h1 className="settings__title">Voz en off</h1>
+      <p className="settings__card-text">Pega cualquier guion y conviértelo en una voz en off con Cartesia.</p>
 
       <VoiceOverEditor
         text={draft.text}
@@ -131,7 +131,7 @@ export default function VoiceOverView({ onOpenSettings }) {
         onOpenSettings={onOpenSettings}
       />
 
-      <h2 className="settings__card-title">History</h2>
+      <h2 className="settings__card-title">Historial</h2>
       <VoiceOverHistory
         items={items}
         onOpenFolder={(id) => run(() => api.openVoiceoverFolder(id))}

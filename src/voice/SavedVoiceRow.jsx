@@ -17,7 +17,7 @@ export default function SavedVoiceRow({ voice, isSelected = false, onSelect, onR
           value={draft}
           maxLength={80}
           autoFocus
-          aria-label="Voice label"
+          aria-label="Etiqueta de la voz"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') commit();
@@ -25,10 +25,10 @@ export default function SavedVoiceRow({ voice, isSelected = false, onSelect, onR
           }}
         />
         <button type="button" className="settings__button settings__button--primary" onClick={commit}>
-          Save
+          Guardar
         </button>
         <button type="button" className="settings__button settings__button--ghost" onClick={() => setDraft(null)}>
-          Cancel
+          Cancelar
         </button>
       </li>
     );
@@ -42,10 +42,10 @@ export default function SavedVoiceRow({ voice, isSelected = false, onSelect, onR
       onSelect={onSelect}
     >
       <button type="button" className="settings__button settings__button--ghost" onClick={() => setDraft(voice.label)}>
-        Rename
+        Renombrar
       </button>
       <button type="button" className="settings__button settings__button--danger" onClick={() => onRemove(voice.id)}>
-        Remove
+        Eliminar
       </button>
     </VoiceRow>
   );

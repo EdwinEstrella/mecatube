@@ -8,16 +8,16 @@ import { chosenIdeaNumber } from '../chat/chosenIdea.js';
 // `auto` stages can be detected from a chat; the others are only ever set by hand
 export const STAGES = [
   { key: 'idea', label: 'Idea', auto: true },
-  { key: 'script', label: 'Script', auto: true },
-  { key: 'metadata', label: 'Metadata', auto: true },
+  { key: 'script', label: 'Guion', auto: true },
+  { key: 'metadata', label: 'Metadatos', auto: true },
   // Not chat-detected; it turns done by itself when a narration track exists (hasVoice)
-  { key: 'voice', label: 'Voice-over', auto: false },
-  { key: 'characters', label: 'Characters', auto: true },
-  { key: 'images', label: 'Images', auto: true },
-  { key: 'animations', label: 'Animations', auto: true },
-  { key: 'thumbnail', label: 'Thumbnail', auto: true },
-  { key: 'editing', label: 'Editing', auto: false },
-  { key: 'published', label: 'Published', auto: false },
+  { key: 'voice', label: 'Voz en off', auto: false },
+  { key: 'characters', label: 'Personajes', auto: true },
+  { key: 'images', label: 'Imágenes', auto: true },
+  { key: 'animations', label: 'Animaciones', auto: true },
+  { key: 'thumbnail', label: 'Miniatura', auto: true },
+  { key: 'editing', label: 'Edición', auto: false },
+  { key: 'published', label: 'Publicado', auto: false },
 ];
 
 export const STAGE_KEYS = STAGES.map((stage) => stage.key);

@@ -12,7 +12,7 @@ export default function VideoRow({ video, stages, doneCount, isOpen, onToggleOpe
         <span className="video-row__progress">
           {doneCount}/{STAGES.length}
         </span>
-        <span className="video-row__current">{current ? `Next: ${current.label}` : 'All stages done'}</span>
+        <span className="video-row__current">{current ? `Siguiente: ${current.label}` : 'Todas las etapas completadas'}</span>
       </button>
       <StageTrack stages={stages} />
       {isOpen && <VideoDetail video={video} stages={stages} {...detail} />}

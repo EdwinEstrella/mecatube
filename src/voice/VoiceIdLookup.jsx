@@ -21,7 +21,7 @@ export default function VoiceIdLookup({ onLookup, onUse, onSave, disabled }) {
     try {
       const voice = await onLookup(id.trim());
       if (voice) setFound(voice);
-      else setMessage('Voice not found');
+      else setMessage('Voz no encontrada');
     } catch (lookupError) {
       setMessage(cleanIpcError(lookupError));
     } finally {
@@ -30,7 +30,7 @@ export default function VoiceIdLookup({ onLookup, onUse, onSave, disabled }) {
   };
 
   const handleSave = async () => {
-    if (await onSave({ id: found.id, name: found.name, label: label.trim() })) setMessage('Saved to your voices.');
+    if (await onSave({ id: found.id, name: found.name, label: label.trim() })) setMessage('Guardada en tus voces.');
   };
 
   return (
@@ -40,8 +40,8 @@ export default function VoiceIdLookup({ onLookup, onUse, onSave, disabled }) {
           className="chat-list__rename voice-lookup__input"
           value={id}
           spellCheck={false}
-          placeholder="Paste a voice ID"
-          aria-label="Voice ID"
+          placeholder="Pega un ID de voz"
+          aria-label="ID de voz"
           disabled={disabled}
           onChange={(event) => {
             setId(event.target.value);
@@ -54,7 +54,7 @@ export default function VoiceIdLookup({ onLookup, onUse, onSave, disabled }) {
           disabled={disabled || isChecking || id.trim() === ''}
           onClick={handleCheck}
         >
-          {isChecking ? 'Checking…' : 'Check'}
+          {isChecking ? 'Verificando…' : 'Verificar'}
         </button>
       </div>
 
@@ -62,31 +62,31 @@ export default function VoiceIdLookup({ onLookup, onUse, onSave, disabled }) {
         <div className="voice-lookup__result">
           <p className="settings__card-text">
             <strong>{found.name}</strong>
-            {found.isOwner ? ' · yours' : ' · public voice'}
+            {found.isOwner ? ' · tuya' : ' · voz pública'}
             {found.description && ` — ${found.description}`}
           </p>
           <div className="voice-panel__actions">
             {onUse && (
               <button type="button" className="settings__button settings__button--primary" onClick={() => onUse({ id: found.id, name: found.name })}>
-                Use
+                Usar
               </button>
             )}
             <input
               className="chat-list__rename voice-lookup__label"
               value={label}
               maxLength={80}
-              placeholder="Custom label (optional)"
-              aria-label="Custom label"
+              placeholder="Etiqueta personalizada (opcional)"
+              aria-label="Etiqueta personalizada"
               onChange={(event) => setLabel(event.target.value)}
             />
             <button type="button" className="settings__button settings__button--ghost" onClick={handleSave}>
-              Save to my voices
+              Guardar en mis voces
             </button>
           </div>
         </div>
       )}
 
-      {message && <p className={message === 'Saved to your voices.' ? 'settings__card-text' : 'prompt-editor__error'}>{message}</p>}
+      {message && <p className={message === 'Guardada en tus voces.' ? 'settings__card-text' : 'prompt-editor__error'}>{message}</p>}
     </div>
   );
 }

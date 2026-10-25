@@ -35,7 +35,7 @@ function CodeBlock({ children }) {
       <div className="md-code__header">
         <span>{language}</span>
         <button type="button" className="md-code__copy" onClick={handleCopy}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? 'Copiado' : 'Copiar'}
         </button>
       </div>
       <pre>{children}</pre>

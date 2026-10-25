@@ -13,11 +13,11 @@ export default function IdeaCards({ ideas, savedNumbers, chosenNumber, canChoose
               <span className="idea-card__number">{idea.number}</span>
               <h3 className="idea-card__title">{idea.title}</h3>
               {idea.format && <span className="idea-card__badge">{idea.format}</span>}
-              {isChosen && <span className="idea-card__badge idea-card__badge--chosen">Chosen</span>}
+              {isChosen && <span className="idea-card__badge idea-card__badge--chosen">Elegida</span>}
               <button
                 type="button"
                 className={`idea-card__heart${isSaved ? ' idea-card__heart--on' : ''}`}
-                aria-label={isSaved ? `Remove idea ${idea.number} from favorites` : `Save idea ${idea.number} to favorites`}
+                aria-label={isSaved ? `Quitar la idea ${idea.number} de favoritos` : `Guardar la idea ${idea.number} en favoritos`}
                 aria-pressed={isSaved}
                 onClick={() => onToggleSave(idea)}
               >
@@ -27,23 +27,23 @@ export default function IdeaCards({ ideas, savedNumbers, chosenNumber, canChoose
                 type="button"
                 className="idea-card__choose"
                 disabled={!canChoose}
-                aria-label={`Choose idea ${idea.number}`}
+                aria-label={`Elegir la idea ${idea.number}`}
                 onClick={() => onChoose(idea.number)}
               >
-                Choose
+                Elegir
               </button>
             </div>
             {idea.question && <p className="idea-card__question">{idea.question}</p>}
             <dl className="idea-card__meta">
               {idea.thumbnailText && (
                 <div>
-                  <dt>Thumbnail</dt>
+                  <dt>Miniatura</dt>
                   <dd>{idea.thumbnailText}</dd>
                 </div>
               )}
               {idea.trigger && (
                 <div>
-                  <dt>Trigger</dt>
+                  <dt>Gatillo</dt>
                   <dd>{idea.trigger}</dd>
                 </div>
               )}

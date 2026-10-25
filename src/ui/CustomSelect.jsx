@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 export default function CustomSelect({
   value,
   options = [],
-  placeholder = 'Select...',
+  placeholder = 'Seleccionar...',
   disabled = false,
   onChange,
   ariaLabel,

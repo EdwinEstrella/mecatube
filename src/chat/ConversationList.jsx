@@ -24,7 +24,7 @@ export default function ConversationList({ conversations, activeId, isLocked, on
   return (
     <aside className="chat-list">
       <button type="button" className="chat-list__new" onClick={onNew}>
-        New chat
+        Nuevo chat
       </button>
 
       <ul className="chat-list__items">
@@ -35,7 +35,7 @@ export default function ConversationList({ conversations, activeId, isLocked, on
           >
             {confirmingId === conversation.id ? (
               <div className="chat-list__confirm">
-                <span>Delete?</span>
+                <span>¿Eliminar?</span>
                 <button
                   type="button"
                   className="chat-list__confirm-yes"
@@ -44,10 +44,10 @@ export default function ConversationList({ conversations, activeId, isLocked, on
                     onDelete(conversation.id);
                   }}
                 >
-                  Delete
+                  Eliminar
                 </button>
                 <button type="button" onClick={() => setConfirmingId(null)}>
-                  Cancel
+                  Cancelar
                 </button>
               </div>
             ) : editingId === conversation.id ? (
@@ -56,7 +56,7 @@ export default function ConversationList({ conversations, activeId, isLocked, on
                 value={draft}
                 maxLength={120}
                 autoFocus
-                aria-label="Conversation title"
+                aria-label="Título de la conversación"
                 onFocus={(event) => event.target.select()}
                 onChange={(event) => setDraft(event.target.value)}
                 onBlur={() => finishEditing(conversation, true)}
@@ -78,8 +78,8 @@ export default function ConversationList({ conversations, activeId, isLocked, on
                 <button
                   type="button"
                   className="chat-list__rename-button"
-                  aria-label={`Rename ${conversation.title}`}
-                  title="Rename conversation"
+                  aria-label={`Renombrar ${conversation.title}`}
+                  title="Renombrar conversación"
                   onClick={() => startEditing(conversation)}
                 >
                   ✎
@@ -87,8 +87,8 @@ export default function ConversationList({ conversations, activeId, isLocked, on
                 <button
                   type="button"
                   className="chat-list__delete"
-                  aria-label={`Delete ${conversation.title}`}
-                  title="Delete conversation"
+                  aria-label={`Eliminar ${conversation.title}`}
+                  title="Eliminar conversación"
                   disabled={isLocked && conversation.id === activeId}
                   onClick={() => setConfirmingId(conversation.id)}
                 >
@@ -98,7 +98,7 @@ export default function ConversationList({ conversations, activeId, isLocked, on
             )}
           </li>
         ))}
-        {conversations.length === 0 && <li className="chat-list__empty">No conversations yet</li>}
+        {conversations.length === 0 && <li className="chat-list__empty">Aún no hay conversaciones</li>}
       </ul>
     </aside>
   );

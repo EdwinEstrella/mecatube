@@ -11,12 +11,12 @@ const MAX_VOICES = 500;
 const SEED = Object.freeze({ id: 'b042270c-d46f-4d4f-8fb0-7dd7c5fe5615', label: 'Hector - Tour Leader', name: 'Hector - Tour Leader' });
 
 function cleanId(id) {
-  if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new Error('That does not look like a voice ID.');
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new Error('Eso no parece un ID de voz.');
   return id;
 }
 
 function cleanLabel(label, fallback) {
-  if (label !== undefined && label !== null && typeof label !== 'string') throw new Error('Invalid label.');
+  if (label !== undefined && label !== null && typeof label !== 'string') throw new Error('Etiqueta no válida.');
   const text = (label ?? '').trim().slice(0, LABEL_MAX);
   return text || fallback;
 }
@@ -57,7 +57,7 @@ function createSavedVoiceStore(dir, { now = () => Date.now() } = {}) {
     if (existing) {
       existing.label = cleanLabel(label, existing.label);
     } else {
-      if (voices.length >= MAX_VOICES) throw new Error('Too many saved voices.');
+      if (voices.length >= MAX_VOICES) throw new Error('Hay demasiadas voces guardadas.');
       voices.push({ id, label: cleanLabel(label, cleanName), name: cleanName, addedAt: now() });
     }
     write(voices);
@@ -68,7 +68,7 @@ function createSavedVoiceStore(dir, { now = () => Date.now() } = {}) {
     cleanId(id);
     const voices = read();
     const item = voices.find((entry) => entry.id === id);
-    if (!item) throw new Error('Saved voice not found.');
+    if (!item) throw new Error('Voz guardada no encontrada.');
     item.label = cleanLabel(label, item.label);
     write(voices);
     return voices;
