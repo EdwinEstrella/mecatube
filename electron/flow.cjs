@@ -471,7 +471,7 @@ function createFlowService({ bridge, store, videos, pushToWindow, jobTimeoutMs =
         sceneStatus(item.videoId, item.number, 'running');
         bridge.sendFlowJob({
           requestId,
-          prompt: item.prompt,
+          prompt: references.length > 0 ? scenePromptForFlow(item.prompt, item.sheetRefs) : item.prompt,
           projectUrl: video.flowProjectUrl ?? null,
           model: FLOW_MODEL,
           outputs: FLOW_OUTPUTS,
@@ -571,4 +571,40 @@ function registerFlowIpc({ ipcMain, shell, service }) {
   });
 }
 
-module.exports = { createFlowStore, createFlowService, registerFlowIpc, CHARACTER_KEY };
+// The illustrator prompt says "the character from character sheet 1" and "must match its character
+// sheet reference". With the sheet attached, Nano Banana reads that as "draw a character sheet" and
+// copies the turnaround poses and expression row. Only the text sent to Flow changes: sheet mentions
+// point at the attached reference image(s) and a guard keeps the scene a single composition. The
+// character description (FICHA) stays word for word, so the character keeps its identity.
+const REFERENCE_GUARD =
+  'Use the attached reference image only for the character design (head, face, hair, clothing, colors, accessories, prop). ' +
+  'Draw one single scene. Do not reproduce the reference layout: no turnaround views, no pose grid, no expression row, ' +
+  'no multiple copies of the same character, no white sheet background unless the scene asks for it.';
+
+function scenePromptForFlow(prompt, sheetRefs = []) {
+  const text = String(prompt ?? '');
+  const order = [];
+  for (const ref of sheetRefs) {
+    const key = String(ref).toUpperCase();
+    if (!order.includes(key)) order.push(key);
+  }
+  if (order.length === 0) return text;
+  const single = order.length === 1;
+  const imageFor = (ref) => {
+    const index = order.indexOf(String(ref).toUpperCase());
+    return single || index === -1 ? 'the attached reference image' : `attached reference image ${index + 1}`;
+  };
+  const rewritten = text
+    .replace(
+      /\b(the\s+)?character\s+from\s+(?:the\s+)?character\s+sheet\s+(\d+[A-Z]?)\b/gi,
+      (_, the = '', ref) => `${the}character shown in ${imageFor(ref)}`,
+    )
+    .replace(/\bcharacter\s+sheet\s+(\d+[A-Z]?)\b/gi, (_, ref) => imageFor(ref))
+    .replace(/\bits\s+character\s+sheet\s+reference\b/gi, single ? 'the attached reference image' : 'its attached reference image')
+    .replace(/\btheir\s+character\s+sheet\s+references\b/gi, 'their attached reference images')
+    .replace(/\bcharacter\s+sheet\s+references?\b/gi, (match) => (/s$/i.test(match) ? 'reference images' : 'reference image'))
+    .replace(/\bcharacter\s+sheets?\b/gi, (match) => (/s$/i.test(match) ? 'reference images' : 'reference image'));
+  return `${rewritten.trim()} ${REFERENCE_GUARD}`;
+}
+
+module.exports = { createFlowStore, createFlowService, registerFlowIpc, scenePromptForFlow, CHARACTER_KEY };

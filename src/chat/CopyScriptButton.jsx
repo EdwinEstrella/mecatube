@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { extractNarration } from '../voice/narration.js';
 
-// Copies the whole script message exactly as DeepSeek delivered it (Markdown included)
+// Copies only the spoken script (no title, labels or closing question), the same text the voice-over uses
 export default function CopyScriptButton({ text }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef(null);
@@ -8,7 +9,7 @@ export default function CopyScriptButton({ text }) {
 
   const handleCopy = () => {
     navigator.clipboard
-      .writeText(text)
+      .writeText(extractNarration(text) || text)
       .then(() => {
         setCopied(true);
         clearTimeout(timer.current);

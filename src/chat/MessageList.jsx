@@ -4,6 +4,8 @@ import IdeaCards from './IdeaCards.jsx';
 import { parseIdeas } from './parseIdeas.js';
 import CharacterCards from '../flow/CharacterCards.jsx';
 import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
+import SceneCards from '../flow/SceneCards.jsx';
+import { parseImageScenes } from '../flow/parseImageScenes.js';
 import { chosenIdeaNumber, hasUserMessageAfter } from './chosenIdea.js';
 import { isScriptMessage } from '../timeline/stages.js';
 import { extractNarration } from '../voice/narration.js';
@@ -47,6 +49,7 @@ export default function MessageList({
   onChooseIdea,
   scriptVoice,
   flow,
+  scenes,
   onOpenTimeline,
   onOpenSettings,
 }) {
@@ -69,6 +72,16 @@ export default function MessageList({
         flow?.available && message.role === 'assistant' && !parsed[index] ? parseCharacterSheets(message.content) : null,
       ),
     [messages, parsed, flow?.available],
+  );
+  // Image-block deliveries (ETAPA 3): one card per prompt with a "Generar en Flow" button
+  const imageBlocks = useMemo(
+    () =>
+      messages.map((message, index) =>
+        flow?.available && scenes?.available && message.role === 'assistant' && !parsed[index] && !sheets[index]
+          ? parseImageScenes(message.content)
+          : null,
+      ),
+    [messages, parsed, sheets, flow?.available, scenes?.available],
   );
   const latestSheetsIndex = sheets.reduce((latest, result, index) => (result ? index : latest), -1);
   // Narration length per finished script message; null for every other message
@@ -108,6 +121,20 @@ export default function MessageList({
                   onSend('2');
                 }}
               />
+              <details className="char-original">
+                <summary>Mensaje original</summary>
+                <Markdown>{message.content}</Markdown>
+              </details>
+            </div>
+          );
+        }
+        const blockResult = imageBlocks[index];
+        if (blockResult) {
+          return (
+            <div key={message.id} className="chat-message chat-message--assistant chat-message--ideas">
+              {blockResult.intro && <Markdown>{blockResult.intro}</Markdown>}
+              <SceneCards block={blockResult.block} scenes={blockResult.scenes} flow={scenes} characterBusy={flow.job !== null} />
+              {blockResult.outro && <Markdown>{blockResult.outro}</Markdown>}
               <details className="char-original">
                 <summary>Mensaje original</summary>
                 <Markdown>{message.content}</Markdown>

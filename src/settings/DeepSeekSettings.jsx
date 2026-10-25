@@ -63,13 +63,6 @@ export default function DeepSeekSettings() {
             Conexión directa con la API oficial de DeepSeek (api.deepseek.com). No requiere extensión del navegador ni pestañas abiertas.
           </p>
         </div>
-        <span
-          className={`prompt-editor__badge ${
-            configured ? 'prompt-editor__badge--edited' : 'prompt-editor__badge--empty'
-          }`}
-        >
-          {configured ? `Configurada (…${status?.last4 || ''})` : 'Sin configurar'}
-        </span>
       </div>
 
       <label className="voice-panel__field">
@@ -97,7 +90,7 @@ export default function DeepSeekSettings() {
         <button
           type="button"
           className="settings__button settings__button--primary"
-          disabled={isBusy || (isEditing && !key.trim())}
+          disabled={isBusy || !key.trim()}
           onClick={handleSave}
         >
           Guardar

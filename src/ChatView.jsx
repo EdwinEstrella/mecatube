@@ -7,6 +7,7 @@ import { PRESETS, effectiveText, loadOverrides } from './prompts/presets.js';
 import { syncChosenIdea } from './timeline/syncChosenIdea.js';
 import { useScriptVoice } from './voice/useScriptVoice.js';
 import { useFlowCharacters } from './flow/useFlowCharacters.js';
+import { useFlowScenes } from './flow/useFlowScenes.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -82,6 +83,10 @@ export default function ChatView({
       setIsConnected(connected);
       setBridgeChecked(true);
     });
+    api.getDeepSeekStatus().then(
+      (status) => setIsApiConfigured(status?.configured === true),
+      () => setIsApiConfigured(false),
+    );
 
     const unsubscribers = [
       api.onBridgeStatusChange(setIsConnected),
@@ -253,7 +258,9 @@ export default function ChatView({
   };
 
   const scriptVoice = useScriptVoice(activeId, messages);
-  const flow = useFlowCharacters(activeId, conversations.find((item) => item.id === activeId)?.title ?? '', isConnected);
+  const activeTitle = conversations.find((item) => item.id === activeId)?.title ?? '';
+  const flow = useFlowCharacters(activeId, activeTitle, isConnected);
+  const flowScenes = useFlowScenes(activeId, activeTitle, isConnected);
 
   const isBusy = pending !== null;
   const isWaiting = isBusy && pending.conversationId === activeId;
@@ -311,6 +318,7 @@ export default function ChatView({
           onChooseIdea={handleChooseIdea}
           scriptVoice={scriptVoice}
           flow={flow}
+          scenes={flowScenes}
           onOpenTimeline={onOpenTimeline}
           onOpenSettings={onOpenSettings}
         />

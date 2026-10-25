@@ -201,6 +201,97 @@ async function handleDeepseekHistory({ requestId, deepseekUrl }) {
 // Replies: flow-project, flow-progress, flow-captcha, flow-result, flow-error (see electron/bridge.cjs).
 let flowBusy = false;
 
+// flow.js asks for its page-world helper (flow-main.js) before intercepting the file picker; it must
+// run in the MAIN world to patch the page's own HTMLInputElement. Only Flow tabs may ask.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'flow-install-hook') return false;
+  const tabId = sender.tab?.id;
+  if (tabId === undefined || !sender.url?.startsWith(`${FLOW_ORIGIN}/`)) {
+    sendResponse({ ok: false, error: 'Remitente no válido.' });
+    return false;
+  }
+  chrome.scripting
+    .executeScript({ target: { tabId }, world: 'MAIN', files: ['flow-main.js'] })
+    .then(() => sendResponse({ ok: true }))
+    .catch((error) => sendResponse({ ok: false, error: error.message }));
+  return true;
+});
+
+// Flow ignores synthetic (isTrusted: false) clicks on its generate button, so flow.js asks for a real
+// one: a mouse press/release through the DevTools protocol at viewport coordinates (CSS pixels).
+// Chrome shows its "debugging this browser" bar only while attached, which is a fraction of a second.
+// A hidden tab does not process input until it is shown, so the Flow tab is brought to the front first.
+const TRUSTED_CLICK_TIMEOUT_MS = 10000;
+
+async function bringTabToFront(tabId) {
+  const tab = await chrome.tabs.update(tabId, { active: true });
+  await chrome.windows.update(tab.windowId, { focused: true });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+}
+
+// Attaching shows the debugging bar, which shrinks the viewport and moves the button, so its center is
+// measured again after attaching; the coordinates sent by flow.js are only the fallback
+async function measureCenter(target, selector, fallback) {
+  if (typeof selector !== 'string' || !selector) return fallback;
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const expression = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return null;
+    el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`;
+  const { result } = await chrome.debugger.sendCommand(target, 'Runtime.evaluate', { expression, returnByValue: true });
+  const point = result?.value;
+  return point && Number.isFinite(point.x) && Number.isFinite(point.y) ? point : fallback;
+}
+
+// Each step is bounded and named, so a hang is reported as "<step>: tardó demasiado" instead of silence
+async function step(name, promise, timeoutMs = TRUSTED_CLICK_TIMEOUT_MS) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${name}: tardó demasiado`)), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    throw error.message.startsWith(`${name}:`) ? error : new Error(`${name}: ${error.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function trustedClick(tabId, x, y, selector) {
+  await step('mostrar la pestaña de Flow', bringTabToFront(tabId));
+  const target = { tabId };
+  await step('conectar el depurador', chrome.debugger.attach(target, '1.3'));
+  try {
+    const point = await step('medir el botón', measureCenter(target, selector, { x, y }));
+    await step('enviar el clic', dispatchClick(target, point.x, point.y));
+  } finally {
+    await chrome.debugger.detach(target).catch(() => {});
+  }
+}
+
+async function dispatchClick(target, x, y) {
+  const base = { x, y, button: 'left', clickCount: 1 };
+  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { ...base, type: 'mouseMoved', button: 'none', clickCount: 0 });
+  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { ...base, type: 'mousePressed' });
+  await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { ...base, type: 'mouseReleased' });
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'flow-trusted-click') return false;
+  const tabId = sender.tab?.id;
+  const { x, y, selector } = message;
+  if (tabId === undefined || !sender.url?.startsWith(`${FLOW_ORIGIN}/`) || !Number.isFinite(x) || !Number.isFinite(y)) {
+    sendResponse({ ok: false, error: 'Solicitud de clic no válida.' });
+    return false;
+  }
+  trustedClick(tabId, x, y, selector)
+    .then(() => sendResponse({ ok: true }))
+    .catch((error) => sendResponse({ ok: false, error: error.message }));
+  return true;
+});
+
 // Reuse a Flow tab (preferring one already on the project) or open one; navigate when needed
 async function prepareFlowTab(projectUrl) {
   const tabs = await chrome.tabs.query({ url: `${FLOW_ORIGIN}/*` });
@@ -220,6 +311,17 @@ async function prepareFlowTab(projectUrl) {
   }
   await waitForTabComplete(tab.id, 'Flow');
   return tab.id;
+}
+
+// A deleted project redirects to /404?reason=project, possibly after load via pushState, so poll briefly
+async function projectStillExists(tabId, projectUrl) {
+  const deadline = Date.now() + 4000;
+  while (Date.now() < deadline) {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab.url?.startsWith(projectUrl)) return false;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  return true;
 }
 
 // The project URL appears after "Nuevo proyecto" is clicked; poll because the page may use pushState
@@ -287,13 +389,19 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
   try {
     let currentProject = projectUrl && FLOW_PROJECT_PATTERN.test(projectUrl) ? projectUrl : null;
     const tabId = await prepareFlowTab(currentProject);
+    if (currentProject && !(await projectStillExists(tabId, currentProject))) {
+      // The saved project was deleted in Flow: start a new one instead of failing
+      currentProject = null;
+      await chrome.tabs.update(tabId, { url: FLOW_HOME_URL });
+      await waitForTabComplete(tabId, 'Flow');
+    }
     await ensureContentScript(tabId, 'flow.js', 'Flow');
 
     if (!currentProject) {
       // The click can navigate the page, which drops the port; the tab URL is the source of truth
       await runTabStep(tabId, { type: 'new-project' }, { settleOn: 'clicked', timeoutMs: FLOW_STEP_TIMEOUT_MS }).catch(
         (error) => {
-          if (!/closed or reloaded/.test(error.message)) throw error;
+          if (!/se cerró o se recargó/.test(error.message)) throw error;
         },
       );
       currentProject = await waitForProjectUrl(tabId);

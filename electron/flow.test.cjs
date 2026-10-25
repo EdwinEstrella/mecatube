@@ -8,7 +8,7 @@ const path = require('node:path');
 const { WebSocket } = require('ws');
 const { createBridge } = require('./bridge.cjs');
 const { createVideoStore } = require('./videos.cjs');
-const { createFlowStore, createFlowService } = require('./flow.cjs');
+const { createFlowStore, createFlowService, scenePromptForFlow } = require('./flow.cjs');
 const { createMediaHandler } = require('./voice-ipc.cjs');
 
 const PORT = 47900 + Math.floor(Math.random() * 90);
@@ -263,7 +263,11 @@ async function waitUntil(check, label) {
   });
 
   // --- Scenes: serial queue, references, cancel ---
-  const sceneVideo = videos.create({ title: 'Scenes video' });
+  // A video owns its characters, and a workspace has a single video: scenes get their own workspace
+  const sceneRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mecatube-scenes-'));
+  const sceneVideos = createVideoStore(sceneRoot);
+  const sceneStore = createFlowStore(sceneRoot);
+  const sceneVideo = sceneVideos.create({ title: 'Scenes video' });
   const sent = [];
   let sceneListener = null;
   let statusListener = null;
@@ -275,17 +279,17 @@ async function waitUntil(check, label) {
     onStatusChange: (fn) => (statusListener = fn),
   };
   const sceneEvents = [];
-  const sceneService = createFlowService({ bridge: sceneBridge, store, videos, pushToWindow: (c, p) => sceneEvents.push([c, p]), jobTimeoutMs: 60000 });
+  const sceneService = createFlowService({ bridge: sceneBridge, store: sceneStore, videos: sceneVideos, pushToWindow: (c, p) => sceneEvents.push([c, p]), jobTimeoutMs: 60000 });
   const states = (number) => sceneEvents.filter(([c, p]) => c === 'flow:scene-status' && p.number === number).map(([, p]) => p.state);
   const image = { mime: 'image/webp', base64: WEBP.toString('base64') };
   const finish = (job, extra = {}) => sceneListener({ type: 'flow-result', requestId: job.requestId, projectUrl: PROJECT, images: [image, image], ...extra });
   const scene = (number, sheetRefs = [], prompt = `scene ${number}`) => ({ number, title: `Escena ${number}`, prompt, sheetRefs });
 
-  store.upsert(sceneVideo.id, { key: 'personaje-1-tomas', name: 'Personaje 1 — Tomás (protagonista)', role: '', prompt: 'sheet 1' });
-  store.upsert(sceneVideo.id, { key: 'personaje-2-ana', name: 'Personaje 2 — Ana', role: '', prompt: 'sheet 2' });
-  store.addGeneration(sceneVideo.id, 'personaje-1-tomas', { images: [{ mime: 'image/png', base64: 'AQID' }, image] });
-  const [tomas] = store.list(sceneVideo.id);
-  store.select(sceneVideo.id, 'personaje-1-tomas', tomas.generations[0].files[0]);
+  sceneStore.upsert(sceneVideo.id, { key: 'personaje-1-tomas', name: 'Personaje 1 — Tomás (protagonista)', role: '', prompt: 'sheet 1' });
+  sceneStore.upsert(sceneVideo.id, { key: 'personaje-2-ana', name: 'Personaje 2 — Ana', role: '', prompt: 'sheet 2' });
+  sceneStore.addGeneration(sceneVideo.id, 'personaje-1-tomas', { images: [{ mime: 'image/png', base64: 'AQID' }, image] });
+  const [tomas] = sceneStore.list(sceneVideo.id);
+  sceneStore.select(sceneVideo.id, 'personaje-1-tomas', tomas.generations[0].files[0]);
 
   await test('scene queue is serial: the next job goes out only after the previous result', async () => {
     const { queued } = sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(1, ['1']), scene(2, ['1']), scene(3)] });
@@ -305,10 +309,10 @@ async function waitUntil(check, label) {
     assert.equal(sent.length, 2);
     assert.equal(sent[1].prompt, 'scene 2');
     assert.deepEqual(states(1), ['queued', 'running', 'running', 'done']);
-    const stored = store.listScenes(sceneVideo.id);
+    const stored = sceneStore.listScenes(sceneVideo.id);
     assert.deepEqual(stored.map((item) => item.number), [1]);
     assert.equal(stored[0].generations[0].files.length, 2);
-    assert.ok(fs.existsSync(store.sceneFilePath(sceneVideo.id, 1, stored[0].generations[0].files[0])));
+    assert.ok(fs.existsSync(sceneStore.sceneFilePath(sceneVideo.id, 1, stored[0].generations[0].files[0])));
     assert.equal(sceneEvents.findLast(([, p]) => p.number === 1)[1].scene.number, 1);
 
     // an error also releases the queue
@@ -339,8 +343,8 @@ async function waitUntil(check, label) {
     assert.match(sceneEvents.findLast(([, p]) => p.number === 4)[1].error, /hoja 2 .*no tiene una imagen seleccionada/);
     assert.match(sceneEvents.findLast(([, p]) => p.number === 5)[1].error, /No encuentro el personaje de la hoja 7/);
 
-    store.addGeneration(sceneVideo.id, 'personaje-2-ana', { images: [image] });
-    store.select(sceneVideo.id, 'personaje-2-ana', store.list(sceneVideo.id)[1].generations[0].files[0]);
+    sceneStore.addGeneration(sceneVideo.id, 'personaje-2-ana', { images: [image] });
+    sceneStore.select(sceneVideo.id, 'personaje-2-ana', sceneStore.list(sceneVideo.id)[1].generations[0].files[0]);
     sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(8, ['1', '2', '1'])] });
     assert.equal(sent.length, 1);
     assert.deepEqual(sent[0].references.map((ref) => ref.mime), ['image/png', 'image/webp'], 'two sheets, the repeated one only once');
@@ -381,8 +385,8 @@ async function waitUntil(check, label) {
     bad([{ number: 1, prompt: '  ' }], /prompt de la escena está vacío/);
     bad([{ number: 1, prompt: 'p', sheetRefs: ['../x'] }], /Referencias de hoja no válidas/);
     assert.throws(() => sceneService.generateScenes({ videoId: 'nope', scenes: [scene(1)] }), /Video no encontrado/);
-    assert.throws(() => store.sceneFilePath(sceneVideo.id, 1, '../x.webp'), /Archivo de imagen no válido/);
-    assert.throws(() => store.sceneFilePath(sceneVideo.id, 'abc', '1700000000000-1.webp'), /Número de escena no válido/);
+    assert.throws(() => sceneStore.sceneFilePath(sceneVideo.id, 1, '../x.webp'), /Archivo de imagen no válido/);
+    assert.throws(() => sceneStore.sceneFilePath(sceneVideo.id, 'abc', '1700000000000-1.webp'), /Número de escena no válido/);
 
     sent.length = 0;
     sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(30), scene(31)] });
@@ -396,34 +400,61 @@ async function waitUntil(check, label) {
     connected = true;
 
     // Only the latest generations of a scene are kept, older files are deleted
-    const dirOf = path.join(dir, 'videos', sceneVideo.id, 'scenes', '40');
+    const dirOf = path.join(sceneRoot, 'videos', sceneVideo.id, 'scenes', '40');
     const firstFiles = [];
     for (let i = 0; i < 6; i += 1) {
-      const saved = store.addSceneGeneration(sceneVideo.id, { number: 40, title: 'T', prompt: 'p', images: [image, image] });
+      const saved = sceneStore.addSceneGeneration(sceneVideo.id, { number: 40, title: 'T', prompt: 'p', images: [image, image] });
       if (i === 0) firstFiles.push(...saved.generations[0].files);
       await sleep(3);
     }
-    const kept = store.listScenes(sceneVideo.id).find((item) => item.number === 40);
+    const kept = sceneStore.listScenes(sceneVideo.id).find((item) => item.number === 40);
     assert.equal(kept.generations.length, 4);
     assert.equal(fs.readdirSync(dirOf).length, 8);
     for (const file of firstFiles) assert.equal(fs.existsSync(path.join(dirOf, file)), false);
   });
 
   await test('media protocol serves scene images and rejects malformed scene paths', async () => {
-    const [{ generations }] = store.listScenes(sceneVideo.id);
+    const [{ generations }] = sceneStore.listScenes(sceneVideo.id);
     const file = generations[0].files[0];
-    const ok = await createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { sceneFile: store.sceneFilePath })({
+    const ok = await createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { sceneFile: sceneStore.sceneFilePath })({
       url: `mecatube-media://scene/${sceneVideo.id}/1/${file}`,
       headers: new Headers(),
     });
     assert.equal(ok.status, 200);
     assert.equal(ok.headers.get('content-type'), 'image/webp');
-    const handler = createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { sceneFile: store.sceneFilePath });
+    const handler = createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { sceneFile: sceneStore.sceneFilePath });
     for (const url of [`mecatube-media://scene/${sceneVideo.id}/..%2F1/${file}`, `mecatube-media://scene/${sceneVideo.id}/x/${file}`, `mecatube-media://scene/${sceneVideo.id}/1`]) {
       assert.equal((await handler({ url, headers: new Headers() })).status, 404, url);
     }
   });
 
+  await test('scenePromptForFlow points sheet mentions at the attached reference and adds the layout guard', () => {
+    const prompt =
+      'Each main character must match its character sheet reference exactly: same head. Scene: a man points at a map. ' +
+      'The character from character sheet 1, stickman man with dark brown hair, pointing, with a curious expression.';
+    const out = scenePromptForFlow(prompt, ['1']);
+    assert.ok(!/character sheet/i.test(out), out);
+    assert.match(out, /must match the attached reference image exactly/);
+    assert.match(out, /The character shown in the attached reference image, stickman man with dark brown hair/);
+    assert.match(out, /no expression row/);
+    // The character description itself is untouched
+    assert.ok(out.includes('stickman man with dark brown hair, pointing, with a curious expression.'));
+  });
+
+  await test('scenePromptForFlow numbers several references by attachment order', () => {
+    const prompt = 'The character from character sheet 2, a woman. The character from character sheet 1B, a man. Matching their character sheet references.';
+    const out = scenePromptForFlow(prompt, ['2', '1B']);
+    assert.match(out, /The character shown in attached reference image 1, a woman/);
+    assert.match(out, /The character shown in attached reference image 2, a man/);
+    assert.match(out, /their attached reference images/);
+  });
+
+  await test('scenePromptForFlow leaves prompts without references unchanged', () => {
+    const prompt = 'Whiteboard explainer. No main characters.';
+    assert.equal(scenePromptForFlow(prompt, []), prompt);
+  });
+
+  fs.rmSync(sceneRoot, { recursive: true, force: true });
   bridge.stop();
   fs.rmSync(dir,{ recursive: true, force: true });
   console.log(`\n${results.length} passed`);
