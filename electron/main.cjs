@@ -102,8 +102,9 @@ function createWindow() {
     minWidth: 800,
     minHeight: 500,
     show: false,
-    fullscreen: true,
+    fullscreen: false,
     frame: false,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: '#0b0b0f',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -118,26 +119,24 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  let wantsFullScreen = true;
-
   registerShortcuts(win.webContents);
-  win.once('ready-to-show', () => win.show());
-
-  const sendFullScreenState = () => {
-    win.webContents.send('window:fullscreen-changed', win.isFullScreen());
-  };
-  win.on('enter-full-screen', sendFullScreenState);
-  win.on('leave-full-screen', sendFullScreenState);
-
-  // Return to fullscreen after being restored from the taskbar
-  win.on('restore', () => {
-    if (wantsFullScreen) win.setFullScreen(true);
+  win.once('ready-to-show', () => {
+    win.maximize();
+    win.show();
   });
 
-  win.toggleAppFullScreen = () => {
-    wantsFullScreen = !win.isFullScreen();
-    win.setFullScreen(wantsFullScreen);
-    if (!wantsFullScreen) win.maximize();
+  const sendWindowState = () => {
+    win.webContents.send('window:fullscreen-changed', win.isMaximized());
+  };
+  win.on('maximize', sendWindowState);
+  win.on('unmaximize', sendWindowState);
+
+  win.toggleAppMaximize = () => {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
   };
 
   if (isDev) {
@@ -156,11 +155,17 @@ ipcMain.on('window:minimize', (event) => {
 });
 
 ipcMain.on('window:toggle-fullscreen', (event) => {
-  BrowserWindow.fromWebContents(event.sender)?.toggleAppFullScreen();
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
 });
 
 ipcMain.handle('window:is-fullscreen', (event) => {
-  return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
+  return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
 });
 
 

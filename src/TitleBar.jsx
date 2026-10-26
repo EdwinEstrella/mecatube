@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import CreateWorkspaceModal from './workspace/CreateWorkspaceModal.jsx';
+import logoUrl from './assets/logo.png';
 
 // Caption glyphs drawn on a 10x10 grid with 1px strokes, matching the Windows caption style used by Chromium-based browsers
 function MinimizeIcon() {
@@ -75,6 +76,7 @@ export default function TitleBar() {
       >
         <div className="title-bar__left">
           <div className="title-bar__brand">
+            <img src={logoUrl} alt="Mecatube logo" className="title-bar__logo" />
             <span className="title-bar__name">Mecatube</span>
             <span className="title-bar__version">v{__APP_VERSION__}</span>
           </div>

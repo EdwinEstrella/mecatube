@@ -65,13 +65,19 @@ body {
 
 .title-bar__brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 
 .title-bar__name {
   font-size: 0.85rem;
   font-weight: 600;
+}
+.title-bar__logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .title-bar__version {
@@ -1124,7 +1130,7 @@ body {
 
 .video-row__summary {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   width: 100%;
   margin-bottom: 14px;
@@ -1547,7 +1553,7 @@ body {
 .voiceover-item__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
@@ -1791,8 +1797,9 @@ body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
+/* Hover stays neutral: blue is reserved for the selected image, so a hovered one never looks chosen */
 .char-card__image:hover {
-  border-color: rgba(77, 107, 254, 0.6);
+  border-color: rgba(255, 255, 255, 0.35);
   transform: translateY(-2px);
 }
 
@@ -2269,4 +2276,24 @@ body {
 
 .confirm-modal__actions .settings__button--danger {
   align-self: auto;
+}
+
+/* Illustrator's closing question under a scene/animation block */
+.next-step {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #121218;
+}
+
+.next-step__question {
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+
+.next-step__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
