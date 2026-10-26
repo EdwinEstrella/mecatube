@@ -55,6 +55,7 @@ test('projectUrlFrom detects the project on flow.google.com', () => {
   const id = '0123456789abcdef0123456789abcdef0123';
   const loc = (origin, pathname) => ({ origin, pathname });
   assert.equal(flow.projectUrlFrom(loc('https://flow.google.com', `/project/${id}/x`)), `https://flow.google.com/project/${id}`);
+  assert.equal(flow.projectUrlFrom(loc('https://flow.google.com', `/u/4/project/${id}`)), `https://flow.google.com/u/4/project/${id}`);
   assert.equal(flow.projectUrlFrom(loc('https://labs.google', `/project/${id}`)), null);
 });
 

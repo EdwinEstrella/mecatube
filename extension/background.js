@@ -9,7 +9,8 @@ const KEEPALIVE_MS = 20000;
 const TAB_LOAD_TIMEOUT_MS = 30000;
 const FLOW_ORIGIN = 'https://flow.google.com';
 const FLOW_HOME_URL = `${FLOW_ORIGIN}/`;
-const FLOW_PROJECT_PATTERN = /^https:\/\/flow\.google\.com\/project\/[0-9a-f-]{36}/;
+// Accounts other than the default one carry a "/u/<n>/" prefix
+const FLOW_PROJECT_PATTERN = /^https:\/\/flow\.google\.com\/(?:u\/\d+\/)?project\/([0-9a-f-]{36})/;
 const FLOW_STEP_TIMEOUT_MS = 60000;
 const FLOW_JOB_TIMEOUT_MS = 6 * 60 * 1000;
 // Video generation (Flow animations) takes longer than images
@@ -328,20 +329,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+function flowProjectId(url) {
+  return FLOW_PROJECT_PATTERN.exec(url ?? '')?.[1] ?? null;
+}
+
+// Flow home for the same Google account as url ("https://flow.google.com/u/4/" keeps account 4)
+function flowHomeFor(url) {
+  const account = /^https:\/\/flow\.google\.com\/(u\/\d+\/)/.exec(url ?? '')?.[1] ?? '';
+  return `${FLOW_HOME_URL}${account}`;
+}
+
 // Reuse a Flow tab (preferring one already on the project) or open one; navigate when needed
 async function prepareFlowTab(projectUrl) {
   const tabs = await chrome.tabs.query({ url: `${FLOW_ORIGIN}/*` });
-  const target = projectUrl || FLOW_HOME_URL;
+  const projectId = flowProjectId(projectUrl);
   // A new project starts from a tab that is not inside another project
-  let tab = projectUrl
-    ? tabs.find((item) => item.url?.startsWith(projectUrl))
-    : tabs.find((item) => !FLOW_PROJECT_PATTERN.test(item.url ?? ''));
+  let tab = projectId
+    ? tabs.find((item) => flowProjectId(item.url) === projectId)
+    : tabs.find((item) => !flowProjectId(item.url));
   if (!tab) tab = tabs[0];
+  const target = projectUrl || flowHomeFor(tab?.url);
 
   if (!tab) {
     tab = await chrome.tabs.create({ url: target, active: false });
   } else {
-    const onTarget = projectUrl ? tab.url?.startsWith(projectUrl) : !FLOW_PROJECT_PATTERN.test(tab.url ?? '');
+    const onTarget = projectId ? flowProjectId(tab.url) === projectId : !flowProjectId(tab.url);
     if (onTarget) return tab.id;
     tab = await chrome.tabs.update(tab.id, { url: target });
   }
@@ -349,15 +361,18 @@ async function prepareFlowTab(projectUrl) {
   return tab.id;
 }
 
-// A deleted project redirects to /404?reason=project, possibly after load via pushState, so poll briefly
+// A deleted project redirects to /404?reason=project, possibly after load via pushState, so poll briefly.
+// Returns the project URL as the tab shows it (Flow may add the account prefix), or null when it is gone
 async function projectStillExists(tabId, projectUrl) {
+  const projectId = flowProjectId(projectUrl);
   const deadline = Date.now() + 4000;
+  let tab = null;
   while (Date.now() < deadline) {
-    const tab = await chrome.tabs.get(tabId);
-    if (!tab.url?.startsWith(projectUrl)) return false;
+    tab = await chrome.tabs.get(tabId);
+    if (flowProjectId(tab.url) !== projectId) return null;
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
-  return true;
+  return FLOW_PROJECT_PATTERN.exec(tab.url)[0];
 }
 
 // The project URL appears after "Nuevo proyecto" is clicked; poll because the page may use pushState
@@ -426,11 +441,15 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
   try {
     let currentProject = projectUrl && FLOW_PROJECT_PATTERN.test(projectUrl) ? projectUrl : null;
     const tabId = await prepareFlowTab(currentProject);
-    if (currentProject && !(await projectStillExists(tabId, currentProject))) {
-      // The saved project was deleted in Flow: start a new one instead of failing
-      currentProject = null;
-      await chrome.tabs.update(tabId, { url: FLOW_HOME_URL });
-      await waitForTabComplete(tabId, 'Flow');
+    if (currentProject) {
+      const liveProject = await projectStillExists(tabId, currentProject);
+      if (!liveProject) {
+        // The saved project was deleted in Flow: start a new one (same account) instead of failing
+        const { url } = await chrome.tabs.get(tabId);
+        await chrome.tabs.update(tabId, { url: flowHomeFor(url?.includes('/u/') ? url : currentProject) });
+        await waitForTabComplete(tabId, 'Flow');
+      }
+      currentProject = liveProject;
     }
     await ensureContentScript(tabId, 'flow.js', 'Flow');
 
@@ -446,6 +465,10 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
       await waitForTabComplete(tabId, 'Flow');
       await ensureContentScript(tabId, 'flow.js', 'Flow');
     }
+
+    // A hidden tab does not render the virtualized grid while it scrolls, so a sheet or scene far down
+    // would never appear and the job would fall back to uploading it; show the tab before searching
+    if (sourceAssetId || references?.some((reference) => reference?.assetId)) await bringTabToFront(tabId);
 
     const result = await runTabStep(
       tabId,

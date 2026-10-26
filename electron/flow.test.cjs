@@ -76,7 +76,7 @@ async function waitUntil(check, label) {
       prompt: 'Line one\nLine two',
       projectUrl: null,
       model: 'nano-banana-pro',
-      outputs: 2,
+      outputs: 1,
       references: [],
     });
 
@@ -151,10 +151,13 @@ async function waitUntil(check, label) {
     [character] = store.list(video.id);
     assert.equal(character.generations.length, 2);
     assert.match(character.generations[1].files[0], /\.png$/);
+    // A single-image generation selects itself
+    assert.equal(character.selectedFile, character.generations[1].files[0]);
   });
 
   await test('select / approve rules', async () => {
-    assert.throws(() => store.setApproved(video.id, undefined, true), /selecciona una imagen/);
+    store.upsert(video.id, { key: 'personaje-8-sin-imagen', name: 'Sin imagen', role: '', prompt: 'p' });
+    assert.throws(() => store.setApproved(video.id, ['personaje-8-sin-imagen'], true), /selecciona una imagen/);
     assert.throws(() => store.select(video.id, character.key, '1700000000000-9.webp'), /no pertenece/);
     const file = character.generations[0].files[1];
     assert.equal(store.select(video.id, character.key, file).selectedFile, file);
@@ -201,6 +204,13 @@ async function waitUntil(check, label) {
     assert.throws(() => store.upsert(video.id, { key: 'ok', name: 'n', role: '', prompt: '   ' }), /vacío/);
   });
 
+  await test('a single-image character sheet selects itself', () => {
+    store.upsert(video.id, { key: 'personaje-9-solo', name: 'Solo', role: '', prompt: 'p' });
+    const solo = store.addGeneration(video.id, 'personaje-9-solo', { images: [{ mime: 'image/webp', base64: WEBP.toString('base64') }] });
+    assert.equal(solo.selectedFile, solo.generations[0].files[0]);
+    assert.equal(solo.approved, false, 'the user still approves it');
+  });
+
   await test('flow-error and a disconnect fail the job; bad project URLs are refused', async () => {
     pushed.length = 0;
     let { requestId } = generate();
@@ -216,7 +226,11 @@ async function waitUntil(check, label) {
     assert.throws(() => generate(), /no está conectada/);
 
     assert.throws(() => service.setProject(video.id, 'https://evil.com/project/12345678-1234-1234-1234-123456789abc'), /URL del proyecto de Flow no válida/);
-    assert.throws(() => service.setProject(video.id, `${PROJECT}/edit/x`), /URL del proyecto de Flow no válida/);
+    assert.throws(() => service.setProject(video.id, `${PROJECT}x`), /URL del proyecto de Flow no válida/);
+    // A pasted address-bar URL keeps only the project base; other accounts carry "/u/<n>/"
+    assert.equal(service.setProject(video.id, `${PROJECT}/edit/x?y=1`).flowProjectUrl, PROJECT);
+    const accountProject = 'https://flow.google.com/u/4/project/12345678-1234-1234-1234-123456789abc';
+    assert.equal(service.setProject(video.id, ` ${accountProject} `).flowProjectUrl, accountProject);
     assert.equal(service.setProject(video.id, ' ').flowProjectUrl, null);
     assert.equal(service.setProject(video.id, PROJECT).flowProjectUrl, PROJECT);
     assert.equal(service.projectUrl(video.id), PROJECT);
@@ -334,7 +348,7 @@ async function waitUntil(check, label) {
   await test('scene jobs carry the selected sheet as reference plus model and outputs', async () => {
     const job = sent[0];
     assert.equal(job.model, 'nano-banana-pro');
-    assert.equal(job.outputs, 1, 'one image per scene; character sheets keep 2');
+    assert.equal(job.outputs, 1, 'one image per scene');
     assert.equal(job.references.length, 1);
     assert.deepEqual(job.references[0], { name: tomas.generations[0].files[0], mime: 'image/png', base64: 'AQID', assetId: SHEET_ID });
     assert.deepEqual(tomas.generations[0].assetIds, [SHEET_ID, null]);

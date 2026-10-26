@@ -36,8 +36,9 @@ const SHEET_REF = /^\d{1,3}[A-Za-z]?$/;
 const REFERENCES_MAX = 6;
 // Every Flow request asks for this model and image count; the extension applies them in the page
 const FLOW_MODEL = 'nano-banana-pro';
-const FLOW_OUTPUTS = 2;
-// One image per scene stretches Flow's usage limit; a bad one is regenerated from its card
+// One image per character sheet and per scene stretches Flow's usage limit; a bad one is regenerated
+// from its card. A single-image generation selects itself, so there is nothing to choose
+const FLOW_OUTPUTS = 1;
 const SCENE_OUTPUTS = 1;
 // Animations: the extension sends the generated video(s) as base64. A video generation takes much
 // longer than an image one, hence its own watchdog.
@@ -91,9 +92,12 @@ function boundedText(value, max, label) {
   return value;
 }
 
+// A URL copied from the address bar may carry a sub-path or query; keep only the project base
 function validProjectUrl(value) {
-  if (typeof value !== 'string' || !FLOW_PROJECT_URL.test(value)) throw new Error('URL del proyecto de Flow no válida.');
-  return value;
+  const text = typeof value === 'string' ? value.trim() : '';
+  const match = /^(https:\/\/flow\.google\.com\/(?:u\/\d+\/)?project\/[0-9a-f-]{36})(?:[/?#].*)?$/s.exec(text);
+  if (!match || !FLOW_PROJECT_URL.test(match[1])) throw new Error('URL del proyecto de Flow no válida.');
+  return match[1];
 }
 
 function writeAtomic(file, data) {
@@ -221,6 +225,7 @@ function createFlowStore(userDataDir) {
       // Which submit method made Flow start (click / pointer-sequence / enter-key); diagnostics only
       submitMethod: typeof submitMethod === 'string' && SUBMIT_METHOD.test(submitMethod) ? submitMethod : null,
     });
+    if (files.length === 1) character.selectedFile = files[0];
     character.approved = false;
     writeAll(videoId, characters);
     return character;

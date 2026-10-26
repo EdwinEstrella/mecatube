@@ -16,49 +16,53 @@
     submitButton: 'button[aria-label="Iniciar generación"]',
     stopButton: 'button[aria-label="Detener"]',
     // Result tiles
-    resultImage: 'img.image[alt="Recuadro que muestra la imagen del usuario"]',
+    resultImage:
+      'img.image[alt="Recuadro que muestra la imagen del usuario"], img.image[alt="Tarjeta que muestra la imagen de un usuario"]',
     // Visible text of the home page button that creates a project (matched case/accent-insensitively)
-    newProjectText: 'nuevo proyecto',
+    // (the wording differs between accounts: "Nuevo proyecto" / "Proyecto nuevo")
+    newProjectTexts: ['nuevo proyecto', 'proyecto nuevo'],
     // Placeholder tiles show "NN %" while generating
     percentText: /^(\d{1,3})\s?%$/,
     // reCAPTCHA challenge iframe (the badge iframe is "anchor"; the visible challenge is "bframe")
     captchaFrame: 'iframe[src*="recaptcha"][src*="bframe"]',
-    // Project URL: https://flow.google.com/project/<uuid>
-    projectPath: /^\/project\/([0-9a-f-]{36})(?:\/|$)/,
+    // Project URL: https://flow.google.com/[u/<n>/]project/<uuid>
+    projectPath: /^\/((?:u\/\d+\/)?)project\/([0-9a-f-]{36})(?:\/|$)/,
     // Agent mode chip (aria-pressed="true" / class agent-mode-chip-checked while the agent is on)
     agentChip: 'button.agent-mode-chip',
     agentChipOnClass: 'agent-mode-chip-checked',
     // Settings popover (Material CDK overlay)
-    settingsTrigger: 'button[aria-label="Activador de ajustes"]',
+    // Flow ships two Spanish wordings depending on the account/rollout; selectors list both
+    settingsTrigger: 'button[aria-label="Activador de ajustes"], button[aria-label="Botón de configuración"]',
     overlayPane: '.cdk-overlay-pane',
     radio: '[role="radio"]',
     modelFamilyButton: 'button[aria-label="Seleccionar familia de modelos"]',
     menuItem: '[role="menuitem"]',
     // Reference (ingredient) upload
-    addIngredientsButton: 'button[aria-label="Añadir ingredientes a ventana para peticiones"]',
-    uploadButton: 'button[mattooltip="Subir archivo multimedia"]',
+    addIngredientsButton:
+      'button[aria-label="Añadir ingredientes a ventana para peticiones"], button[aria-label="Agregar ingredientes al cuadro de instrucción"]',
+    uploadButton: 'button[mattooltip="Subir archivo multimedia"], button[mattooltip="Cargar contenido multimedia"]',
     // After picking a file Flow asks to confirm image rights ("Derechos para usar esta imagen")
     rightsDialog: 'mat-dialog-container',
-    rightsAcceptText: 'Acepto',
+    rightsAcceptText: ['Acepto', 'Aceptar'],
     // The upload lands in the asset list; it is then added to the prompt as an ingredient chip
     assetRow: '.cdk-overlay-pane button[role="option"].asset-item',
     assetTitle: '.asset-title',
     addToPromptButton: '.cdk-overlay-pane .detail-add-to-prompt-btn',
     ingredientChip: 'img[alt="Imagen del ingrediente"]',
-    clearPromptButton: 'button[aria-label="Borrar petición"]',
+    clearPromptButton: 'button[aria-label="Borrar petición"], button[aria-label="Borrar instrucción"]',
     // Project grid: virtualized tiles with a per-tile options menu
     // The element that actually scrolls (the cdk viewport inside it grows with the content)
     gridViewport: '.cdk-virtual-scrollable',
     gridTile: 'flow-grid-tile-container',
     tileMoreLabel: 'Más opciones',
-    tileAddToPromptLabel: 'Añadir a la petición',
+    tileAddToPromptLabel: ['Añadir a la petición', 'Agregar a la instrucción', 'Agregar a la petición', 'Añadir a la instrucción'],
     // A failed generation ("Has alcanzado tu límite de uso…") becomes an error tile in the grid
     errorTile: 'flow-error-tile',
     errorMessage: '.error-message-text',
     // Animation (video) flow
     tileAnimateLabel: 'Animar',
     videoTile: 'flow-video-tile',
-    videoThumb: 'img[alt="Miniatura de vídeo generada"]',
+    videoThumb: 'img[alt="Miniatura de vídeo generada"], img[alt="Miniatura de video generada"]',
     videoElement: 'video',
     hoverMarkerAttr: 'data-mecatube-target',
     hoverMarkerSelector: '[data-mecatube-target="1"]',
@@ -98,6 +102,7 @@
   // the search stops by itself at the end of the grid, this is only a safety bound
   const ASSET_SCROLL_STEPS = 400;
   const ASSET_SCROLL_WAIT_MS = 350;
+  const ASSET_END_WAIT_MS = 3000;
   const READY_TIMEOUT_MS = 3 * 60 * 1000;
   const BOX_RESTORE_TIMEOUT_MS = 60000;
   const UPLOAD_TIMEOUT_MS = 30000;
@@ -179,17 +184,18 @@
 
   function findNewProjectButton(doc) {
     return (
-      Array.from(doc.querySelectorAll('button, [role="button"]')).find((el) =>
-        normalizeText(el.textContent).includes(SELECTORS.newProjectText),
-      ) ?? null
+      Array.from(doc.querySelectorAll('button, [role="button"]')).find((el) => {
+        const text = normalizeText(el.textContent);
+        return SELECTORS.newProjectTexts.some((label) => text.includes(label));
+      }) ?? null
     );
   }
 
-  // Base project URL ("https://flow.google.com/project/<uuid>") for a location, or null
+  // Base project URL ("https://flow.google.com/[u/<n>/]project/<uuid>") for a location, or null
   function projectUrlFrom(location) {
     if (location.origin !== 'https://flow.google.com') return null;
     const match = SELECTORS.projectPath.exec(location.pathname);
-    return match ? `${location.origin}/project/${match[1]}` : null;
+    return match ? `${location.origin}/${match[1]}project/${match[2]}` : null;
   }
 
   // Clears the editor and types the prompt the way a user paste would
@@ -409,7 +415,9 @@
 
   // Control text often starts with an icon ligature ("crop_16_9 16:9"), so match on the tail.
   // loose: substring match (menu items, model button)
+  // label may be a list of alternative wordings
   function labelMatches(text, label, loose = false) {
+    if (Array.isArray(label)) return label.some((item) => labelMatches(text, item, loose));
     const haystack = normalizeText(text);
     const needle = normalizeText(label);
     if (!needle) return false;
@@ -705,7 +713,8 @@
   // The project grid tile of a Flow image. Tiles carry a stable data-media-id (the uuid also seen in
   // flow-content.google URLs); asset-list rows do not, and their /asb/ URLs change between page loads.
   function findTileImage(doc, assetId) {
-    return doc.querySelector(`${SELECTORS.resultImage}[data-media-id="${assetId}"], img[data-media-id="${assetId}"]`);
+    // resultImage is a selector list, so a suffix cannot be appended to it; the id alone is unique
+    return doc.querySelector(`img[data-media-id="${assetId}"]`);
   }
 
   // The grid is virtualized: tiles exist only near the viewport, so scroll it from the top, bounded
@@ -720,7 +729,8 @@
       if (tile) return tile;
       const before = viewport.scrollTop;
       viewport.scrollTop = before + Math.max(viewport.clientHeight * 0.8, 200);
-      if (viewport.scrollTop === before) return null;
+      // At the end of the grid the last (oldest) tiles can still be rendering; give them time
+      if (viewport.scrollTop === before) return waitFor(() => findTileImage(doc, assetId), ASSET_END_WAIT_MS, 100);
     }
     return findTileImage(doc, assetId);
   }

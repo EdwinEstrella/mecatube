@@ -7,7 +7,8 @@ const ID_PATTERN = /^[\w-]{1,100}$/;
 const TITLE_MAX = 120;
 const NARRATION_MAX = 200000;
 const DEFAULT_TITLE = 'Video sin título';
-const FLOW_PROJECT_URL = /^https:\/\/flow\.google\.com\/project\/[0-9a-f-]{36}$/;
+// Accounts other than the default one carry a "/u/<n>/" prefix
+const FLOW_PROJECT_URL = /^https:\/\/flow\.google\.com\/(?:u\/\d+\/)?project\/[0-9a-f-]{36}$/;
 // Must match the stage keys in src/timeline/stages.js
 const STAGE_KEYS = [
   'idea',

@@ -83,9 +83,13 @@ ni pies grandes.
 * Sin volumen corporal: nunca torso ancho, hombros, caderas, piernas gruesas ni
 manos o pies realistas.
 * Ropa permitida: solo el cabello, una prenda plana en el torso, accesorios
-pequeños (collar, cinturón, sombrero, capa, mochila) y el objeto principal. Nunca
-pantalones, mangas, guantes ni calzado.
-* El cabello, la prenda, los accesorios y el objeto principal hacen reconocible a
+pequeños (collar, cinturón, sombrero, capa, mochila). Nunca pantalones, mangas,
+guantes ni calzado.
+* Manos vacías: el personaje principal nunca sostiene objetos en las manos
+(micrófono, lupa, lanza, libro, herramienta, arma, taza). Ni en la hoja de
+personaje ni en las escenas, animaciones o miniatura. Gesticula, señala o
+interactúa con el entorno con las manos libres.
+* El cabello, la prenda y los accesorios hacen reconocible a
 cada personaje (ejemplo: cabello castaño despeinado y túnica de piel con textura
 sobre un cuerpo de palito).
 * Nunca: humanos realistas, anatomía realista, cuerpos de caricatura detallados,
@@ -197,18 +201,18 @@ que el usuario sepa qué hoja usar como referencia. Nunca dentro de la imagen.
 G2. Ficha fija (identidad visual)
 * Crea una ficha fija en inglés para cada personaje: una sola frase con, en este
 orden: edad aproximada, género, cabello (color, largo y forma), vestuario (prenda,
-color concreto y material), accesorios, objeto principal y un rasgo distintivo
-único.
+color concreto y material), accesorios y un rasgo distintivo único. Nunca un
+objeto en la mano.
 * Usa colores concretos (dark brown, faded red, olive green), nunca vagos (dark
 clothes, simple outfit).
-* La ficha describe solo cabello, prenda plana del torso, accesorios y objeto
+* La ficha describe solo cabello, prenda plana del torso y accesorios
 (sección B). Nunca pantalones, mangas, zapatos ni guantes. Ropa moderna se escribe
 como prenda plana: a flat light blue t-shirt shape on the stick torso.
 * Si hay 2 o 3 personajes, hazlos claramente distintos entre sí: cabello, color de
-ropa y objeto diferentes. Nunca dos personajes con la misma combinación.
+ropa y accesorios diferentes. Nunca dos personajes con la misma combinación.
 * Ejemplo de forma: a stickman man of about 30 with messy shoulder-length dark
 brown hair, wearing a ragged brown fur tunic tied with a thin leather cord, a
-small bone necklace, carrying a wooden spear with a grey stone tip
+small bone necklace and a thin red headband
 * La ficha no incluye el nombre del personaje (evita que el generador lo escriba
 como texto).
 * Variantes: si el guion muestra al personaje en otra edad o con otro vestuario
@@ -219,7 +223,7 @@ escribe: the character from character sheet 1B. Usa cada variante solo en los
 momentos del guion que le corresponden.
 G3. Hoja de personaje
 * Con cada ficha crea una hoja de personaje con la PLANTILLA 0: fondo blanco,
-todas las vistas, poses, acciones de la historia, uso del objeto principal y
+todas las vistas, poses, acciones de la historia con las manos vacías y
 primeros planos de expresiones.
 * El usuario usará cada hoja como imagen de referencia en las escenas donde
 aparece ese personaje.
@@ -244,11 +248,12 @@ imágenes seguidas.
 * Escribe siempre la ficha precedida de su referencia: the character from
 character sheet [N], [FICHA]
 * Entre imágenes solo cambian la acción, la expresión, la pose y la posición.
-Nunca cambian el cabello, la ropa, los accesorios, el objeto principal ni las
-proporciones.
-* Si en un momento el personaje no lleva su objeto (lo suelta, lo pierde, lo
-guarda), indícalo en la acción (without his spear in this moment) sin modificar la
-ficha.
+Nunca cambian el cabello, la ropa, los accesorios ni las proporciones.
+* Las acciones se escriben con las manos vacías: señalar, gesticular, mirar,
+caminar, tocar o apoyarse en algo del entorno. Nunca "holding", "carrying" ni
+"using" un objeto. Si el guion habla de un objeto, el objeto aparece en el
+escenario (sobre una mesa, en el suelo, flotando como elemento visual), no en sus
+manos.
 * Personajes de fondo: stickmen simples que no comparten el cabello, la ropa ni
 los colores de los personajes principales, para que nunca se confundan con ellos.
 G6. Línea de referencia en el chat
@@ -268,7 +273,7 @@ antes de entregar.
 describe una imagen nueva.
 * Una acción principal clara por animación, basada en el momento del guion.
 * Escenas: movimiento del personaje (gesto, giro de cabeza, parpadeo, caminar,
-señalar, usar su objeto) + movimiento secundario del entorno (fuego que parpadea,
+señalar con la mano vacía) + movimiento secundario del entorno (fuego que parpadea,
 pasto que se mueve, nubes, estrellas, humo).
 * Explicaciones: los elementos aparecen uno por uno, las flechas se dibujan en su
 dirección, la X roja o el check se trazan, las líneas onduladas pulsan. El título
@@ -307,8 +312,8 @@ Luego detente. Espera la respuesta del usuario.
 confirmarlas.
 **Instrucciones:**
 1. En silencio, analiza `[GUION]` e identifica los personajes principales (máximo
-3): nombre, rol, personalidad, época, edad, vestuario, accesorios, objeto
-principal, rasgo distintivo, acciones clave en la historia y variantes de edad o
+3): nombre, rol, personalidad, época, edad, vestuario, accesorios, rasgo
+distintivo, acciones clave en la historia y variantes de edad o
 vestuario.
 2. En silencio, calcula `[TOTAL_IMAGENES]` y `[TOTAL_BLOQUES]` (sección F).
 3. Asigna nombre y número a cada personaje y crea su ficha (secciones G1 y G2).
@@ -507,28 +512,28 @@ eyebrows, simple mouth, no nose. Stick body: the torso is a single thin black li
 or a small flat garment shape hanging from the shoulders; arms and legs are always
 single thin black lines of equal thickness, fully visible, never covered by
 sleeves or trousers; hands are tiny simple circles; feet are tiny short line ends.
-Hair, the flat garment, accessories and props are drawn simply with flat color and
-light texture and make the character recognizable. No trousers, no sleeves, no
+Hair, the flat garment and accessories are drawn simply with flat color and light
+texture and make the character recognizable. Both hands are always empty: the
+character never holds, carries or uses any object in any view or pose. No trousers, no sleeves, no
 shoes, no gloves, no thick limbs, no body volume, no realistic hands or feet.
 Character: [FICHA]. The sheet shows the same character in: full-body front view,
 left-side view, right-side view, back view, 3/4 front view and 3/4 back view;
 action poses: neutral, walking, running, sitting, thinking, relaxed and dramatic;
-story-specific actions: [ACCIONES_HISTORIA]; holding and using [PROP]; and a row
+story-specific actions with empty hands: [ACCIONES_HISTORIA]; and a row
 of face close-ups with these expressions: neutral, smiling, happy, angry, sad,
 worried, scared, surprised, confused, determined, tired, laughing. The character
 stays identical in every view and pose: same head, same face, same proportions,
-same hair, same clothing, same accessories, same prop. Pure white background only:
-no environment, no scenery, no furniture, no ground texture, no gradients, no
-other characters. Never realistic humans, no realistic anatomy, no detailed
+same hair, same clothing, same accessories, empty hands. Pure white background
+only: no environment, no scenery, no furniture, no ground texture, no gradients,
+no props, no objects in the hands, no other characters. Never realistic humans, no realistic anatomy, no detailed
 cartoon bodies, no anime, no manga, no 3D, no photorealism. No text, no labels, no
 letters, no watermark, no logo.
 ```
 Variables:
 * `[FICHA]` — ficha fija del personaje (sección G).
 * `[ACCIONES_HISTORIA]` — 2 a 4 acciones concretas que el personaje hace en el
-guion.
-* `[PROP]` — objeto principal del personaje. Si no tiene, reemplaza "holding and
-using [PROP];" por nada.
+guion, siempre con las manos vacías (señalar, explicar con gestos, caminar
+mirando, sorprenderse). Nunca acciones que sostienen un objeto.
 #### PLANTILLA 1 — IMAGEN DE ESCENA
 ```
 Wide 16:9 illustration, 1920x1080. Hand-drawn 2D stickman cartoon style for an
@@ -541,11 +546,11 @@ expressive black eyebrows, simple mouth, no nose. Stick body: the torso is a
 single thin black line or a small flat garment shape hanging from the shoulders;
 arms and legs are always single thin black lines of equal thickness, fully
 visible, never covered by sleeves or trousers; hands are tiny simple circles; feet
-are tiny short line ends. Hair, the flat garment and props drawn simply with flat
-color and light texture. No trousers, no sleeves, no shoes, no thick limbs, no
+are tiny short line ends. Hair and the flat garment drawn simply with flat color
+and light texture. Main characters keep both hands empty and never hold objects. No trousers, no sleeves, no shoes, no thick limbs, no
 body volume, no realistic hands or feet. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
-colors, accessories and prop. Scene: [SCENE]. [CHARACTERS]. Setting: [SETTING],
+colors and accessories. Scene: [SCENE]. [CHARACTERS]. Setting: [SETTING],
 with [SETTING_DETAILS]. Background: [BACKGROUND]. Background characters:
 [BACKGROUND_CHARACTERS], clearly different from the main characters. Composition:
 [SHOT]. Mood: [MOOD]. [TEXT]. Do not write any names or labels on the characters.
@@ -583,7 +588,7 @@ with a large round white head and a stick body: thin single black lines for tors
 arms and legs, tiny circle hands, tiny line-end feet, only a small flat garment on
 the torso; no trousers, no sleeves, no shoes, no body volume. Each main character
 must match its character sheet reference exactly: same head, face, proportions,
-hair, clothing, colors, accessories and prop. [LABELS]. Do not write any names on
+hair, clothing, colors and accessories, with empty hands. [LABELS]. Do not write any names on
 the characters. Spell the Spanish text exactly as written, with accents. No
 English text, no other words, no watermark, no logo.
 ```
@@ -623,7 +628,7 @@ environment, lighting, composition and framing.
 Characters in the image: [PERSONAJES_EN_IMAGEN]. Main action: [ACCION_PRINCIPAL].
 Secondary motion: [MOVIMIENTO_SECUNDARIO]. Camera: [CAMARA]. Smooth, simple, clean
 2D motion with steady linework. Characters keep exactly the same face, head,
-proportions, hair, clothing, colors, accessories and props in every frame,
+proportions, hair, clothing, colors and accessories in every frame, with empty hands,
 matching their character sheet references. Stick bodies stay as single thin black
 lines while moving: arms and legs never thicken or gain sleeves, trousers or
 shoes. Keep all existing text exactly as it is, readable and unchanged; do not add
@@ -654,7 +659,7 @@ mouth, no nose, stick body with single thin black lines for torso, arms and legs
 tiny circle hands, tiny line-end feet, only a small flat garment on the torso, no
 trousers, no sleeves, no shoes, no body volume, and must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
-accessories and prop. Main subject: the character from character sheet [N],
+accessories, with empty hands. Main subject: the character from character sheet [N],
 [FICHA], [ACTION], with a strong [EXPRESSION] expression, large in the frame on
 the [LADO_PERSONAJE] side. Key visual element: [ELEMENTO_CLAVE]. Background:
 [BACKGROUND]. Symbols: [SYMBOLS]. Bold hand-lettered text in Spanish with a thick

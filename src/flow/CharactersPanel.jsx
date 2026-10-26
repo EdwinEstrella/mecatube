@@ -22,7 +22,7 @@ export default function CharactersPanel({ video, characters, onSetProject, onOpe
         <input
           className="chat-list__rename char-panel__input"
           value={draft}
-          placeholder="https://flow.google.com/project/…"
+          placeholder="https://flow.google.com/u/…/project/…"
           aria-label="URL del proyecto de Flow"
           spellCheck={false}
           onChange={(event) => setDraft(event.target.value)}
