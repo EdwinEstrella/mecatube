@@ -16,6 +16,7 @@ const { MEDIA_SCHEME, registerMediaScheme, createMediaHandler, registerVoiceIpc 
 const { createVoicePrefsStore } = require('./voice-prefs.cjs');
 const { createCreditStore } = require('./credits.cjs');
 const { createSavedVoiceStore } = require('./saved-voices.cjs');
+const { createUpdater } = require('./updates.cjs');
 const { createFlowStore, createFlowService, registerFlowIpc } = require('./flow.cjs');
 
 const isDev = process.argv.includes('--dev');
@@ -434,6 +435,18 @@ app.whenReady().then(() => {
   });
   bridge.start();
   createWindow();
+
+  // electron-updater is loaded lazily so the dev run never touches it
+  const updater = createUpdater({
+    app,
+    ipcMain,
+    pushToWindow,
+    loadAutoUpdater: () => require('electron-updater').autoUpdater,
+  });
+  updater.register();
+  if (app.isPackaged) {
+    mainWindow.webContents.once('did-finish-load', () => setTimeout(() => updater.check(), 3000));
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

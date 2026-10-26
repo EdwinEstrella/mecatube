@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import CreateWorkspaceModal from './workspace/CreateWorkspaceModal.jsx';
+import UpdateButton from './updates/UpdateButton.jsx';
 import logoUrl from './assets/logo.png';
 
 // Caption glyphs drawn on a 10x10 grid with 1px strokes, matching the Windows caption style used by Chromium-based browsers
@@ -153,6 +154,10 @@ export default function TitleBar() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="title-bar__update-slot" onDoubleClick={(event) => event.stopPropagation()}>
+          <UpdateButton />
         </div>
 
         <div className="title-bar__actions" onDoubleClick={(event) => event.stopPropagation()}>
