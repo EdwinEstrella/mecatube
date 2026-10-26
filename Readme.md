@@ -1,93 +1,98 @@
 # Mecatube
 
 <p align="center">
-  <img src="src/assets/logo.png" width="140" height="140" alt="Mecatube Logo" />
+  <img src="src/assets/logo.png" width="140" height="140" alt="Logo de Mecatube" />
 </p>
 
 <p align="center">
-  <strong>Automated AI-Powered Stickman Video Production Studio</strong><br />
-  Streamlined workflow bridging AI scriptwriting, voiceover synthesis, scene illustration, and animation.
+  <strong>Estudio de producción de videos stickman con IA</strong><br />
+  Guion, voz en off, ilustraciones y animaciones en un solo flujo de trabajo.
 </p>
 
 ---
 
-## Overview
+## Qué es
 
-**Mecatube** is a desktop application engineered to automate the end-to-end production of 2D educational stickman videos. By orchestrating LLM prompt engineering, voice synthesis, browser automation for asset generation, and project management into a single unified desktop experience, Mecatube eliminates manual copy-pasting and maintains strict character and visual consistency across entire video narratives.
+Mecatube es una aplicación para Windows que te ayuda a crear videos de personajes stickman: escribe el guion con DeepSeek, genera la voz en off, crea las ilustraciones y animaciones con Google Flow, y organiza todo en una sola ventana.
 
----
+Para conectarse con DeepSeek y Flow usa una pequeña extensión de Chrome (incluida aquí).
 
-## Key Features
+## Descargar
 
-- **Stickman Narrative & Art Direction**:
-  - Structured prompt generation following a proven 5-stage sequential pipeline.
-  - Strict 85/15 ratio enforcement (85% narrative scene illustrations, 15% educational diagrammatic explainers).
-  - High character consistency with character sheets, prompt templates, and distinct visual IDs.
+| Qué | Enlace |
+| --- | --- |
+| **Aplicación para Windows** | [Descargar Mecatube-Setup.exe](https://github.com/EdwinEstrella/mecatube/releases/latest/download/Mecatube-Setup.exe) |
+| **Extensión para Chrome** | [Descargar Mecatube-Extension.zip](https://github.com/EdwinEstrella/mecatube/releases/latest/download/Mecatube-Extension.zip) |
+| Todas las versiones | [Ver versiones](https://github.com/EdwinEstrella/mecatube/releases) |
 
-- **Mecatube Bridge (Chrome MV3 Extension)**:
-  - Real-time WebSocket connection bridging the desktop application with browser tabs.
-  - Automates script generation via `chat.deepseek.com`.
-  - Drives asset and animation generation via Google Flow (`flow.google.com`).
+## Instalar la app paso a paso
 
-- **Voiceover Synthesis (Cartesia Integration)**:
-  - High-fidelity streaming text-to-speech with ultra-low latency.
-  - Custom voice library management, saved voice profiles, and credit usage tracking.
-  - Audio playback and narration extraction directly aligned with script timestamps.
+1. Descarga **Mecatube-Setup.exe** con el enlace de arriba.
+2. Haz doble clic en el archivo descargado.
+3. Si Windows muestra **"Windows protegió su PC"**, es normal: la app aún no tiene firma digital de pago. Haz clic en **Más información** y luego en **Ejecutar de todas formas**.
+4. Elige la carpeta de instalación (o deja la que aparece) y pulsa **Instalar**.
+5. Al terminar, abre **Mecatube** desde el acceso directo del escritorio o del menú Inicio.
 
-- **Timeline & Video Project Hub**:
-  - Visual stage progression (Scripting → Voiceover → Illustrations → Animations → Final Assembly).
-  - Workspace isolation allowing multiple parallel channels or video topics.
+## Instalar la extensión en Chrome paso a paso
 
----
+1. Descarga **Mecatube-Extension.zip** con el enlace de arriba.
+2. Descomprímelo en una carpeta que **no vayas a borrar ni mover** (por ejemplo `Documentos\Mecatube-Extension`). Chrome usa esa carpeta cada vez que se abre.
+3. En Chrome escribe `chrome://extensions` en la barra de direcciones y pulsa Enter.
+4. Activa **Modo de desarrollador** (interruptor arriba a la derecha).
+5. Pulsa **Cargar descomprimida** y selecciona la carpeta donde descomprimiste el zip (la que contiene el archivo `manifest.json`).
+6. Opcional: haz clic en el icono de puzle de Chrome y fija **Mecatube Bridge** para tenerlo a la mano.
 
-## Architecture & Tech Stack
+> No borres la carpeta de la extensión: si lo haces, Chrome la desactivará.
 
-- **Desktop Shell**: [Electron](https://www.electronjs.org/) (Custom frameless window, IPC bridges, native file system persistence).
-- **Frontend UI**: [React 19](https://react.dev/), [Vite](https://vitejs.dev/), [Motion](https://motion.dev/) (smooth micro-interactions).
-- **Extension**: Chrome Manifest V3 service worker & content scripts with WebSocket protocol.
-- **Voice Engine**: Cartesia TTS API over custom streaming protocols.
+**Para actualizar la extensión:** descarga el zip nuevo, descomprímelo sobre la misma carpeta (reemplazando los archivos), ve a `chrome://extensions` y pulsa el botón de recargar de la extensión.
 
----
+## Primeros pasos
 
-## Getting Started
+1. Abre Chrome y entra en [chat.deepseek.com](https://chat.deepseek.com) e inicia sesión.
+2. En otra pestaña abre [flow.google.com](https://flow.google.com) e inicia sesión.
+3. Abre Mecatube. Si la extensión está bien instalada, la app mostrará que está **conectada**.
+4. Empieza un chat nuevo y sigue los pasos de la app.
 
-### Prerequisites
+## Actualizar
 
-- [Node.js](https://nodejs.org/) (v20+ recommended)
-- Google Chrome or Chromium-based browser (for the companion extension)
+- **La app:** pulsa el botón **Actualizar** en la barra superior. Cuando haya una versión nueva dirá "Actualizar a vX.Y.Z"; púlsalo, espera la descarga y luego pulsa "Reiniciar y actualizar".
+- **La extensión:** se actualiza a mano, como se explica arriba.
 
-### Installation
+## Problemas frecuentes
 
-1. Clone the repository and install dependencies:
-   ```bash
-   git clone https://github.com/your-username/mecatube.git
-   cd mecatube
-   npm install
-   ```
+- **La extensión aparece desconectada y los botones no funcionan:** comprueba que Chrome esté abierto, que la extensión esté activada en `chrome://extensions` y que tengas abiertas las pestañas de DeepSeek y Flow con la sesión iniciada. Recarga la extensión si hace falta.
+- **Windows dice "Windows protegió su PC":** pulsa **Más información** y después **Ejecutar de todas formas**.
+- **Flow pide resolver un captcha:** resuélvelo en la pestaña de Flow; Mecatube continúa solo cuando termines.
 
-2. Run the application in development mode:
-   ```bash
-   npm run dev
-   ```
-   This concurrently boots the Vite dev server and launches Electron with hot-reloading.
+## Apoya el proyecto
 
-### Installing the Browser Extension
+Si Mecatube te es útil, puedes apoyar su desarrollo con una donación.
 
-1. Open Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** in the top-right corner.
-3. Click **Load unpacked** and select the [`extension/`](extension/) directory from this repository.
-4. Ensure the Mecatube desktop app is running; the extension icon will indicate an active WebSocket bridge.
+[![Donar con Stripe](https://img.shields.io/badge/Donate-Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white)](https://buy.stripe.com/dRm8wI8Hk0wq3Y692vcEw0h)
+
+Enlace directo: https://buy.stripe.com/dRm8wI8Hk0wq3Y692vcEw0h
+
+## Publicar la extensión en la Chrome Web Store
+
+Consulta la guía en [docs/chrome-web-store.md](docs/chrome-web-store.md).
 
 ---
 
-## Best Practices & Workflow Rules
+<details>
+<summary><strong>Para desarrolladores</strong></summary>
 
-1. **Character Consistency in Google Flow**: Avoid re-uploading character images between scenes; reuse the existing character asset from the project within Google Flow to preserve identity and seed stability.
-2. **Multi-Character Management**: Ensure each character maintains their unique sheet number and distinguishing flat garment/props to prevent model confusion.
-3. **85/15 Balance**: Never cluster explanation diagrams together; distribute diagrammatic explainers evenly to maintain viewer engagement.
+```bash
+npm install              # instala dependencias
+npm run dev              # app en modo desarrollo
+npm run dist             # genera el instalador en release/
+npm run pack:extension   # genera release/Mecatube-Extension.zip
+```
 
----
+**Publicar una versión:**
 
-## License
+1. Sube la versión en `package.json` (por ejemplo `0.1.1`) y haz commit.
+2. Ejecuta `npm run dist` y `npm run pack:extension`.
+3. Crea un tag `vX.Y.Z` y una release en GitHub.
+4. Adjunta a la release: `Mecatube-Setup-X.Y.Z.exe`, `Mecatube-Setup.exe`, `latest.yml`, `Mecatube-Setup-X.Y.Z.exe.blockmap` y `Mecatube-Extension.zip`. El actualizador de la app lee `latest.yml`, y los enlaces de este README usan `Mecatube-Setup.exe` y `Mecatube-Extension.zip`.
 
-ISC License.
+</details>
