@@ -27,7 +27,9 @@ try {
   copyFiltered(source, staging);
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.rmSync(output, { force: true });
-  const result = spawnSync('tar', ['-a', '-c', '-f', output, '-C', staging, '.'], { stdio: 'inherit' });
+  // Use the Windows bsdtar explicitly: a GNU tar earlier in PATH (e.g. Git Bash) treats "C:" as a remote host
+  const tarBin = process.platform === 'win32' ? path.join(process.env.SystemRoot ?? 'C:\Windows', 'System32', 'tar.exe') : 'tar';
+  const result = spawnSync(tarBin, ['-a', '-c', '-f', output, '-C', staging, ...fs.readdirSync(staging)], { stdio: 'inherit' });
   if (result.status !== 0) throw new Error('tar failed to create the zip');
   console.log(`Created ${path.relative(root, output)}`);
 } finally {
