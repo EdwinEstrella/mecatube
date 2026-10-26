@@ -1,24 +1,28 @@
 {
   "name": "mecatube",
-  "version": "0.0.1-beta",
+  "version": "0.1.0",
   "description": "Mecatube desktop app",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k -n vite,electron \"vite\" \"wait-on http://127.0.0.1:5173 && nodemon --watch electron --ext cjs,js --exec \\\"electron . --dev\\\"\"",
     "build": "vite build",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "vite build && electron-builder --win --publish never && node scripts/release-assets.cjs",
+    "pack:extension": "node scripts/pack-extension.cjs"
   },
   "license": "ISC",
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
     "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "nodemon": "^3.1.14",
     "vite": "^8.3.5",
     "wait-on": "^9.5.1"
   },
   "dependencies": {
     "@remotion/player": "^4.0.538",
+    "electron-updater": "^6.8.11",
     "motion": "^14.6.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -26,5 +30,53 @@
     "remark-gfm": "^4.0.1",
     "remotion": "^4.0.538",
     "ws": "^8.22.0"
+  },
+  "author": "EdwinEstrella",
+  "homepage": "https://github.com/EdwinEstrella/mecatube",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EdwinEstrella/mecatube.git"
+  },
+  "build": {
+    "appId": "com.edwinestrella.mecatube",
+    "productName": "Mecatube",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "!electron/**/*.test.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.png",
+      "artifactName": "Mecatube-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerLanguages": [
+        "es_ES"
+      ],
+      "language": "3082"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "EdwinEstrella",
+        "repo": "mecatube"
+      }
+    ]
   }
 }

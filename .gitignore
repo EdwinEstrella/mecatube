@@ -43,3 +43,6 @@ odd/
 # Temporary files
 *.tmp
 *.tmp.*
+
+# Release output
+release/
