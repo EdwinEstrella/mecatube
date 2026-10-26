@@ -334,7 +334,7 @@ async function waitUntil(check, label) {
   await test('scene jobs carry the selected sheet as reference plus model and outputs', async () => {
     const job = sent[0];
     assert.equal(job.model, 'nano-banana-pro');
-    assert.equal(job.outputs, 2);
+    assert.equal(job.outputs, 1, 'one image per scene; character sheets keep 2');
     assert.equal(job.references.length, 1);
     assert.deepEqual(job.references[0], { name: tomas.generations[0].files[0], mime: 'image/png', base64: 'AQID', assetId: SHEET_ID });
     assert.deepEqual(tomas.generations[0].assetIds, [SHEET_ID, null]);
@@ -356,6 +356,21 @@ async function waitUntil(check, label) {
     assert.equal(sent.length, 1);
     assert.deepEqual(sent[0].references.map((ref) => ref.mime), ['image/png', 'image/webp'], 'two sheets, the repeated one only once');
     finish(sent[0]);
+  });
+
+  await test("Flow's usage limit stops the queue instead of failing every waiting scene in Flow", async () => {
+    sent.length = 0;
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(13), scene(14), scene(15)] });
+    assert.equal(sent.length, 1);
+    sceneListener({
+      type: 'flow-error',
+      requestId: sent[0].requestId,
+      message: 'Flow rechazó la generación: Has alcanzado tu límite de uso. Inténtalo de nuevo más tarde.',
+    });
+    assert.equal(sent.length, 1, 'no further scene is sent to Flow');
+    assert.deepEqual([13, 14, 15].map((n) => states(n).slice(-1)[0]), ['error', 'error', 'error']);
+    assert.match(sceneEvents.findLast(([, p]) => p.number === 15)[1].error, /Cola detenida: Flow alcanzó tu límite de uso/);
+    assert.deepEqual(sceneService.status().scenes, { busy: false, running: null, pending: 0 });
   });
 
   await test('cancelScenes clears the waiting scenes and keeps the running one', async () => {
@@ -434,15 +449,17 @@ async function waitUntil(check, label) {
     assert.throws(() => sceneStore.selectScene(sceneVideo.id, 99, mine), /Escena no encontrada/);
     assert.throws(() => sceneStore.selectScene(sceneVideo.id, 0, mine), /Número de escena no válido/);
     assert.equal(selectedOf(), mine);
-    // newer generations keep the selection while its generation is kept; pruning it clears the selection
-    for (let i = 0; i < 3; i += 1) {
-      await sleep(3);
-      sceneStore.addSceneGeneration(sceneVideo.id, { number: 50, title: 'A', prompt: 'p', images: [image, image] });
-    }
-    assert.equal(selectedOf(), mine);
+    // Regenerating replaces the visible pair, so the choice is cleared and made again among the new images
     await sleep(3);
-    assert.equal(sceneStore.addSceneGeneration(sceneVideo.id, { number: 50, title: 'A', prompt: 'p', images: [image, image] }).selectedFile, null);
+    const regenerated = sceneStore.addSceneGeneration(sceneVideo.id, { number: 50, title: 'A', prompt: 'p', images: [image, image] });
+    assert.equal(regenerated.selectedFile, null);
     assert.equal(selectedOf(), null);
+    const fresh = regenerated.generations.at(-1).files[0];
+    assert.equal(sceneStore.selectScene(sceneVideo.id, 50, fresh).selectedFile, fresh);
+    // A single-image generation (scenes now ask Flow for 1) is chosen automatically, also on regenerate
+    await sleep(3);
+    const single = sceneStore.addSceneGeneration(sceneVideo.id, { number: 50, title: 'A', prompt: 'p', images: [image] });
+    assert.equal(single.selectedFile, single.generations.at(-1).files[0]);
   });
 
   await test('media protocol serves scene images and rejects malformed scene paths', async () => {
@@ -458,6 +475,30 @@ async function waitUntil(check, label) {
     for (const url of [`mecatube-media://scene/${sceneVideo.id}/..%2F1/${file}`, `mecatube-media://scene/${sceneVideo.id}/x/${file}`, `mecatube-media://scene/${sceneVideo.id}/1`]) {
       assert.equal((await handler({ url, headers: new Headers() })).status, 404, url);
     }
+  });
+
+  await test("scene references use only the current chat's characters, not another chat's 'Personaje 1'", async () => {
+    // Reproduces a real workspace: a leftover "Personaje 1" (here Tomás, stored first) and the chat's
+    // current, approved "Personaje 1 — Narrador"; without the chat's keys the leftover was picked
+    const NARRADOR_ID = '6f9619ff-8b86-4011-b42d-00c04fc964ff';
+    sceneStore.upsert(sceneVideo.id, { key: 'personaje-1-narrador', name: 'Personaje 1 — Narrador (protagonista)', role: '', prompt: 'sheet 1 new' });
+    sceneStore.addGeneration(sceneVideo.id, 'personaje-1-narrador', {
+      images: [{ mime: 'image/png', base64: 'BAUG', sourceUrl: `https://flow-content.google/image/${NARRADOR_ID}?Expires=1` }, image],
+    });
+    const narrador = sceneStore.list(sceneVideo.id).find((item) => item.key === 'personaje-1-narrador');
+    sceneStore.select(sceneVideo.id, 'personaje-1-narrador', narrador.generations[0].files[0]);
+
+    const before = sent.length;
+    sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(64, ['1'])], characterKeys: ['personaje-1-narrador', 'personaje-2-ana'] });
+    assert.equal(sent.length, before + 1);
+    assert.equal(sent.at(-1).references.length, 1);
+    assert.equal(sent.at(-1).references[0].assetId, NARRADOR_ID);
+    finish(sent.at(-1));
+
+    assert.throws(
+      () => sceneService.generateScenes({ videoId: sceneVideo.id, scenes: [scene(65, ['1'])], characterKeys: ['../bad'] }),
+      /personajes no válida/,
+    );
   });
 
   await test('scenePromptForFlow points sheet mentions at the attached reference and adds the layout guard', () => {

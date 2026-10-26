@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ConversationList from './chat/ConversationList.jsx';
 import DeleteChatDialog from './chat/DeleteChatDialog.jsx';
 import MessageList from './chat/MessageList.jsx';
@@ -10,6 +10,7 @@ import { useScriptVoice } from './voice/useScriptVoice.js';
 import { useFlowCharacters } from './flow/useFlowCharacters.js';
 import { useFlowScenes } from './flow/useFlowScenes.js';
 import { useFlowAnimations } from './flow/useFlowAnimations.js';
+import { latestCharacterKeys } from './flow/currentCharacters.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -281,7 +282,8 @@ export default function ChatView({
   const scriptVoice = useScriptVoice(activeId, messages);
   const activeTitle = conversations.find((item) => item.id === activeId)?.title ?? '';
   const flow = useFlowCharacters(activeId, activeTitle, isConnected);
-  const flowScenes = useFlowScenes(activeId, activeTitle, isConnected);
+  const characterKeys = useMemo(() => latestCharacterKeys(messages), [messages]);
+  const flowScenes = useFlowScenes(activeId, activeTitle, isConnected, characterKeys);
   const flowAnimations = useFlowAnimations(activeId, activeTitle, isConnected, flowScenes);
 
   const isBusy = pending !== null;

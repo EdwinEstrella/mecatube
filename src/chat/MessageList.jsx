@@ -6,12 +6,36 @@ import CharacterCards from '../flow/CharacterCards.jsx';
 import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
 import SceneCards from '../flow/SceneCards.jsx';
 import AnimationCards from '../flow/AnimationCards.jsx';
+import { nextStepPrompt } from './nextStep.js';
 import { parseImageScenes } from '../flow/parseImageScenes.js';
 import { chosenIdeaNumber, hasUserMessageAfter } from './chosenIdea.js';
 import { isScriptMessage } from '../timeline/stages.js';
 import { extractNarration } from '../voice/narration.js';
 import ScriptVoiceControl from '../voice/ScriptVoiceControl.jsx';
 import CopyScriptButton from './CopyScriptButton.jsx';
+
+// The illustrator's closing question ("¿Paso al siguiente bloque?") as one button per option
+function NextStepButtons({ step, canSend, onSend }) {
+  if (!step) return null;
+  return (
+    <div className="next-step">
+      <p className="next-step__question">{step.question}</p>
+      <div className="next-step__options">
+        {step.options.map((option, index) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`settings__button ${index === 0 ? 'settings__button--primary' : 'settings__button--ghost'}`}
+            disabled={!canSend}
+            onClick={() => onSend(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const COLLAPSE_CHARS = 600;
 const COLLAPSE_LINES = 12;
@@ -147,6 +171,9 @@ export default function MessageList({
                 <SceneCards block={blockResult.block} scenes={blockResult.scenes} flow={scenes} characterBusy={flow.job !== null} />
               )}
               {blockResult.outro && <Markdown>{blockResult.outro}</Markdown>}
+              {!hasUserMessageAfter(messages, index) && (
+                <NextStepButtons step={nextStepPrompt(message.content)} canSend={canSend} onSend={onSend} />
+              )}
               <details className="char-original">
                 <summary>Mensaje original</summary>
                 <Markdown>{message.content}</Markdown>

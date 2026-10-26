@@ -27,11 +27,37 @@ async function testConnection(apiKey) {
   }
 }
 
-// Streams chat completion using Server-Sent Events (SSE)
-async function streamChat({ apiKey, messages, model = 'deepseek-chat', onDelta, signal }) {
-  if (!apiKey) throw new Error('La API key de DeepSeek no está configurada.');
+// Long replies (an image block is ~38k characters) hit the output limit and arrive cut mid-sentence
+// with finish_reason "length". Each cut is followed by a request to continue from the exact point;
+// the parts are joined into one reply.
+const MAX_CONTINUATIONS = 4;
+const CONTINUE_PROMPT =
+  'Tu respuesta anterior se cortó por el límite de longitud. Continúa exactamente desde el último carácter que escribiste, ' +
+  'sin repetir nada, sin saludar y sin explicar: solo el texto que falta, con el mismo formato.';
 
-  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+// Streams chat completion using Server-Sent Events (SSE), continuing automatically when cut
+async function streamChat({ apiKey, messages, model = 'deepseek-chat', onDelta, signal, fetchImpl = fetch }) {
+  if (!apiKey) throw new Error('La API key de DeepSeek no está configurada.');
+  let full = '';
+  let history = messages;
+  for (let round = 0; round <= MAX_CONTINUATIONS; round += 1) {
+    const { content, finishReason } = await streamOnce({
+      apiKey,
+      messages: history,
+      model,
+      signal,
+      fetchImpl,
+      onDelta: (partial) => onDelta?.(full + partial),
+    });
+    full += content;
+    if (finishReason !== 'length' || !content) break;
+    history = [...messages, { role: 'assistant', content: full }, { role: 'user', content: CONTINUE_PROMPT }];
+  }
+  return full;
+}
+
+async function streamOnce({ apiKey, messages, model, onDelta, signal, fetchImpl }) {
+  const response = await fetchImpl(`${DEEPSEEK_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -58,6 +84,7 @@ async function streamChat({ apiKey, messages, model = 'deepseek-chat', onDelta, 
   const decoder = new TextDecoder('utf8');
   let accumulated = '';
   let buffer = '';
+  let finishReason = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -81,13 +108,14 @@ async function streamChat({ apiKey, messages, model = 'deepseek-chat', onDelta, 
           accumulated += content;
           onDelta?.(accumulated);
         }
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
       } catch {
         // partial json line, ignore
       }
     }
   }
 
-  return accumulated;
+  return { content: accumulated, finishReason };
 }
 
 module.exports = {

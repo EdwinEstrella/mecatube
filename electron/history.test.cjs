@@ -141,8 +141,9 @@ const msg = (role, content, id = `${role}-${content}`) => ({ id, role, content, 
     for (let i = 0; i < 100 && received.length === 0; i += 1) await sleep(20);
     const statuses = [];
     bridge.onStatusChange((connected) => statuses.push(connected));
+    const rejectPromise = assert.rejects(promise, /reinició/);
     const replacement = await connect();
-    await assert.rejects(promise, /reinició/);
+    await rejectPromise;
     assert.deepEqual(statuses.slice(0, 2), [false, true]);
     ext = replacement;
 

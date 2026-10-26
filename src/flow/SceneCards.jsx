@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { allFiles, isActive, pendingScenes, selectedCount, sceneImageUrl, sceneStatusLabel } from './sceneStatus.js';
+import { isActive, latestFiles, pendingScenes, selectedCount, sceneImageUrl, sceneStatusLabel } from './sceneStatus.js';
 
 export function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
@@ -33,7 +33,8 @@ function sceneHeading(scene) {
 
 // Presentational: one card per image prompt. The container owns the queue, records and sending.
 function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSelect }) {
-  const files = allFiles(record);
+  // Only the latest pair: regenerating replaces the previous images
+  const files = latestFiles(record);
   const label = sceneStatusLabel(status, record);
   const active = isActive(status);
   const sheets = scene.sheetRefs.length > 0 ? `Hoja${scene.sheetRefs.length > 1 ? 's' : ''} ${scene.sheetRefs.join(', ')}` : '';

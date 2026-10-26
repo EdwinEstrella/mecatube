@@ -20,7 +20,7 @@ export function allFiles(record) {
 export function selectedCount(scenes, records) {
   return scenes.filter((scene) => {
     const record = records?.[scene.number];
-    return Boolean(record?.selectedFile) && allFiles(record).includes(record.selectedFile);
+    return Boolean(record?.selectedFile) && latestFiles(record).includes(record.selectedFile);
   }).length;
 }
 

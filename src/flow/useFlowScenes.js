@@ -11,7 +11,9 @@ const hasScenesApi = () => typeof window !== 'undefined' && Boolean(window.elect
 // Container logic for the scene cards of an illustrator chat. The main process runs the serial
 // queue; this hook sends scenes, mirrors the per-scene status events and loads the stored images.
 // `statuses` is by scene number: { state, percent, captcha, error }; `records` the stored scenes.
-export function useFlowScenes(conversationId, conversationTitle, isConnected) {
+// characterKeys: keys of the characters in the chat's latest sheet message, so scene references
+// resolve only against this chat's approved sheets
+export function useFlowScenes(conversationId, conversationTitle, isConnected, characterKeys = []) {
   const [videoId, setVideoId] = useState(null);
   const [projectUrl, setProjectUrl] = useState(null);
   const [records, setRecords] = useState({});
@@ -78,6 +80,7 @@ export function useFlowScenes(conversationId, conversationTitle, isConnected) {
       await api.generateScenes({
         videoId: video.id,
         scenes: list.map(({ number, title, prompt, sheetRefs }) => ({ number, title, prompt, sheetRefs })),
+        characterKeys,
       });
     } catch (generateError) {
       setError(cleanError(generateError));

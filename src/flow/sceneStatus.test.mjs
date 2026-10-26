@@ -24,7 +24,8 @@ assert.deepEqual(pending.map((scene) => scene.number), [4, 5]);
 
 assert.deepEqual(allFiles(done), ['a-1.webp', 'a-2.webp', 'b-1.webp', 'b-2.webp']);
 assert.deepEqual(allFiles(undefined), []);
-const records = { 1: { ...done, selectedFile: 'a-2.webp' }, 2: { ...done, selectedFile: 'gone.webp' }, 3: { ...done, selectedFile: null } };
+// Only a choice among the latest pair counts (a choice in an older generation does not)
+const records = { 1: { ...done, selectedFile: 'b-2.webp' }, 2: { ...done, selectedFile: 'a-1.webp' }, 3: { ...done, selectedFile: null } };
 assert.equal(selectedCount([{ number: 1 }, { number: 2 }, { number: 3 }, { number: 4 }], records), 1);
 
 console.log('sceneStatus: all passed');

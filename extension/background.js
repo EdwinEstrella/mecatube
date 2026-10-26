@@ -12,6 +12,8 @@ const FLOW_HOME_URL = `${FLOW_ORIGIN}/`;
 const FLOW_PROJECT_PATTERN = /^https:\/\/flow\.google\.com\/project\/[0-9a-f-]{36}/;
 const FLOW_STEP_TIMEOUT_MS = 60000;
 const FLOW_JOB_TIMEOUT_MS = 6 * 60 * 1000;
+// Video generation (Flow animations) takes longer than images
+const FLOW_ANIMATE_TIMEOUT_MS = 13 * 60 * 1000;
 const DEEPSEEK_CHAT_PATTERN = /^https:\/\/chat\.deepseek\.com\/a\/chat\/s\/[\w-]+/;
 const HISTORY_TIMEOUT_MS = 60000;
 
@@ -292,6 +294,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+// Flow injects a tile's <video> only on a trusted hover (synthetic events do nothing), so flow.js asks
+// for a real mouse move over a marked element. Same safeguards as the trusted click: tab to front,
+// debugger attached only briefly, center re-measured after attaching, every step bounded.
+async function trustedHover(tabId, x, y, selector) {
+  await step('mostrar la pestaña de Flow', bringTabToFront(tabId));
+  const target = { tabId };
+  await step('conectar el depurador', chrome.debugger.attach(target, '1.3'));
+  try {
+    const point = await step('medir el vídeo', measureCenter(target, selector, { x, y }));
+    const base = { x: point.x, y: point.y, button: 'none', clickCount: 0, type: 'mouseMoved' };
+    // A small approach move first so the page sees the pointer enter the tile
+    await step('mover el ratón', chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { ...base, x: point.x - 6, y: point.y - 6 }));
+    await step('mover el ratón', chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', base));
+    // Keep the debugger attached briefly so the hover handler runs while the pointer is there
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  } finally {
+    await chrome.debugger.detach(target).catch(() => {});
+  }
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'flow-trusted-hover') return false;
+  const tabId = sender.tab?.id;
+  const { x, y, selector } = message;
+  if (tabId === undefined || !sender.url?.startsWith(`${FLOW_ORIGIN}/`) || !Number.isFinite(x) || !Number.isFinite(y)) {
+    sendResponse({ ok: false, error: 'Solicitud de hover no válida.' });
+    return false;
+  }
+  trustedHover(tabId, x, y, selector)
+    .then(() => sendResponse({ ok: true }))
+    .catch((error) => sendResponse({ ok: false, error: error.message }));
+  return true;
+});
+
 // Reuse a Flow tab (preferring one already on the project) or open one; navigate when needed
 async function prepareFlowTab(projectUrl) {
   const tabs = await chrome.tabs.query({ url: `${FLOW_ORIGIN}/*` });
@@ -416,7 +452,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
       { type: 'generate', prompt, model, outputs, references, kind, sourceAssetId, video },
       {
         settleOn: 'result',
-        timeoutMs: FLOW_JOB_TIMEOUT_MS,
+        timeoutMs: kind === 'animate' ? FLOW_ANIMATE_TIMEOUT_MS : FLOW_JOB_TIMEOUT_MS,
         stayOn: currentProject,
         onMessage: (message) => {
           if (message.type === 'progress') send({ type: 'flow-progress', requestId, percent: message.percent });

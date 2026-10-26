@@ -52,8 +52,20 @@
     gridTile: 'flow-grid-tile-container',
     tileMoreLabel: 'Más opciones',
     tileAddToPromptLabel: 'Añadir a la petición',
+    // A failed generation ("Has alcanzado tu límite de uso…") becomes an error tile in the grid
+    errorTile: 'flow-error-tile',
+    errorMessage: '.error-message-text',
+    // Animation (video) flow
+    tileAnimateLabel: 'Animar',
+    videoTile: 'flow-video-tile',
+    videoThumb: 'img[alt="Miniatura de vídeo generada"]',
+    videoElement: 'video',
+    hoverMarkerAttr: 'data-mecatube-target',
+    hoverMarkerSelector: '[data-mecatube-target="1"]',
     // Visible labels
     mediaLabel: 'Imagen',
+    videoMediaLabel: 'Vídeo',
+    framesLabel: 'Fotogramas',
     aspectLabel: '16:9',
     // Remove controls on attached ingredient chips (matched on aria-label / text)
     removeLabel: /^(eliminar|quitar|borrar|remove|delete|clear|close|cancel|cerrar)\b/,
@@ -61,6 +73,14 @@
 
   // Model id sent by the app -> text Flow shows for it
   const MODEL_LABELS = { 'nano-banana-pro': 'Nano Banana Pro' };
+  const VIDEO_MODEL_LABELS = {
+    'omni-1.1-flash': 'Omni 1.1 Flash',
+    'veo-3.1-lite': 'Veo 3.1 - Lite',
+    'veo-3.1-fast': 'Veo 3.1 - Fast',
+    'veo-3.1-quality': 'Veo 3.1 - Quality',
+  };
+  const VIDEO_RESOLUTIONS = ['360p', '720p'];
+  const VIDEO_SECONDS = [4, 6, 8, 10];
 
   const POLL_MS = 700;
   const BOX_TIMEOUT_MS = 30000;
@@ -74,13 +94,20 @@
   const IMAGE_FETCH_TIMEOUT_MS = 30000;
   const UI_TIMEOUT_MS = 5000;
   // Bounded search for an existing asset: scroll steps of the lazy list and wait per step
-  const ASSET_SCROLL_STEPS = 8;
-  const ASSET_SCROLL_WAIT_MS = 600;
+  // A busy project grid is tens of screens tall (a real one needed 15 steps to reach an older sheet);
+  // the search stops by itself at the end of the grid, this is only a safety bound
+  const ASSET_SCROLL_STEPS = 400;
+  const ASSET_SCROLL_WAIT_MS = 350;
   const READY_TIMEOUT_MS = 3 * 60 * 1000;
   const BOX_RESTORE_TIMEOUT_MS = 60000;
   const UPLOAD_TIMEOUT_MS = 30000;
   const RIGHTS_DIALOG_TIMEOUT_MS = 6000;
   const HOOK_TIMEOUT_MS = 10000;
+  // Video generation is much slower than images
+  const ANIMATE_JOB_TIMEOUT_MS = 12 * 60 * 1000;
+  const VIDEO_FETCH_TIMEOUT_MS = 60000;
+  const VIDEO_MAX_BYTES = 24 * 1024 * 1024;
+  const HOVER_VIDEO_TIMEOUT_MS = 8000;
 
   // --- Pure helpers (exported for tests) -------------------------------------------------------
 
@@ -188,6 +215,21 @@
     return isGenerating(doc) || newImages(doc, snapshot).length > 0;
   }
 
+  // Messages of the error tiles Flow shows for this prompt ("Has alcanzado tu límite de uso…"). A
+  // failed tile keeps the prompt as its aria-label, which tells our job apart from older failures.
+  function promptErrors(doc, prompt) {
+    const key = normalizeText(prompt).slice(0, 160);
+    return Array.from(doc.querySelectorAll(SELECTORS.gridTile))
+      .filter((tile) => tile.querySelector(SELECTORS.errorTile) && normalizeText(tile.getAttribute('aria-label')).slice(0, 160) === key)
+      .map((tile) => tile.querySelector(SELECTORS.errorMessage)?.textContent.trim() || 'Flow no pudo completar la generación.');
+  }
+
+  // Error for a failure tile that appeared for this prompt after `before` failures were counted
+  function newPromptError(doc, prompt, before) {
+    const errors = promptErrors(doc, prompt);
+    return errors.length > before ? new Error(`Flow rechazó la generación: ${errors[0]}`) : null;
+  }
+
   // Full pointer/mouse sequence at the center of the element, the way a real click arrives
   function pointerClick(doc, el) {
     const win = doc.defaultView;
@@ -249,6 +291,8 @@
   // submit is never sent twice.
   async function submitPrompt(doc, box, prompt, snapshot, { startTimeoutMs = START_TIMEOUT_MS, isAborted = () => false } = {}) {
     const findSubmit = () => doc.querySelector(SELECTORS.submitButton);
+    // An immediate failure tile also means the submit took effect: never resend in that case
+    const errorsBefore = promptErrors(doc, prompt).length;
     const methods = [
       ['trusted-click', () => trustedClick(findSubmit())],
       ['click', () => findSubmit()?.click()],
@@ -267,7 +311,10 @@
           throw new Error(`No se pudo pulsar «Generar» en Flow. Clic real: ${lastTrustedClickError}.`);
         }
       }
-      const started = await waitFor(() => isAborted() || hasStarted(doc, snapshot), startTimeoutMs);
+      const started = await waitFor(
+        () => isAborted() || hasStarted(doc, snapshot) || promptErrors(doc, prompt).length > errorsBefore,
+        startTimeoutMs,
+      );
       if (isAborted()) throw new Error('Trabajo de Flow cancelado.');
       if (started) return name;
     }
@@ -301,6 +348,59 @@
     return label;
   }
 
+  function videoModelLabel(id) {
+    const label = VIDEO_MODEL_LABELS[String(id ?? '').trim().toLowerCase()];
+    if (!label) throw new Error(`Modelo de vídeo de Flow no soportado: «${id}».`);
+    return label;
+  }
+
+  function secondsLabel(seconds) {
+    const n = Number(seconds);
+    if (!VIDEO_SECONDS.includes(n)) throw new Error(`Duración de vídeo no válida para Flow: «${seconds}».`);
+    return `${n} s`;
+  }
+
+  function resolutionLabel(resolution) {
+    const value = String(resolution ?? '').trim().toLowerCase();
+    if (!VIDEO_RESOLUTIONS.includes(value)) throw new Error(`Resolución de vídeo no válida para Flow: «${resolution}».`);
+    return value;
+  }
+
+  // Asset uuid inside a flow-content URL (.../image/<uuid>?... or .../video/<uuid>?...); null when absent
+  function flowUuidFromUrl(src) {
+    const match = /\/(?:image|video)\/([^/?#]+)/.exec(String(src ?? ''));
+    return match && ASSET_ID.test(match[1]) ? match[1].toLowerCase() : null;
+  }
+
+  // Ids in `current` (array or Set) that were not in `before` (Set or array), in order, without duplicates
+  function newVideoIds(before, current) {
+    const known = before instanceof Set ? before : new Set(before);
+    const fresh = [];
+    for (const id of current) if (id && !known.has(id) && !fresh.includes(id)) fresh.push(id);
+    return fresh;
+  }
+
+  // The first `count` results (Flow puts new results at the top of the grid); everything when count is
+  // missing or invalid
+  function capResults(list, count) {
+    const n = Number(count);
+    return Number.isInteger(n) && n > 0 ? list.slice(0, n) : list;
+  }
+
+  // Set of what `read()` returns once the grid stops changing (it re-renders after a scroll back to the
+  // top): same size on three consecutive polls, at most ~3 s
+  async function settledSnapshot(read) {
+    let last = new Set(read());
+    let stable = 0;
+    for (let i = 0; i < 15 && stable < 3; i += 1) {
+      await sleep(200);
+      const next = new Set(read());
+      stable = next.size === last.size && [...next].every((item) => last.has(item)) ? stable + 1 : 0;
+      last = next;
+    }
+    return last;
+  }
+
   function outputsLabel(count) {
     const n = Number(count);
     if (!Number.isInteger(n) || n < 1 || n > 4) throw new Error(`Cantidad de imágenes no válida para Flow: «${count}».`);
@@ -331,6 +431,8 @@
   }
 
   // True for the Flow production host and for the legacy labs.google URL (which redirects to it)
+  const ASSET_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   function isFlowUrl(href) {
     try {
       const url = new URL(href);
@@ -340,8 +442,6 @@
       return false;
     }
   }
-
-  const ASSET_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   // Flow asset id inside an image URL (https://flow-content.google/image/<uuid>?...); null when absent
   function assetIdFromSrc(src) {
@@ -761,8 +861,9 @@
     // Adding an ingredient re-renders the editor, so the box found at the start may be detached now
     box = doc.querySelector(SELECTORS.promptBox) ?? box;
 
-    // After the references: their thumbnails must not count as new results
-    const snapshot = new Set(imageSources(doc));
+    // After the references: their thumbnails must not count as new results. The grid was scrolled to
+    // find a sheet, so wait until its top re-renders before taking the snapshot
+    const snapshot = await settledSnapshot(() => imageSources(doc));
     insertPrompt(doc, box, prompt);
     const accepted = await waitFor(() => {
       const current = doc.querySelector(SELECTORS.promptBox);
@@ -778,6 +879,7 @@
     if (!submit) throw new Error('El botón de enviar de Flow nunca estuvo disponible.');
 
     const startedAt = now();
+    const errorsBefore = promptErrors(doc, prompt).length;
     const submitMethod = await submitPrompt(doc, box, prompt, snapshot, {
       startTimeoutMs: options.startTimeoutMs,
       isAborted,
@@ -797,6 +899,10 @@
       await sleep(POLL_MS);
       if (isAborted()) throw new Error('Trabajo de Flow cancelado.');
       if (now() - startedAt > JOB_TIMEOUT_MS) throw new Error('Se agotó el tiempo esperando a que Flow terminara de generar.');
+
+      // Flow turned this request into an error tile (usage limit, policy…): fail now, do not wait it out
+      const flowError = newPromptError(doc, prompt, errorsBefore);
+      if (flowError) throw flowError;
 
       const captcha = isCaptchaVisible(doc);
       if (captcha !== captchaShown) {
@@ -819,7 +925,9 @@
       // Generation has not visibly started yet; give the page a moment before trusting "idle"
       if (!sawGenerating && now() - startedAt < GRACE_MS) continue;
 
-      const fresh = newImages(doc, snapshot);
+      // New results appear first in the grid; never take more than were requested (old tiles that
+      // re-render after scrolling must not be mistaken for results)
+      const fresh = capResults(newImages(doc, snapshot), outputs);
       if (fresh.length === 0) continue;
       stableCount = fresh.length === stableSize ? stableCount + 1 : 1;
       stableSize = fresh.length;
@@ -841,6 +949,253 @@
       // Resolve only once Flow accepts input again so the app's queue never sends into a locked box
       await waitFor(() => !isAborted() && !isGenerating(doc) && isBoxReady(doc.querySelector(SELECTORS.promptBox)), BOX_RESTORE_TIMEOUT_MS);
       return { images, submitMethod };
+    }
+  }
+
+  // Video tiles in the grid as [{ id, tile }]; the id is the uuid of the thumbnail (or of the video once injected)
+  function videoTiles(doc) {
+    const found = [];
+    doc.querySelectorAll(SELECTORS.videoTile).forEach((tile) => {
+      const thumb = tile.querySelector(SELECTORS.videoThumb);
+      const video = tile.querySelector(SELECTORS.videoElement);
+      const id =
+        flowUuidFromUrl(thumb?.currentSrc || thumb?.src || thumb?.getAttribute?.('src')) ||
+        flowUuidFromUrl(video?.currentSrc || video?.src || video?.getAttribute?.('src'));
+      if (id) found.push({ id, tile });
+    });
+    return found;
+  }
+
+  function videoIds(doc) {
+    return new Set(videoTiles(doc).map((entry) => entry.id));
+  }
+
+  // Video settings: Vídeo + Fotogramas + aspect + resolution + duration + model + xN (last, a model
+  // change can reset the count). Any control Flow does not offer is an error, never a fallback.
+  async function applyVideoSettings(doc, video) {
+    const settings = video ?? {};
+    const modelText = videoModelLabel(settings.model);
+    const resolution = resolutionLabel(settings.resolution);
+    const seconds = secondsLabel(settings.seconds);
+    const outputsText = outputsLabel(settings.outputs ?? 1);
+    const aspect = String(settings.aspect ?? SELECTORS.aspectLabel);
+    try {
+      await ensureRadio(doc, SELECTORS.videoMediaLabel, 'tipo de medio');
+      await ensureRadio(doc, SELECTORS.framesLabel, 'modo de vídeo');
+      await ensureRadio(doc, aspect, 'relación de aspecto');
+      await ensureRadio(doc, resolution, 'resolución');
+      await ensureRadio(doc, seconds, 'duración');
+      await ensureModel(doc, modelText);
+      await ensureRadio(doc, outputsText, 'cantidad de vídeos');
+    } finally {
+      await closeOverlays(doc, () => overlayItems(doc, SELECTORS.radio).length > 0 || overlayItems(doc, SELECTORS.menuItem).length > 0);
+    }
+  }
+
+  // Source image tile -> "Más opciones" -> "Animar": Flow puts the image in the prompt bar as the start frame
+  async function startAnimationFromTile(doc, bar, sourceAssetId) {
+    const isMenuOpen = () => overlayItems(doc, SELECTORS.menuItem).length > 0;
+    try {
+      const image = await findTileScrolling(doc, sourceAssetId);
+      if (!image) throw new Error('La imagen elegida de la escena no está en este proyecto de Flow.');
+      image.scrollIntoView({ block: 'center' });
+      const tile = image.closest(SELECTORS.gridTile);
+      const more =
+        tile &&
+        Array.from(tile.querySelectorAll('button')).find((button) => labelMatches(button.getAttribute('aria-label'), SELECTORS.tileMoreLabel, true));
+      if (!more) throw new Error('No se encontró el menú de la imagen de la escena en Flow.');
+      press(doc, more);
+      const item = await waitFor(() => findByLabel(overlayItems(doc, SELECTORS.menuItem), SELECTORS.tileAnimateLabel, true), UI_TIMEOUT_MS);
+      if (!item) throw new Error('Flow no ofreció «Animar» para la imagen de la escena.');
+      press(doc, item);
+      const chip = await waitFor(() => bar.querySelector(SELECTORS.ingredientChip), UI_TIMEOUT_MS * 2);
+      if (!chip) throw new Error('La imagen de la escena no quedó como fotograma inicial en Flow.');
+    } finally {
+      await closeOverlays(doc, isMenuOpen);
+      const viewport = doc.querySelector(SELECTORS.gridViewport);
+      if (viewport) viewport.scrollTop = 0;
+    }
+  }
+
+  // Real mouse move over the element through the extension (chrome.debugger); the marker attribute lets
+  // the service worker find the element again after the debugging bar shifts the layout.
+  // Resolves to null on success or to the failure reason.
+  function trustedHover(el) {
+    return new Promise((resolve) => {
+      if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return resolve('la extensión no está disponible');
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const rect = el.getBoundingClientRect();
+      const message = {
+        type: 'flow-trusted-hover',
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        selector: SELECTORS.hoverMarkerSelector,
+      };
+      const timer = setTimeout(() => resolve('la extensión no respondió'), 45000);
+      chrome.runtime.sendMessage(message, (response) => {
+        clearTimeout(timer);
+        if (chrome.runtime.lastError) return resolve(chrome.runtime.lastError.message);
+        resolve(response?.ok === true ? null : (response?.error ?? 'sin respuesta de la extensión'));
+      });
+    });
+  }
+
+  // The <video src> only exists after a trusted hover on the tile
+  async function revealVideoUrl(doc, entry) {
+    const readSrc = () => {
+      const video = entry.tile.querySelector(SELECTORS.videoElement);
+      return video ? video.currentSrc || video.src || video.getAttribute('src') || null : null;
+    };
+    const existing = readSrc();
+    if (existing) return existing;
+    const viewport = doc.querySelector(SELECTORS.gridViewport);
+    if (viewport) viewport.scrollTop = 0;
+    entry.tile.setAttribute(SELECTORS.hoverMarkerAttr, '1');
+    let lastError = null;
+    try {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        lastError = await trustedHover(entry.tile);
+        const src = await waitFor(readSrc, HOVER_VIDEO_TIMEOUT_MS, 200);
+        if (src) return src;
+      }
+    } finally {
+      entry.tile.removeAttribute(SELECTORS.hoverMarkerAttr);
+    }
+    throw new Error(`Flow no mostró el vídeo generado${lastError ? ` (${lastError})` : ''}.`);
+  }
+
+  async function fetchVideo(src) {
+    const tooBig = () => new Error('El vídeo generado es demasiado grande para importarlo (más de 24 MB).');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), VIDEO_FETCH_TIMEOUT_MS);
+    try {
+      // flow-content.google allows any origin only without credentials
+      const response = await fetch(src, { credentials: 'omit', signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (Number(response.headers.get('content-length')) > VIDEO_MAX_BYTES) throw tooBig();
+      const blob = await response.blob();
+      if (blob.size > VIDEO_MAX_BYTES) throw tooBig();
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      return { mime: blob.type || response.headers.get('content-type') || 'video/mp4', base64: bytesToBase64(bytes), sourceUrl: src };
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('Se agotó el tiempo descargando el vídeo de Flow.');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Animates an image already in the project: tile -> Animar -> video settings -> prompt -> generate ->
+  // wait -> hover to reveal the video URL -> download. Resolves to { videos, submitMethod }.
+  // job: { prompt, sourceAssetId, video: { model, resolution, seconds, aspect, outputs } }
+  async function runAnimate({ prompt, sourceAssetId, video }, post, doc = document, now = Date.now, options = {}) {
+    const isAborted = options.isAborted ?? (() => false);
+    const assetId = typeof sourceAssetId === 'string' && ASSET_ID.test(sourceAssetId) ? sourceAssetId.toLowerCase() : null;
+    if (!assetId) throw new Error('Falta la imagen de la escena para animar.');
+    // Validate the settings before touching Flow
+    videoModelLabel(video?.model);
+    resolutionLabel(video?.resolution);
+    secondsLabel(video?.seconds);
+    outputsLabel(video?.outputs ?? 1);
+
+    let box = await waitFor(() => doc.querySelector(SELECTORS.promptBox), BOX_TIMEOUT_MS);
+    if (!box) throw new Error('No se encontró el cuadro de prompt de Flow. ¿Está abierto el proyecto y con la sesión iniciada?');
+    const ready = await waitFor(() => !isAborted() && !isGenerating(doc) && isBoxReady(box), READY_TIMEOUT_MS);
+    if (isAborted()) throw new Error('Trabajo de Flow cancelado.');
+    if (!ready) throw new Error('El cuadro de prompt de Flow no quedó disponible (¿hay otra generación en curso?).');
+
+    await ensureDirectMode(doc);
+    const bar = promptBar(doc, box);
+    const clear = doc.querySelector(SELECTORS.clearPromptButton);
+    if (clear) {
+      press(doc, clear);
+      await waitFor(() => attachmentCount(bar) === 0, UI_TIMEOUT_MS);
+    }
+    await clearReferences(doc, bar);
+
+    await startAnimationFromTile(doc, bar, assetId);
+    await applyVideoSettings(doc, video);
+
+    // The grid was scrolled to find the source tile: wait until its top re-renders
+    const before = [...(await settledSnapshot(() => videoIds(doc)))];
+    // The editor re-renders after the start-frame chip appears
+    box = doc.querySelector(SELECTORS.promptBox) ?? box;
+    const snapshot = await settledSnapshot(() => imageSources(doc));
+    insertPrompt(doc, box, prompt);
+    const accepted = await waitFor(() => {
+      const current = doc.querySelector(SELECTORS.promptBox);
+      if (current && current !== box) box = current;
+      return boxMatches(box, prompt);
+    }, 2000, 150);
+    if (!accepted) throw new Error('Flow no aceptó el texto del prompt.');
+
+    const submit = await waitFor(() => {
+      const button = doc.querySelector(SELECTORS.submitButton);
+      return isEnabled(button) ? button : null;
+    }, SUBMIT_ENABLE_TIMEOUT_MS);
+    if (!submit) throw new Error('El botón de enviar de Flow nunca estuvo disponible.');
+
+    const startedAt = now();
+    const errorsBefore = promptErrors(doc, prompt).length;
+    const submitMethod = await submitPrompt(doc, box, prompt, snapshot, { startTimeoutMs: options.startTimeoutMs, isAborted });
+    if (!submitMethod) {
+      const detail = lastTrustedClickError ? ` Clic real: ${lastTrustedClickError}.` : ' El clic real se envió, pero Flow no reaccionó.';
+      throw new Error(`Flow no empezó a generar (el botón de generar no respondió).${detail}`);
+    }
+
+    let sawGenerating = false;
+    let captchaShown = false;
+    let lastPercent = null;
+    let stableCount = 0;
+    let stableSize = -1;
+
+    for (;;) {
+      await sleep(POLL_MS);
+      if (isAborted()) throw new Error('Trabajo de Flow cancelado.');
+      if (now() - startedAt > ANIMATE_JOB_TIMEOUT_MS) throw new Error('Se agotó el tiempo esperando a que Flow terminara de generar el vídeo.');
+
+      // Flow turned this request into an error tile (usage limit, policy…): fail now, do not wait it out
+      const flowError = newPromptError(doc, prompt, errorsBefore);
+      if (flowError) throw flowError;
+
+      const captcha = isCaptchaVisible(doc);
+      if (captcha !== captchaShown) {
+        captchaShown = captcha;
+        post({ type: 'captcha', active: captcha });
+      }
+      const percent = parsePercent(doc);
+      if (percent !== null && percent !== lastPercent) {
+        lastPercent = percent;
+        post({ type: 'progress', percent });
+      }
+
+      const generating = isGenerating(doc);
+      if (generating) sawGenerating = true;
+      if (generating || captcha) {
+        stableCount = 0;
+        continue;
+      }
+      if (!sawGenerating && now() - startedAt < GRACE_MS) continue;
+
+      const tiles = videoTiles(doc);
+      const freshIds = capResults(newVideoIds(before, tiles.map((entry) => entry.id)), video?.outputs);
+      if (freshIds.length === 0) continue;
+      stableCount = freshIds.length === stableSize ? stableCount + 1 : 1;
+      stableSize = freshIds.length;
+      if (stableCount < STABLE_POLLS) continue;
+
+      const videos = [];
+      let lastError = null;
+      for (const entry of tiles.filter((item) => freshIds.includes(item.id))) {
+        try {
+          videos.push(await fetchVideo(await revealVideoUrl(doc, entry)));
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (videos.length === 0) throw new Error(lastError?.message || 'Flow generó el vídeo, pero no se pudo descargar.');
+      await waitFor(() => !isAborted() && !isGenerating(doc) && isBoxReady(doc.querySelector(SELECTORS.promptBox)), BOX_RESTORE_TIMEOUT_MS);
+      return { videos, submitMethod };
     }
   }
 
@@ -912,6 +1267,12 @@
       try {
         if (message.type === 'new-project') {
           await runNewProject(post);
+        } else if (message.kind === 'animate') {
+          const { videos, submitMethod } = await runAnimate(
+            { prompt: String(message.prompt ?? ''), sourceAssetId: message.sourceAssetId, video: message.video },
+            post, document, Date.now, { isAborted: () => !open },
+          );
+          post({ type: 'result', images: [], videos, submitMethod });
         } else {
           const { images, submitMethod } = await runGenerate(
             {
@@ -954,6 +1315,14 @@
     MODEL_LABELS,
     modelLabel,
     outputsLabel,
+    videoModelLabel,
+    secondsLabel,
+    resolutionLabel,
+    flowUuidFromUrl,
+    newVideoIds,
+    capResults,
+    videoTiles,
+    videoIds,
     labelMatches,
     findByLabel,
     isFlowUrl,
@@ -962,6 +1331,7 @@
     isAgentModeOn,
     isBoxReady,
     runGenerate,
+    runAnimate,
     runNewProject,
   };
 

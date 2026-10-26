@@ -121,4 +121,43 @@ test('base64ToBytes round-trips with bytesToBase64', () => {
   assert.equal(base64ToBytes('').length, 0);
 });
 
+test('videoModelLabel maps known ids and rejects unknown ones', () => {
+  assert.equal(flow.videoModelLabel('omni-1.1-flash'), 'Omni 1.1 Flash');
+  assert.equal(flow.videoModelLabel('veo-3.1-lite'), 'Veo 3.1 - Lite');
+  assert.equal(flow.videoModelLabel('veo-3.1-fast'), 'Veo 3.1 - Fast');
+  assert.equal(flow.videoModelLabel('VEO-3.1-Quality'), 'Veo 3.1 - Quality');
+  assert.throws(() => flow.videoModelLabel('nano-banana-pro'), /no soportado/);
+});
+
+test('secondsLabel and resolutionLabel validate against Flow options', () => {
+  assert.equal(flow.secondsLabel(8), '8 s');
+  assert.equal(flow.secondsLabel('10'), '10 s');
+  assert.throws(() => flow.secondsLabel(7), /no válida/);
+  assert.equal(flow.resolutionLabel('720P'), '720p');
+  assert.throws(() => flow.resolutionLabel('1080p'), /no válida/);
+});
+
+test('flowUuidFromUrl reads image and video uuids', () => {
+  const id = '0a1b2c3d-1111-4222-8333-444455556666';
+  assert.equal(flow.flowUuidFromUrl(`https://flow-content.google/image/${id}?Expires=1&Signature=x`), id);
+  assert.equal(flow.flowUuidFromUrl(`https://flow-content.google/video/${id.toUpperCase()}?Expires=1`), id);
+  assert.equal(flow.flowUuidFromUrl('https://flow-content.google/image/not-a-uuid'), null);
+  assert.equal(flow.flowUuidFromUrl(null), null);
+});
+
+test('newVideoIds returns only ids missing from the snapshot, once each', () => {
+  assert.deepEqual(flow.newVideoIds(new Set(['a', 'b']), ['a', 'c', 'b', 'c', 'd']), ['c', 'd']);
+  assert.deepEqual(flow.newVideoIds(['a'], ['a']), []);
+  assert.deepEqual(flow.newVideoIds(new Set(), []), []);
+});
+
+test('capResults keeps only the requested number of results (old tiles re-rendered after a scroll)', () => {
+  const fresh = ['n1', 'n2', 'old1', 'old2', 'old3'];
+  assert.deepEqual(flow.capResults(fresh, 2), ['n1', 'n2']);
+  assert.deepEqual(flow.capResults(fresh, 1), ['n1']);
+  assert.deepEqual(flow.capResults(['n1'], 2), ['n1']);
+  assert.deepEqual(flow.capResults(fresh, undefined), fresh);
+  assert.deepEqual(flow.capResults(fresh, 0), fresh);
+});
+
 console.log(`${passed} passed`);

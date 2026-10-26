@@ -14,6 +14,9 @@ const { FLOW_PROJECT_URL } = require('./videos.cjs');
 
 const VIDEO_ID = /^[\w-]{1,100}$/;
 const CHARACTER_KEY = /^[a-z0-9-]{1,64}$/;
+// Flow's "Has alcanzado tu límite de uso. Inténtalo de nuevo más tarde." (relayed by the extension)
+const USAGE_LIMIT = /l[ií]mite de uso/i;
+const USAGE_LIMIT_STOP = 'Cola detenida: Flow alcanzó tu límite de uso. Inténtalo de nuevo más tarde.';
 const IMAGE_FILE = /^\d{10,16}-\d{1,3}\.(webp|png|jpg)$/;
 const EXTENSIONS = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg' };
 const NAME_MAX = 200;
@@ -34,6 +37,8 @@ const REFERENCES_MAX = 6;
 // Every Flow request asks for this model and image count; the extension applies them in the page
 const FLOW_MODEL = 'nano-banana-pro';
 const FLOW_OUTPUTS = 2;
+// One image per scene stretches Flow's usage limit; a bad one is regenerated from its card
+const SCENE_OUTPUTS = 1;
 // Animations: the extension sends the generated video(s) as base64. A video generation takes much
 // longer than an image one, hence its own watchdog.
 const VIDEO_FILE = /^\d{10,16}-\d{1,3}\.(mp4|webm|mov)$/;
@@ -328,10 +333,10 @@ function createFlowStore(userDataDir) {
     for (const old of scene.generations.splice(0, Math.max(0, scene.generations.length - MAX_SCENE_GENERATIONS))) {
       for (const file of old.files) fs.rmSync(path.join(dir, file), { force: true });
     }
-    // The chosen image goes away with its generation
-    if (scene.selectedFile && !scene.generations.some((generation) => generation.files.includes(scene.selectedFile))) {
-      scene.selectedFile = null;
-    }
+    // Regenerating replaces the images the user sees: a single image is the choice by itself, several are
+    // chosen again among the new ones
+    if (files.length === 1) scene.selectedFile = files[0];
+    else if (scene.selectedFile && !files.includes(scene.selectedFile)) scene.selectedFile = null;
     fs.mkdirSync(videoDir(videoId), { recursive: true });
     writeAtomic(scenesIndexFile(videoId), JSON.stringify(scenes, null, 2));
     return scene;
@@ -501,6 +506,8 @@ function createFlowService({
     finishJob();
     if (failed.kind === 'scene' || failed.kind === 'animation') {
       itemStatus(failed.kind, failed.videoId, (failed.scene ?? failed.animation).number, 'error', { error: message });
+      // Flow's usage limit fails every following request too: stop the queue instead of burning through it
+      if (USAGE_LIMIT.test(message)) dropQueue('error', USAGE_LIMIT_STOP);
       pump();
     } else {
       pushToWindow('flow:error', { videoId: failed.videoId, characterKey: failed.characterKey, message });
@@ -632,7 +639,11 @@ function createFlowService({
   // Reference images of a scene: the selected image of every character its sheet labels name
   function referencesFor(item) {
     if (item.sheetRefs.length === 0) return [];
-    const characters = store.list(item.videoId);
+    // Only the characters of the chat's current sheets: leftovers of another chat or of a renamed
+    // sheet answer to the same "Personaje N" and would be picked instead of the approved one
+    const all = store.list(item.videoId);
+    const keys = item.characterKeys ?? [];
+    const characters = keys.length > 0 ? all.filter((character) => keys.includes(character.key)) : all;
     const references = [];
     const seen = new Set();
     for (const { ref, character } of resolveSheets(characters, item.sheetRefs)) {
@@ -682,7 +693,7 @@ function createFlowService({
           prompt: references.length > 0 ? scenePromptForFlow(item.prompt, item.sheetRefs) : item.prompt,
           projectUrl: video.flowProjectUrl ?? null,
           model: FLOW_MODEL,
-          outputs: FLOW_OUTPUTS,
+          outputs: SCENE_OUTPUTS,
           references,
         });
       } catch (error) {
@@ -693,10 +704,14 @@ function createFlowService({
   }
 
   // scenes: [{ number, title, prompt, sheetRefs }]; queued in the given order, one Flow job at a time
-  function generateScenes({ videoId, scenes } = {}) {
+  // characterKeys: keys of the characters in the chat's latest sheet message (optional)
+  function generateScenes({ videoId, scenes, characterKeys = [] } = {}) {
     validVideoId(videoId);
     if (!findVideo(videoId)) throw new Error('Video no encontrado.');
     if (!Array.isArray(scenes) || scenes.length === 0 || scenes.length > SCENES_PER_BATCH_MAX) throw new Error('Lista de escenas no válida.');
+    if (!Array.isArray(characterKeys) || characterKeys.length > 50 || !characterKeys.every((key) => typeof key === 'string' && CHARACTER_KEY.test(key))) {
+      throw new Error('Lista de personajes no válida.');
+    }
     if (job?.kind === 'character') throw new Error('Hay una generación de personaje en curso. Espera a que termine.');
     if (!bridge.isConnected()) throw new Error('La extensión del navegador no está conectada.');
 
@@ -712,6 +727,7 @@ function createFlowService({
         title: boundedText(scene?.title ?? '', NAME_MAX, 'scene title'),
         prompt,
         sheetRefs,
+        characterKeys,
       };
     });
 
