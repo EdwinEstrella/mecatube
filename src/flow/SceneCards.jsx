@@ -32,7 +32,8 @@ function sceneHeading(scene) {
 }
 
 // Presentational: one card per image prompt. The container owns the queue, records and sending.
-function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSelect }) {
+// labels (optional): { heading, generate, regenerate, images } overrides for non-scene items (the thumbnail)
+function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSelect, labels = {} }) {
   // Only the latest pair: regenerating replaces the previous images
   const files = latestFiles(record);
   const label = sceneStatusLabel(status, record);
@@ -42,7 +43,7 @@ function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSel
   return (
     <li className="char-card scene-card">
       <div className="char-card__header">
-        <h3 className="char-card__title">{sceneHeading(scene)}</h3>
+        <h3 className="char-card__title">{labels.heading ?? sceneHeading(scene)}</h3>
         {scene.hook && <span className="scene-card__badge scene-card__badge--hook">Gancho</span>}
         {label.text && <span className={`scene-card__badge scene-card__badge--${label.tone}`}>{label.text}</span>}
       </div>
@@ -63,7 +64,7 @@ function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSel
 
       <div className="char-card__actions">
         <button type="button" className="idea-card__choose" disabled={!canStart || active} onClick={() => onGenerate(scene)}>
-          {files.length > 0 ? 'Regenerar en Flow' : 'Generar en Flow'}
+          {files.length > 0 ? (labels.regenerate ?? 'Regenerar en Flow') : (labels.generate ?? 'Generar en Flow')}
         </button>
       </div>
 
@@ -75,7 +76,7 @@ function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSel
       {status?.state === 'error' && status.error && <p className="char-card__error">{status.error}</p>}
 
       {files.length > 0 && (
-        <ul className="scene-card__grid" aria-label={`Imágenes de la escena ${scene.number}`}>
+        <ul className="scene-card__grid" aria-label={labels.images ?? `Imágenes de la escena ${scene.number}`}>
           {files.map((file) => {
             const selected = record.selectedFile === file;
             return (
@@ -103,6 +104,38 @@ function SceneCard({ scene, record, status, videoId, canStart, onGenerate, onSel
         </ul>
       )}
     </li>
+  );
+}
+
+const THUMBNAIL_LABELS = {
+  generate: 'Generar miniatura en Flow',
+  regenerate: 'Regenerar miniatura',
+  images: 'Imágenes de la miniatura',
+};
+
+// The thumbnail: one card on the scene pipeline (reserved scene number), without the block bar.
+// thumbnail: parseThumbnail result; flow: the useFlowScenes result
+export function ThumbnailCard({ thumbnail, flow, characterBusy }) {
+  const canStart = flow.connected && !characterBusy;
+  const heading = thumbnail.title ? `Miniatura · ${thumbnail.title}` : 'Miniatura';
+  return (
+    <div className="char-cards scene-cards">
+      {!flow.connected && <p className="char-card__hint">Conecta la extensión del navegador para generar en Flow.</p>}
+      {characterBusy && <p className="char-card__hint">Hay una hoja de personaje generándose; espera a que termine.</p>}
+      {flow.error && <p className="char-card__error">{flow.error}</p>}
+      <ol className="char-cards__list">
+        <SceneCard
+          scene={thumbnail}
+          record={flow.records[thumbnail.number]}
+          status={flow.statuses[thumbnail.number]}
+          videoId={flow.videoId}
+          canStart={canStart}
+          onGenerate={(item) => flow.generate([item])}
+          onSelect={flow.select}
+          labels={{ ...THUMBNAIL_LABELS, heading }}
+        />
+      </ol>
+    </div>
   );
 }
 

@@ -47,6 +47,18 @@ function takeHook(rest) {
   return { text: segments.join(' · '), hook: true };
 }
 
+// Sheet labels ("hoja 1", "hojas 1 y 2", "hoja 1B") found in a heading, uppercased, in order, no repeats
+export function parseSheetRefs(text) {
+  const sheetRefs = [];
+  for (const match of String(text ?? '').matchAll(SHEETS)) {
+    for (const item of match[1].matchAll(SHEET_ITEM)) {
+      const ref = item[0].toUpperCase();
+      if (!sheetRefs.includes(ref)) sheetRefs.push(ref);
+    }
+  }
+  return sheetRefs;
+}
+
 function parseHeading(number, rawRest) {
   const { text: tagged, hook } = takeHook(rawRest);
   const text = tagged.trim();
@@ -54,13 +66,7 @@ function parseHeading(number, rawRest) {
   const word = /^([a-z]+)/.exec(plain)?.[1] ?? '';
   const kind = KINDS[word] ?? 'other';
 
-  const sheetRefs = [];
-  for (const match of text.matchAll(SHEETS)) {
-    for (const item of match[1].matchAll(SHEET_ITEM)) {
-      const ref = item[0].toUpperCase();
-      if (!sheetRefs.includes(ref)) sheetRefs.push(ref);
-    }
-  }
+  const sheetRefs = parseSheetRefs(text);
 
   let title = text.replace(SHEET_GROUP, '').replace(/\s*[·•|]\s*hojas?\s.*$/i, '');
   if (kind === 'explanation') {

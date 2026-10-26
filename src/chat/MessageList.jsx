@@ -4,10 +4,11 @@ import IdeaCards from './IdeaCards.jsx';
 import { parseIdeas } from './parseIdeas.js';
 import CharacterCards from '../flow/CharacterCards.jsx';
 import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
-import SceneCards from '../flow/SceneCards.jsx';
+import SceneCards, { ThumbnailCard } from '../flow/SceneCards.jsx';
 import AnimationCards from '../flow/AnimationCards.jsx';
 import { nextStepPrompt } from './nextStep.js';
 import { parseImageScenes } from '../flow/parseImageScenes.js';
+import { parseThumbnail } from '../flow/parseThumbnail.js';
 import { chosenIdeaNumber, hasUserMessageAfter } from './chosenIdea.js';
 import { isScriptMessage } from '../timeline/stages.js';
 import { extractNarration } from '../voice/narration.js';
@@ -109,6 +110,16 @@ export default function MessageList({
       ),
     [messages, parsed, sheets, flow?.available, scenes?.available],
   );
+  // Thumbnail delivery (ETAPA 5): one card with a "Generar miniatura en Flow" button
+  const thumbnails = useMemo(
+    () =>
+      messages.map((message, index) =>
+        flow?.available && scenes?.available && message.role === 'assistant' && !parsed[index] && !sheets[index] && !imageBlocks[index]
+          ? parseThumbnail(message.content)
+          : null,
+      ),
+    [messages, parsed, sheets, imageBlocks, flow?.available, scenes?.available],
+  );
   const latestSheetsIndex = sheets.reduce((latest, result, index) => (result ? index : latest), -1);
   // Narration length per finished script message; null for every other message
   const narrationLengths = useMemo(
@@ -174,6 +185,20 @@ export default function MessageList({
               {!hasUserMessageAfter(messages, index) && (
                 <NextStepButtons step={nextStepPrompt(message.content)} canSend={canSend} onSend={onSend} />
               )}
+              <details className="char-original">
+                <summary>Mensaje original</summary>
+                <Markdown>{message.content}</Markdown>
+              </details>
+            </div>
+          );
+        }
+        const thumbnail = thumbnails[index];
+        if (thumbnail) {
+          return (
+            <div key={message.id} className="chat-message chat-message--assistant chat-message--ideas">
+              {thumbnail.intro && <Markdown>{thumbnail.intro}</Markdown>}
+              <ThumbnailCard thumbnail={thumbnail} flow={scenes} characterBusy={flow.job !== null} />
+              {thumbnail.outro && <Markdown>{thumbnail.outro}</Markdown>}
               <details className="char-original">
                 <summary>Mensaje original</summary>
                 <Markdown>{message.content}</Markdown>
