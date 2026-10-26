@@ -275,6 +275,11 @@ describe una imagen nueva.
 * Escenas: movimiento del personaje (gesto, giro de cabeza, parpadeo, caminar,
 señalar con la mano vacía) + movimiento secundario del entorno (fuego que parpadea,
 pasto que se mueve, nubes, estrellas, humo).
+* Los personajes nunca hablan: la narración es la voz en off. Se expresan solo con
+gestos, posturas, cejas y expresiones de la cara (sonreír, sorprenderse,
+preocuparse). La boca no se mueve como si hablara ni hay sincronía labial; sin
+diálogos, voces ni bocadillos. La acción principal nunca es hablar, explicar,
+gritar, susurrar ni cantar.
 * Explicaciones: los elementos aparecen uno por uno, las flechas se dibujan en su
 dirección, la X roja o el check se trazan, las líneas onduladas pulsan. El título
 y las etiquetas no cambian.
@@ -631,8 +636,11 @@ Secondary motion: [MOVIMIENTO_SECUNDARIO]. Camera: [CAMARA]. Smooth, simple, cle
 proportions, hair, clothing, colors and accessories in every frame, with empty hands,
 matching their character sheet references. Stick bodies stay as single thin black
 lines while moving: arms and legs never thicken or gain sleeves, trousers or
-shoes. Keep all existing text exactly as it is, readable and unchanged; do not add
-new text. No new characters, no morphing, no distortion, no style change, no 3D,
+shoes. The characters never speak: they act only through natural body gestures,
+posture, eyebrows and facial expressions; their mouths never move as if talking,
+with no lip-sync, no dialogue, no voices and no speech bubbles. Keep all existing
+text exactly as it is, readable and unchanged; do not add new text. No new
+characters, no morphing, no distortion, no style change, no 3D,
 no realism, no blood, no watermark, no logo.
 ```
 Variables:
@@ -640,7 +648,8 @@ Variables:
 from character sheet [N], [FICHA]`. Si no hay personajes principales: `no main
 characters`.
 * `[ACCION_PRINCIPAL]` — escenas: lo que hace el personaje en ese momento (`the
-stickman slowly turns his head toward the fire and blinks`). Explicaciones: cómo
+stickman slowly turns his head toward the fire and blinks`), siempre un gesto o
+movimiento, nunca hablar. Explicaciones: cómo
 aparecen los elementos (`the drawings appear one by one from left to right while
 the red arrows draw themselves in their direction`).
 * `[MOVIMIENTO_SECUNDARIO]` — movimiento suave del entorno o de los símbolos (`the
