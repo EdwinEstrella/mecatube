@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="45%" stop-color="#2e1065" />
+      <stop offset="85%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#635BFF" />
+    </linearGradient>
+
+    <!-- Ambient Glow Blobs -->
+    <radialGradient id="glow-left" cx="20%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ec4899" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#1e1b4b" stop-opacity="0" />
+    </radialGradient>
+
+    <radialGradient id="glow-right" cx="85%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#635BFF" stop-opacity="0" />
+    </radialGradient>
+
+    <radialGradient id="heart-glow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#ff4d6d" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#ff4d6d" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Button Drop Shadow -->
+    <filter id="btn-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+
+    <style>
+      .txt-base {
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+      }
+      .title {
+        font-size: 38px;
+        font-weight: 800;
+        fill: #ffffff;
+        letter-spacing: -0.5px;
+      }
+      .subtitle {
+        font-size: 20px;
+        font-weight: 400;
+        fill: #e0e7ff;
+      }
+      .btn-text {
+        font-size: 19px;
+        font-weight: 700;
+        fill: #635BFF;
+        letter-spacing: 0.3px;
+      }
+      .footer-text {
+        font-size: 13px;
+        font-weight: 500;
+        fill: #c7d2fe;
+      }
+      
+      /* Subtle Keyframe Animations */
+      @keyframes heartPulse {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.18);
+        }
+      }
+      @keyframes twinkle {
+        0%, 100% {
+          opacity: 0.35;
+          transform: scale(0.85);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.2);
+        }
+      }
+      @keyframes floatSoft {
+        0%, 100% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-4px);
+        }
+      }
+
+      .animated-heart {
+        transform-origin: 232px 125px;
+        animation: heartPulse 1.8s ease-in-out infinite;
+      }
+      .sparkle-1 {
+        transform-origin: 270px 75px;
+        animation: twinkle 2.2s ease-in-out infinite;
+      }
+      .sparkle-2 {
+        transform-origin: 95px 105px;
+        animation: twinkle 2.6s ease-in-out infinite 0.6s;
+      }
+      .sparkle-3 {
+        transform-origin: 250px 200px;
+        animation: twinkle 2s ease-in-out infinite 1.1s;
+      }
+      .sparkle-right {
+        transform-origin: 1080px 140px;
+        animation: twinkle 3s ease-in-out infinite 0.4s;
+      }
+      .stickman-group {
+        animation: floatSoft 4s ease-in-out infinite;
+      }
+      .btn-group {
+        transition: transform 0.2s ease;
+        cursor: pointer;
+      }
+    </style>
+  </defs>
+
+  <!-- Base Rounded Card -->
+  <rect width="1200" height="300" rx="24" fill="url(#bg-grad)" />
+
+  <!-- Soft Ambient Glow Overlays -->
+  <rect width="1200" height="300" rx="24" fill="url(#glow-left)" />
+  <rect width="1200" height="300" rx="24" fill="url(#glow-right)" />
+
+  <!-- Subtle Border Highlight -->
+  <rect x="0.5" y="0.5" width="1199" height="299" rx="23.5" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1" />
+
+  <!-- ==================== LEFT: STICKMAN & HEART ==================== -->
+  <g class="stickman-group">
+    <!-- Heart Glow Ambient Circle -->
+    <circle cx="232" cy="125" r="45" fill="url(#heart-glow)" />
+
+    <!-- Sparkles / Stars -->
+    <!-- Sparkle 1 (top right) -->
+    <g class="sparkle-1">
+      <path d="M 270 65 Q 270 75 280 75 Q 270 75 270 85 Q 270 75 260 75 Q 270 75 270 65 Z" fill="#ffd166" />
+    </g>
+    <!-- Sparkle 2 (top left) -->
+    <g class="sparkle-2">
+      <path d="M 95 97 Q 95 105 103 105 Q 95 105 95 113 Q 95 105 87 105 Q 95 105 95 97 Z" fill="#ffffff" opacity="0.9" />
+    </g>
+    <!-- Sparkle 3 (bottom right) -->
+    <g class="sparkle-3">
+      <path d="M 250 193 Q 250 200 257 200 Q 250 200 250 207 Q 250 200 243 200 Q 250 200 250 193 Z" fill="#fbcfe8" />
+    </g>
+
+    <!-- Stickman Body Elements -->
+    <!-- Head -->
+    <circle cx="160" cy="95" r="32" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+    <!-- Happy Face: Eyes -->
+    <circle cx="151" cy="92" r="3" fill="#ffffff" />
+    <circle cx="169" cy="92" r="3" fill="#ffffff" />
+    <!-- Happy Smile -->
+    <path d="M 152 103 Q 160 112 168 103" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" />
+
+    <!-- Torso -->
+    <line x1="160" y1="127" x2="160" y2="205" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Left Arm (Waving enthusiastically) -->
+    <path d="M 160 148 Q 125 152 108 122" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Right Arm (Offering the heart) -->
+    <path d="M 160 152 Q 192 155 220 134" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Left Leg -->
+    <path d="M 160 205 L 132 262" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Right Leg -->
+    <path d="M 160 205 L 188 262" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Animated Red Heart held in hand -->
+    <g class="animated-heart">
+      <path d="M 232 135 C 232 135 214 123 214 113 C 214 105 220 100 227 100 C 230 100 232 103 232 103 C 232 103 234 100 237 100 C 244 100 250 105 250 113 C 250 123 232 135 232 135 Z"
+            fill="#ef4444" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" />
+      <!-- Heart shine highlight -->
+      <path d="M 220 105 C 217 107 216 111 217 114" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" opacity="0.8" />
+    </g>
+  </g>
+
+  <!-- ==================== CENTER-RIGHT: CONTENT ==================== -->
+  <g transform="translate(350, 0)">
+    <!-- Title -->
+    <text x="0" y="88" class="txt-base title">&#191;Te gusta Mecatube?</text>
+
+    <!-- Subtitle -->
+    <text x="0" y="128" class="txt-base subtitle">Apoya el proyecto y ay&#250;danos a crear m&#225;s herramientas gratis</text>
+
+    <!-- Action Button (Pill shape) -->
+    <g class="btn-group" transform="translate(0, 160)">
+      <!-- Outer White Pill Button -->
+      <rect x="0" y="0" width="225" height="52" rx="26" fill="#ffffff" filter="url(#btn-shadow)" />
+      <!-- Inner text with heart symbol -->
+      <text x="112" y="32" class="txt-base btn-text" text-anchor="middle">&#10084; Donar ahora</text>
+    </g>
+
+    <!-- Security & Stripe Notice -->
+    <g transform="translate(4, 244)">
+      <!-- Mini Shield / Lock Icon -->
+      <path d="M 2 3 L 8 0.5 L 14 3 C 14 7.5 11 11.5 8 13 C 5 11.5 2 7.5 2 3 Z" fill="none" stroke="#a5b4fc" stroke-width="1.5" stroke-linejoin="round" />
+      <path d="M 6 6.5 L 7.5 8 L 10.5 5" fill="none" stroke="#a5b4fc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      <!-- Trust text -->
+      <text x="22" y="10" class="txt-base footer-text">Pago seguro con Stripe</text>
+    </g>
+  </g>
+
+  <!-- ==================== RIGHT DECORATIVE ELEMENTS ==================== -->
+  <!-- Subtle decorative creative/video sparkles on far right -->
+  <g opacity="0.45">
+    <circle cx="1060" cy="80" r="3" fill="#ffffff" />
+    <circle cx="1120" cy="180" r="4" fill="#c7d2fe" />
+    <circle cx="1020" cy="220" r="2.5" fill="#fbcfe8" />
+    
+    <!-- Video play / creator badge doodle -->
+    <rect x="1040" y="120" width="60" height="42" rx="10" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-opacity="0.3" />
+    <polygon points="1066,133 1079,141 1066,149" fill="#ffffff" fill-opacity="0.4" />
+
+    <!-- Starburst on right -->
+    <g class="sparkle-right">
+      <path d="M 1120 70 Q 1120 80 1130 80 Q 1120 80 1120 90 Q 1120 80 1110 80 Q 1120 80 1120 70 Z" fill="#ffd166" opacity="0.7" />
+    </g>
+  </g>
+</svg>
