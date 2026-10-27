@@ -79,7 +79,7 @@ export function isScriptMessage(content) {
 
 // ETAPA 4 output format (prompt-1.txt L456-467): "METADATOS DE PUBLICACION", or the
 // "1. TITULOS" and "4. ETIQUETAS" section headings together
-function isMetadata(lines) {
+export function isMetadata(lines) {
   if (test(lines, /^(?:\d+[.)] ?)?metadatos de publicacion:?$/)) return true;
   return (
     test(lines, /^(?:\d+[.)] ?)?titulos:?(?: \(.*\))?$/) && test(lines, /^(?:\d+[.)] ?)?etiquetas:?(?: \(.*\))?$/)

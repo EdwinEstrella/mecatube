@@ -118,6 +118,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openExportFolder: (videoId) =>
     ipcRenderer.invoke('editor:open-export-folder', typeof videoId === 'object' && videoId !== null ? videoId : { videoId }),
+  saveThumbnail: (payload, maybeSourcePath) => {
+    const videoId = typeof payload === 'object' && payload !== null ? payload.videoId : payload;
+    const sourcePath = typeof payload === 'object' && payload !== null ? payload.sourcePath : maybeSourcePath;
+    return ipcRenderer.invoke('editor:save-thumbnail', { videoId, sourcePath });
+  },
   getPromptOverrides: () => ipcRenderer.invoke('prompts:get-overrides'),
   savePrompt: (id, text) => ipcRenderer.invoke('prompts:save', { id, text }),
   resetPrompt: (id) => ipcRenderer.invoke('prompts:reset', { id }),

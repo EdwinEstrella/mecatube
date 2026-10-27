@@ -180,6 +180,83 @@ async function test(name, fn) {
       assert.equal(fs.readFileSync(finalPath, 'utf8'), 'abcdef');
     });
 
+    await test('saveThumbnail copies thumbnail to final folder with correct name and extension', () => {
+      const videoId = 'video-test-thumb';
+      const sceneDir = path.join(tmpWorkspace, 'videos', videoId, 'scenes', '9999');
+      fs.mkdirSync(sceneDir, { recursive: true });
+      const srcFile = path.join(sceneDir, 'thumbnail-gen.webp');
+      fs.writeFileSync(srcFile, 'webp-binary-data');
+
+      const savedPath = service.saveThumbnail({
+        videoId,
+        sourcePath: 'scenes/9999/thumbnail-gen.webp',
+      });
+
+      const finalDir = path.join(tmpWorkspace, 'videos', videoId, 'final');
+      const expectedPath = path.join(finalDir, 'miniatura.webp');
+      assert.equal(savedPath, expectedPath);
+      assert.ok(fs.existsSync(expectedPath));
+      assert.equal(fs.readFileSync(expectedPath, 'utf8'), 'webp-binary-data');
+
+      // Also accepts absolute path inside video directory and cleans up previous extension
+      const srcPng = path.join(sceneDir, 'thumbnail-2.png');
+      fs.writeFileSync(srcPng, 'png-binary-data');
+      const savedPng = service.saveThumbnail({
+        videoId,
+        sourcePath: srcPng,
+      });
+      const expectedPng = path.join(finalDir, 'miniatura.png');
+      assert.equal(savedPng, expectedPng);
+      assert.ok(fs.existsSync(expectedPng));
+      assert.equal(fs.readFileSync(expectedPng, 'utf8'), 'png-binary-data');
+      assert.ok(!fs.existsSync(expectedPath)); // Previous webp cleaned up
+    });
+
+    await test('saveThumbnail rejects paths outside the video folder and non-existent files', () => {
+      const videoId = 'video-test-thumb-security';
+      const otherVideoDir = path.join(tmpWorkspace, 'videos', 'other-video');
+      fs.mkdirSync(otherVideoDir, { recursive: true });
+      const outsideFile = path.join(otherVideoDir, 'outside.png');
+      fs.writeFileSync(outsideFile, 'data');
+
+      assert.throws(
+        () => service.saveThumbnail({ videoId, sourcePath: outsideFile }),
+        /dentro de la carpeta del video/
+      );
+      assert.throws(
+        () => service.saveThumbnail({ videoId, sourcePath: '../other-video/outside.png' }),
+        /dentro de la carpeta del video/
+      );
+      assert.throws(
+        () => service.saveThumbnail({ videoId, sourcePath: 'scenes/9999/missing.png' }),
+        /no existe/
+      );
+    });
+
+    await test('saveThumbnail rejects bad extensions', () => {
+      const videoId = 'video-test-thumb-ext';
+      const dir = path.join(tmpWorkspace, 'videos', videoId, 'scenes', '9999');
+      fs.mkdirSync(dir, { recursive: true });
+      const badFile = path.join(dir, 'thumb.txt');
+      fs.writeFileSync(badFile, 'text');
+
+      assert.throws(
+        () => service.saveThumbnail({ videoId, sourcePath: 'scenes/9999/thumb.txt' }),
+        /Extensión de miniatura no permitida/
+      );
+      assert.throws(
+        () => service.saveThumbnail({ videoId, sourcePath: 'scenes/9999/thumb.exe' }),
+        /Extensión de miniatura no permitida/
+      );
+    });
+
+    await test('saveThumbnail rejects invalid videoId', () => {
+      assert.throws(
+        () => service.saveThumbnail({ videoId: '../evil', sourcePath: 'thumb.png' }),
+        /ID de video no válido/
+      );
+    });
+
     console.log(`\n${passed} passed`);
   } finally {
     fs.rmSync(tmpWorkspace, { recursive: true, force: true });
