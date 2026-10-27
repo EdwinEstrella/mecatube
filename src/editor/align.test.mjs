@@ -8,6 +8,7 @@ import {
   alignAnchors,
   fillMissing,
   buildAlignedClips,
+  round3,
 } from './align.js';
 
 let failures = 0;
@@ -272,21 +273,21 @@ test('items with source "ai" are not moved by fillMissing', () => {
   assert.equal(filled[2].start, words[8].s);
 });
 
-// 13. buildAlignedClips contiguity, first start 0, last end = duration, short clip dropped
-test('buildAlignedClips enforces contiguity, first start 0, last end duration, and drops short clips with warning', () => {
+// 13. buildAlignedClips contiguity, first start 0, last end = duration, short clip redistributed
+test('buildAlignedClips enforces contiguity, first start 0, last end duration, and keeps all clips with shift warning', () => {
   const alignment = [
     { number: 1, start: 0.8, source: 'anchor' },
     { number: 2, start: 3.0, source: 'anchor' },
-    { number: 3, start: 3.2, source: 'anchor' }, // duration 0.2 < minClip 0.5 -> dropped!
+    { number: 3, start: 3.2, source: 'anchor' },
     { number: 4, start: 6.0, source: 'anchor' },
   ];
 
-  const { clips, warnings } = buildAlignedClips(alignment, 10.0, { minClip: 0.5 });
+  const { clips, warnings } = buildAlignedClips(alignment, 10.0, { minSpan: 1.5 });
 
-  // Clip 3 should be dropped because span 3.2 - 3.0 = 0.2s < 0.5s
-  assert.equal(clips.length, 3);
+  // All 4 clips kept
+  assert.equal(clips.length, 4);
   assert.equal(warnings.length, 1);
-  assert.ok(warnings[0].includes('Dropped clip 2') || warnings[0].includes('Dropped clip 3'));
+  assert.match(warnings[0], /Shifted clip 3 start from 3\.2 to 4\.5/);
 
   // First start forced to 0
   assert.equal(clips[0].start, 0);
@@ -294,12 +295,72 @@ test('buildAlignedClips enforces contiguity, first start 0, last end duration, a
   // Contiguity: each clip ends at next start, last ends at duration
   assert.equal(clips[0].end, clips[1].start);
   assert.equal(clips[1].end, clips[2].start);
-  assert.equal(clips[2].end, 10.0);
+  assert.equal(clips[2].end, clips[3].start);
+  assert.equal(clips[3].end, 10.0);
 
-  // All clips satisfy minClip
+  // All clips satisfy minSpan
   for (const c of clips) {
-    assert.ok(c.end - c.start >= 0.5);
+    assert.ok(round3(c.end - c.start) >= 1.5);
   }
+});
+
+test('buildAlignedClips (a) redistributes crowded clips keeping all spans >= 1.5 and last end duration', () => {
+  const alignment = [
+    { number: 1, start: 0 },
+    { number: 2, start: 10 },
+    { number: 3, start: 10.3 },
+    { number: 4, start: 10.6 },
+  ];
+  const { clips, warnings } = buildAlignedClips(alignment, 20);
+  assert.equal(clips.length, 4);
+  assert.equal(clips[0].start, 0);
+  assert.equal(clips[0].end, 10);
+  assert.equal(clips[1].start, 10);
+  assert.equal(clips[1].end, 11.5);
+  assert.equal(clips[2].start, 11.5);
+  assert.equal(clips[2].end, 13);
+  assert.equal(clips[3].start, 13);
+  assert.equal(clips[3].end, 20);
+  for (const c of clips) {
+    assert.ok(round3(c.end - c.start) >= 1.5);
+  }
+  assert.equal(warnings.length, 2);
+  assert.match(warnings[0], /Shifted clip 3 start from 10\.3 to 11\.5/);
+  assert.match(warnings[1], /Shifted clip 4 start from 10\.6 to 13/);
+});
+
+test('buildAlignedClips (b) n clips where D/n < 1.5 yields equal-ish spans of D/n with no clip dropped', () => {
+  const alignment = [
+    { number: 1, start: 0 },
+    { number: 2, start: 0.2 },
+    { number: 3, start: 0.5 },
+    { number: 4, start: 0.8 },
+  ];
+  const { clips } = buildAlignedClips(alignment, 4.0);
+  assert.equal(clips.length, 4);
+  assert.equal(clips[0].start, 0);
+  assert.equal(clips[3].end, 4.0);
+  for (const c of clips) {
+    const span = round3(c.end - c.start);
+    assert.ok(Math.abs(span - 1.0) <= 0.001);
+  }
+});
+
+test('buildAlignedClips (c) already well-spaced clips are unchanged', () => {
+  const alignment = [
+    { number: 1, start: 0 },
+    { number: 2, start: 5.0 },
+    { number: 3, start: 10.0 },
+  ];
+  const { clips, warnings } = buildAlignedClips(alignment, 15.0);
+  assert.equal(clips.length, 3);
+  assert.equal(warnings.length, 0);
+  assert.equal(clips[0].start, 0);
+  assert.equal(clips[0].end, 5.0);
+  assert.equal(clips[1].start, 5.0);
+  assert.equal(clips[1].end, 10.0);
+  assert.equal(clips[2].start, 10.0);
+  assert.equal(clips[2].end, 15.0);
 });
 
 // 14. Edge cases

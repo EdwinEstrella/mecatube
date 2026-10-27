@@ -237,13 +237,13 @@ test('defaultStyling produces valid EDL v1', () => {
   assert.deepEqual(edl.subtitles, []);
 });
 
-test('applyStyling drops clips < 2.0s when keep:false and absorbs into previous or next clip', () => {
+test('applyStyling never drops clips regardless of keep:false or duration', () => {
   const fixedClips = [
-    { number: 1, start: 0.0, end: 1.5 }, // 1.5s -> first clip, dropped
-    { number: 2, start: 1.5, end: 5.0 }, // 3.5s -> kept, absorbs clip 1
-    { number: 3, start: 5.0, end: 6.2 }, // 1.2s -> dropped, absorbed by clip 2
-    { number: 4, start: 6.2, end: 9.0 }, // 2.8s -> keep:false but duration >= 2s, MUST BE KEPT
-    { number: 5, start: 9.0, end: 12.0 }, // 3.0s -> kept
+    { number: 1, start: 0.0, end: 1.5 },
+    { number: 2, start: 1.5, end: 5.0 },
+    { number: 3, start: 5.0, end: 6.2 },
+    { number: 4, start: 6.2, end: 9.0 },
+    { number: 5, start: 9.0, end: 12.0 },
   ];
 
   const aiRaw = JSON.stringify({
@@ -260,32 +260,70 @@ test('applyStyling drops clips < 2.0s when keep:false and absorbs into previous 
   assert.ok(edl);
   assert.equal(warnings.length, 0);
 
-  // Dropped list has clips 1 and 3
-  assert.deepEqual(edl.dropped, [
-    { number: 1, reason: 'Demasiado corto al inicio' },
-    { number: 3, reason: 'Transición innecesaria de 1.2s' },
-  ]);
+  // Dropped list is empty
+  assert.deepEqual(edl.dropped, []);
 
-  // Kept clips are 2, 4, 5
-  assert.equal(edl.clips.length, 3);
+  // All 5 clips are kept with fixed timings
+  assert.equal(edl.clips.length, 5);
 
-  // Clip 2 absorbed clip 1: start 0.0, end 6.2 (absorbing clip 3 too!)
-  assert.equal(edl.clips[0].number, 2);
+  assert.equal(edl.clips[0].number, 1);
   assert.equal(edl.clips[0].start, 0.0);
-  assert.equal(edl.clips[0].end, 6.2);
-  assert.equal(edl.clips[0].reason, 'Inicio absorbido');
+  assert.equal(edl.clips[0].end, 1.5);
+  assert.equal(edl.clips[0].reason, 'Demasiado corto al inicio');
 
-  // Clip 4 was >= 2.0s so keep:false was ignored
-  assert.equal(edl.clips[1].number, 4);
-  assert.equal(edl.clips[1].start, 6.2);
-  assert.equal(edl.clips[1].end, 9.0);
-  assert.equal(edl.clips[1].reason, 'Intento de descarte pero dura 2.8s');
+  assert.equal(edl.clips[1].number, 2);
+  assert.equal(edl.clips[1].start, 1.5);
+  assert.equal(edl.clips[1].end, 5.0);
+  assert.equal(edl.clips[1].transition, 'fade');
+  assert.equal(edl.clips[1].motion, 'zoom-in');
+  assert.equal(edl.clips[1].reason, 'Inicio absorbido');
 
-  // Clip 5
-  assert.equal(edl.clips[2].number, 5);
-  assert.equal(edl.clips[2].start, 9.0);
-  assert.equal(edl.clips[2].end, 12.0);
-  assert.equal(edl.clips[2].reason, 'Final estable');
+  assert.equal(edl.clips[2].number, 3);
+  assert.equal(edl.clips[2].start, 5.0);
+  assert.equal(edl.clips[2].end, 6.2);
+  assert.equal(edl.clips[2].reason, 'Transición innecesaria de 1.2s');
+
+  assert.equal(edl.clips[3].number, 4);
+  assert.equal(edl.clips[3].start, 6.2);
+  assert.equal(edl.clips[3].end, 9.0);
+  assert.equal(edl.clips[3].transition, 'zoom');
+  assert.equal(edl.clips[3].motion, 'pan-left');
+  assert.equal(edl.clips[3].reason, 'Intento de descarte pero dura 2.8s');
+
+  assert.equal(edl.clips[4].number, 5);
+  assert.equal(edl.clips[4].start, 9.0);
+  assert.equal(edl.clips[4].end, 12.0);
+  assert.equal(edl.clips[4].transition, 'cut');
+  assert.equal(edl.clips[4].motion, 'none');
+  assert.equal(edl.clips[4].reason, 'Final estable');
+});
+
+test('applyStyling keeps clip and leaves dropped empty when AI returns keep:false for 0.7s clip', () => {
+  const fixedClips = [
+    { number: 1, start: 0.0, end: 5.0 },
+    { number: 2, start: 5.0, end: 5.7 },
+    { number: 3, start: 5.7, end: 10.0 },
+  ];
+
+  const aiRaw = JSON.stringify({
+    clips: [
+      { number: 1, keep: true, transition: 'fade', motion: 'zoom-in' },
+      { number: 2, keep: false, transition: 'cut', motion: 'none', reason: 'Muy corto' },
+      { number: 3, keep: true, transition: 'cut', motion: 'zoom-out' },
+    ],
+  });
+
+  const { edl, warnings } = applyStyling(fixedClips, aiRaw, { duration: 10.0 });
+  assert.ok(edl);
+  assert.equal(warnings.length, 0);
+  assert.equal(edl.clips.length, 3);
+  assert.equal(edl.clips[1].number, 2);
+  assert.equal(edl.clips[1].start, 5.0);
+  assert.equal(edl.clips[1].end, 5.7);
+  assert.equal(edl.clips[1].transition, 'cut');
+  assert.equal(edl.clips[1].motion, 'none');
+  assert.equal(edl.clips[1].reason, 'Muy corto');
+  assert.deepEqual(edl.dropped, []);
 });
 
 if (failures > 0) {

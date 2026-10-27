@@ -360,7 +360,9 @@ export function fillMissing(alignment, words, duration) {
   return items;
 }
 
-export function buildAlignedClips(alignment, duration, { minClip = 0.5 } = {}) {
+// Never drops clips: crowded starts are shifted so each clip lasts at least minSpan
+// (or duration / count when the timeline is too short for that).
+export function buildAlignedClips(alignment, duration, { minSpan = 1.5 } = {}) {
   const warnings = [];
   const roundedDuration = round3(duration);
 
@@ -373,7 +375,7 @@ export function buildAlignedClips(alignment, duration, { minClip = 0.5 } = {}) {
     return { clips: [], warnings };
   }
 
-  let current = alignment
+  const current = alignment
     .filter(
       (item) =>
         item !== null &&
@@ -393,44 +395,54 @@ export function buildAlignedClips(alignment, duration, { minClip = 0.5 } = {}) {
   }
 
   current.sort((a, b) => a.start - b.start || a.number - b.number);
+  current[0].start = 0;
 
-  let changed = true;
-  while (changed && current.length > 0) {
-    changed = false;
-    current[0].start = 0;
+  const n = current.length;
+  const D = roundedDuration;
+  const m = Math.min(minSpan, D / n);
 
-    for (let i = 0; i < current.length; i += 1) {
-      const clip = current[i];
-      const start = i === 0 ? 0 : round3(clip.start);
-      const nextStart = i === current.length - 1 ? roundedDuration : round3(current[i + 1].start);
-      const span = round3(nextStart - start);
+  const s = new Array(n + 1);
+  for (let i = 0; i < n; i += 1) {
+    s[i] = current[i].start;
+  }
+  s[0] = 0;
+  s[n] = D;
 
-      if (span < minClip) {
-        warnings.push(
-          `Dropped clip ${clip.number}: duration ${span}s is shorter than minClip (${minClip}s).`
-        );
-        current.splice(i, 1);
-        changed = true;
-        break;
-      }
+  const origStarts = [...s];
+
+  // Forward pass: s[i] = max(s[i], s[i-1] + m)
+  for (let i = 1; i < n; i += 1) {
+    s[i] = Math.max(s[i], s[i - 1] + m);
+  }
+
+  // Backward pass with s[n] = D: s[i] = min(s[i], s[i+1] - m) for i from n-1 down to 1
+  for (let i = n - 1; i >= 1; i -= 1) {
+    s[i] = Math.min(s[i], s[i + 1] - m);
+  }
+  s[0] = 0;
+
+  // Round with round3
+  for (let i = 0; i < n; i += 1) {
+    s[i] = round3(s[i]);
+  }
+  s[n] = D;
+
+  const mFormatted = round3(m);
+  for (let i = 1; i < n; i += 1) {
+    if (s[i] !== origStarts[i]) {
+      warnings.push(
+        `Shifted clip ${current[i].number} start from ${origStarts[i]} to ${s[i]} to keep it at least ${mFormatted}s.`
+      );
     }
   }
 
-  if (current.length === 0) {
-    return { clips: [], warnings };
-  }
-
-  current[0].start = 0;
   const clips = [];
-  for (let i = 0; i < current.length; i += 1) {
-    const clip = current[i];
-    const start = i === 0 ? 0 : round3(clip.start);
-    const end = i === current.length - 1 ? roundedDuration : round3(current[i + 1].start);
+  for (let i = 0; i < n; i += 1) {
     clips.push({
-      number: clip.number,
-      start,
-      end,
-      source: clip.source,
+      number: current[i].number,
+      start: s[i],
+      end: s[i + 1],
+      source: current[i].source,
     });
   }
 

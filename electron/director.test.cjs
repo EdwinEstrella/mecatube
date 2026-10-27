@@ -48,6 +48,10 @@ async function test(name, fn) {
       assert.match(messages[0].content, /senior YouTube video editor/i);
       assert.match(messages[0].content, /cut\|fade\|slide\|zoom/);
       assert.match(messages[0].content, /none\|zoom-in\|zoom-out\|pan-left\|pan-right/);
+      assert.match(messages[0].content, /Every clip must be used; never drop clips\. For very short moments prefer a plain cut and motion none\./);
+      assert.doesNotMatch(messages[0].content, /Drop \(keep: false\)/);
+      assert.doesNotMatch(messages[0].content, /or why dropped/);
+      assert.doesNotMatch(messages[0].content, /"keep": <bool>/);
 
       assert.equal(messages[1].role, 'user');
       const payload = JSON.parse(messages[1].content);

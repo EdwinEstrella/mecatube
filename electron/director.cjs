@@ -21,15 +21,14 @@ const DIRECTOR_SYSTEM_PROMPT =
   'Editing guidance:\n' +
   '- Choose transitions by narrative function: "cut" by default, "fade" for topic/section changes, "zoom" for reveals and strong emphasis, "slide" rarely.\n' +
   '- Choose motion by content: "zoom-in" for tension or detail, "pan-left" or "pan-right" for landscapes or maps, "zoom-out" for reveals or wide context, "none" for explainer infographics with text so they stay readable.\n' +
-  '- Drop (keep: false) ONLY crowded moments shorter than 2.0 s with low narrative weight. Never drop moments >= 2.0 s.\n' +
-  '- Write a short reason in Spanish (<= 140 chars) justifying each editing decision (why this cut/transition/motion, or why dropped).\n\n' +
+  '- Every clip must be used; never drop clips. For very short moments prefer a plain cut and motion none.\n' +
+  '- Write a short reason in Spanish (<= 140 chars) justifying each editing decision (why this cut/transition/motion).\n\n' +
   'Rules:\n' +
   '1. Output ONLY one JSON object, no prose, no code fences. Output exactly this shape with one entry per given clip, in the same order:\n' +
   '   {\n' +
   '     "clips": [\n' +
   '       {\n' +
   '         "number": <int>,\n' +
-  '         "keep": <bool>,\n' +
   '         "transition": "<cut|fade|slide|zoom>",\n' +
   '         "motion": "<none|zoom-in|zoom-out|pan-left|pan-right>",\n' +
   '         "reason": "<short justification in Spanish, max 140 chars>"\n' +
