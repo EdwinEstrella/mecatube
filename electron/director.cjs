@@ -14,25 +14,29 @@ const MAX_NOTES_CHARS = 500;
 const MAX_EDL_BYTES = 2 * 1024 * 1024;
 
 const DIRECTOR_SYSTEM_PROMPT =
-  'You are a professional YouTube video editor for narrated faceless videos.\n' +
-  'Clip timings and order are FIXED. Your role is ONLY to choose the transition and motion for each clip.\n\n' +
+  'You are a senior YouTube video editor for narrated faceless videos.\n' +
+  'Clip positions and order are fixed by the script. Each video starts when its moment starts and is cut exactly when the next moment starts.\n\n' +
   'Allowed transitions: cut | fade | slide | zoom\n' +
   'Allowed motions: none | zoom-in | zoom-out | pan-left | pan-right\n\n' +
-  'Pacing guidance:\n' +
-  '- Opening hook: faster cuts and dynamic motion.\n' +
-  '- Mostly use \'cut\' transitions.\n' +
-  '- Use \'fade\' on topic changes.\n' +
-  '- Use \'zoom\' for reveals and strong emphasis.\n' +
-  '- Use \'slide\' rarely.\n' +
-  '- Vary motion so consecutive clips differ (alternate zoom-in / zoom-out, pan-left / pan-right).\n\n' +
+  'Editing guidance:\n' +
+  '- Choose transitions by narrative function: "cut" by default, "fade" for topic/section changes, "zoom" for reveals and strong emphasis, "slide" rarely.\n' +
+  '- Choose motion by content: "zoom-in" for tension or detail, "pan-left" or "pan-right" for landscapes or maps, "zoom-out" for reveals or wide context, "none" for explainer infographics with text so they stay readable.\n' +
+  '- Drop (keep: false) ONLY crowded moments shorter than 2.0 s with low narrative weight. Never drop moments >= 2.0 s.\n' +
+  '- Write a short reason in Spanish (<= 140 chars) justifying each editing decision (why this cut/transition/motion, or why dropped).\n\n' +
   'Rules:\n' +
   '1. Output ONLY one JSON object, no prose, no code fences. Output exactly this shape with one entry per given clip, in the same order:\n' +
   '   {\n' +
   '     "clips": [\n' +
-  '       { "number": <int>, "transition": "<cut|fade|slide|zoom>", "motion": "<none|zoom-in|zoom-out|pan-left|pan-right>" }\n' +
+  '       {\n' +
+  '         "number": <int>,\n' +
+  '         "keep": <bool>,\n' +
+  '         "transition": "<cut|fade|slide|zoom>",\n' +
+  '         "motion": "<none|zoom-in|zoom-out|pan-left|pan-right>",\n' +
+  '         "reason": "<short justification in Spanish, max 140 chars>"\n' +
+  '       }\n' +
   '     ]\n' +
   '   }\n' +
-  '2. No timings, no subtitles (positions and captions are fixed).\n' +
+  '2. Write reasons in Spanish.\n' +
   '3. If notes are given, they are creator instructions for styling and take priority over style preferences.';
 
 const ALIGN_SYSTEM_PROMPT =
@@ -40,7 +44,7 @@ const ALIGN_SYSTEM_PROMPT =
   'Scenes are in script order and each scene illustrates the START of one moment.\n\n' +
   'Input:\n' +
   '- phrases: numbered narration phrases [{ "i": <int>, "text": "<string>" }] in chronological order.\n' +
-  '- scenes: scenes to place [{ "number": <int>, "title": "<string>", "prompt": "<string>", "needed": <bool>, "fixedPhrase": <int|null> }].\n\n' +
+  '- scenes: scenes to place [{ "number": <int>, "title": "<string>", "summary": "<string>", "needed": <bool>, "fixedPhrase": <int|null> }].\n\n' +
   'Rules:\n' +
   '1. Output ONLY a single JSON object, no prose, no code fences:\n' +
   '   {"assignments":[{"number":N,"phrase":i}]}\n' +
@@ -63,12 +67,23 @@ function writeAtomic(file, data) {
 function buildDirectorMessages({ duration, clips, notes }) {
   const userPayload = {
     duration,
-    clips: (Array.isArray(clips) ? clips : []).map((c) => ({
-      number: c.number,
-      start: c.start,
-      end: c.end,
-      text: c.text,
-    })),
+    clips: (Array.isArray(clips) ? clips : []).map((c) => {
+      const dur =
+        typeof c.duration === 'number' && Number.isFinite(c.duration)
+          ? Math.round((c.duration + Number.EPSILON) * 1000) / 1000
+          : typeof c.start === 'number' && typeof c.end === 'number'
+            ? Math.round((c.end - c.start + Number.EPSILON) * 1000) / 1000
+            : undefined;
+      return {
+        number: c.number,
+        start: c.start,
+        end: c.end,
+        ...(dur !== undefined ? { duration: dur } : {}),
+        text: c.text,
+        ...(typeof c.summary === 'string' ? { summary: c.summary } : {}),
+        ...(typeof c.kind === 'string' ? { kind: c.kind } : {}),
+      };
+    }),
   };
 
   const trimmedNotes = typeof notes === 'string' ? notes.trim() : '';
@@ -88,13 +103,16 @@ function buildAlignMessages({ phrases, scenes }) {
       i: typeof p.i === 'number' ? p.i : index,
       text: p.text,
     })),
-    scenes: (Array.isArray(scenes) ? scenes : []).map((s) => ({
-      number: s.number,
-      title: s.title,
-      prompt: typeof s.prompt === 'string' ? s.prompt.slice(0, MAX_PROMPT_CHARS) : '',
-      ...(s.needed !== undefined ? { needed: Boolean(s.needed) } : {}),
-      ...(typeof s.fixedPhrase === 'number' ? { fixedPhrase: s.fixedPhrase } : {}),
-    })),
+    scenes: (Array.isArray(scenes) ? scenes : []).map((s) => {
+      const rawText = typeof s.summary === 'string' ? s.summary : (typeof s.prompt === 'string' ? s.prompt : '');
+      return {
+        number: s.number,
+        title: s.title,
+        summary: rawText.slice(0, MAX_PROMPT_CHARS),
+        ...(s.needed !== undefined ? { needed: Boolean(s.needed) } : {}),
+        ...(typeof s.fixedPhrase === 'number' ? { fixedPhrase: s.fixedPhrase } : {}),
+      };
+    }),
   };
 
   return [
@@ -194,7 +212,7 @@ function createDirectorService({ getWorkspacePath, getApiKey, streamChat }) {
         !Number.isInteger(s.number) ||
         s.number < 1 ||
         typeof s.title !== 'string' ||
-        typeof s.prompt !== 'string'
+        (typeof s.summary !== 'string' && typeof s.prompt !== 'string')
       ) {
         throw new Error('Lista de escenas no válida.');
       }

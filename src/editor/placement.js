@@ -191,46 +191,87 @@ export function applyStyling(fixedClips, raw, { duration } = {}) {
 
   const aiClips = Array.isArray(parsed?.clips) ? parsed.clips : [];
 
-  const styledClips = fixedClips.map((fixed, i) => {
-    // 1. Try match by index
+  // Determine drop candidates: only clips with segment duration < 2.0s and keep: false may be dropped
+  const dropCandidates = [];
+  for (let i = 0; i < fixedClips.length; i += 1) {
+    const fixed = fixedClips[i];
+    const segDuration = round3(fixed.end - fixed.start);
     let aiClip = aiClips[i];
-
-    // 2. Fallback: match by animation number
     if (!aiClip || aiClip.number !== fixed.number) {
-      const matchByNumber = aiClips.find((c) => c && c.number === fixed.number);
-      if (matchByNumber) {
-        aiClip = matchByNumber;
-      }
+      aiClip = aiClips.find((c) => c && c.number === fixed.number);
+    }
+    if (aiClip && aiClip.keep === false && segDuration < 2.0) {
+      dropCandidates.push(i);
+    }
+  }
+
+  // If all clips were marked dropped, keep all to ensure a valid non-empty timeline
+  const actuallyDropIndices =
+    dropCandidates.length < fixedClips.length ? new Set(dropCandidates) : new Set();
+
+  const keptClips = [];
+  const dropped = [];
+  let pendingStart = null;
+
+  for (let i = 0; i < fixedClips.length; i += 1) {
+    const fixed = fixedClips[i];
+    let aiClip = aiClips[i];
+    if (!aiClip || aiClip.number !== fixed.number) {
+      aiClip = aiClips.find((c) => c && c.number === fixed.number);
     }
 
-    const transition =
-      aiClip && TRANSITIONS.includes(aiClip.transition)
-        ? aiClip.transition
-        : i === 0
-          ? 'fade'
-          : 'cut';
+    if (actuallyDropIndices.has(i)) {
+      const reason = typeof aiClip?.reason === 'string' ? aiClip.reason.trim().slice(0, 140) : '';
+      dropped.push({ number: fixed.number, reason });
 
-    const motion =
-      aiClip && MOTIONS.includes(aiClip.motion)
-        ? aiClip.motion
-        : i % 2 === 0
-          ? 'zoom-in'
-          : 'zoom-out';
+      if (keptClips.length > 0) {
+        keptClips[keptClips.length - 1].end = round3(fixed.end);
+      } else if (pendingStart === null) {
+        pendingStart = fixed.start;
+      }
+    } else {
+      let start = fixed.start;
+      if (pendingStart !== null) {
+        start = pendingStart;
+        pendingStart = null;
+      }
 
-    return {
-      number: fixed.number,
-      start: round3(fixed.start),
-      end: round3(fixed.end),
-      transition,
-      motion,
-    };
-  });
+      const transition =
+        aiClip && TRANSITIONS.includes(aiClip.transition)
+          ? aiClip.transition
+          : keptClips.length === 0
+            ? 'fade'
+            : 'cut';
+
+      const motion =
+        aiClip && MOTIONS.includes(aiClip.motion)
+          ? aiClip.motion
+          : keptClips.length % 2 === 0
+            ? 'zoom-in'
+            : 'zoom-out';
+
+      const reason =
+        typeof aiClip?.reason === 'string' && aiClip.reason.trim()
+          ? aiClip.reason.trim().slice(0, 140)
+          : undefined;
+
+      keptClips.push({
+        number: fixed.number,
+        start: round3(start),
+        end: round3(fixed.end),
+        transition,
+        motion,
+        ...(reason !== undefined ? { reason } : {}),
+      });
+    }
+  }
 
   const edlCandidate = {
     version: 1,
     duration: round3(totalDuration),
-    clips: styledClips,
+    clips: keptClips,
     subtitles: [],
+    dropped,
   };
 
   const available = fixedClips.map((c) => c.number);

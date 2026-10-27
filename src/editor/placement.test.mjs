@@ -237,6 +237,57 @@ test('defaultStyling produces valid EDL v1', () => {
   assert.deepEqual(edl.subtitles, []);
 });
 
+test('applyStyling drops clips < 2.0s when keep:false and absorbs into previous or next clip', () => {
+  const fixedClips = [
+    { number: 1, start: 0.0, end: 1.5 }, // 1.5s -> first clip, dropped
+    { number: 2, start: 1.5, end: 5.0 }, // 3.5s -> kept, absorbs clip 1
+    { number: 3, start: 5.0, end: 6.2 }, // 1.2s -> dropped, absorbed by clip 2
+    { number: 4, start: 6.2, end: 9.0 }, // 2.8s -> keep:false but duration >= 2s, MUST BE KEPT
+    { number: 5, start: 9.0, end: 12.0 }, // 3.0s -> kept
+  ];
+
+  const aiRaw = JSON.stringify({
+    clips: [
+      { number: 1, keep: false, reason: 'Demasiado corto al inicio' },
+      { number: 2, keep: true, transition: 'fade', motion: 'zoom-in', reason: 'Inicio absorbido' },
+      { number: 3, keep: false, reason: 'Transición innecesaria de 1.2s' },
+      { number: 4, keep: false, transition: 'zoom', motion: 'pan-left', reason: 'Intento de descarte pero dura 2.8s' },
+      { number: 5, keep: true, transition: 'cut', motion: 'none', reason: 'Final estable' },
+    ],
+  });
+
+  const { edl, warnings } = applyStyling(fixedClips, aiRaw, { duration: 12.0 });
+  assert.ok(edl);
+  assert.equal(warnings.length, 0);
+
+  // Dropped list has clips 1 and 3
+  assert.deepEqual(edl.dropped, [
+    { number: 1, reason: 'Demasiado corto al inicio' },
+    { number: 3, reason: 'Transición innecesaria de 1.2s' },
+  ]);
+
+  // Kept clips are 2, 4, 5
+  assert.equal(edl.clips.length, 3);
+
+  // Clip 2 absorbed clip 1: start 0.0, end 6.2 (absorbing clip 3 too!)
+  assert.equal(edl.clips[0].number, 2);
+  assert.equal(edl.clips[0].start, 0.0);
+  assert.equal(edl.clips[0].end, 6.2);
+  assert.equal(edl.clips[0].reason, 'Inicio absorbido');
+
+  // Clip 4 was >= 2.0s so keep:false was ignored
+  assert.equal(edl.clips[1].number, 4);
+  assert.equal(edl.clips[1].start, 6.2);
+  assert.equal(edl.clips[1].end, 9.0);
+  assert.equal(edl.clips[1].reason, 'Intento de descarte pero dura 2.8s');
+
+  // Clip 5
+  assert.equal(edl.clips[2].number, 5);
+  assert.equal(edl.clips[2].start, 9.0);
+  assert.equal(edl.clips[2].end, 12.0);
+  assert.equal(edl.clips[2].reason, 'Final estable');
+});
+
 if (failures > 0) {
   console.log(`\n${failures} test(s) failed`);
   process.exit(1);

@@ -1,26 +1,42 @@
 // Presentational panel for automatic video editing and Remotion playback preview.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Player } from '@remotion/player';
 import VideoComposition, { compositionSize } from './VideoComposition.jsx';
 import CaptionStyleEditor from './CaptionStyleEditor.jsx';
 import { useAutoEdit } from './useAutoEdit.js';
+import { buildPlan } from './plan.js';
 import { formatDuration } from '../voice/constants.js';
+
+const TRANSITION_LABELS = {
+  cut: 'Corte',
+  fade: 'Fundido',
+  zoom: 'Zoom',
+  slide: 'Deslizar',
+};
+
+const MOTION_LABELS = {
+  'zoom-in': 'Acercar',
+  'zoom-out': 'Alejar',
+  'pan-left': 'Paneo izquierda',
+  'pan-right': 'Paneo derecha',
+  none: 'Fijo',
+};
+
+function round3(num) {
+  const rounded = Math.round((num + Number.EPSILON) * 1000) / 1000;
+  return rounded === 0 ? 0 : rounded;
+}
 
 function formatSyncStats(stats) {
   if (!stats || typeof stats.total !== 'number' || stats.total === 0) return null;
   const parts = [];
+  const aiCount = stats.ai ?? 0;
+  const estCount = stats.estimated ?? 0;
   const anchorCount = stats.anchor ?? 0;
-  const totalCount = stats.total;
-  parts.push(
-    `${anchorCount} de ${totalCount} ${totalCount === 1 ? 'video sincronizado' : 'videos sincronizados'} con el guion`
-  );
-  if (stats.ai > 0) {
-    parts.push(`${stats.ai} ${stats.ai === 1 ? 'ubicado' : 'ubicados'} por IA`);
-  }
-  if (stats.estimated > 0) {
-    parts.push(`${stats.estimated} ${stats.estimated === 1 ? 'estimado' : 'estimados'}`);
-  }
-  return parts.join(' · ');
+  parts.push(`${aiCount} por IA`);
+  parts.push(`${estCount} ${estCount === 1 ? 'estimado' : 'estimados'}`);
+  parts.push(`${anchorCount} por anclas del guion`);
+  return `Ubicación: ${parts.join(' · ')}`;
 }
 
 export default function AutoEditPanel({ videoId, onEdited, stages, ...customProps }) {
@@ -48,6 +64,11 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
   const sceneImages = customProps.sceneImages ?? hookResult.sceneImages ?? {};
 
   const [notes, setNotes] = useState('');
+  const playerRef = useRef(null);
+
+  const plan = edl ? buildPlan(edl, { fps: compositionSize.fps, clipDurations }) : null;
+  const planItems = plan?.items ?? [];
+  const totalDecisions = (edl?.clips?.length ?? 0) + (edl?.dropped?.length ?? 0);
 
   const isDirecting = status === 'directing';
   const isBlocked = isDirecting || status === 'loading' || status === 'missing';
@@ -63,6 +84,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
           {edl ? (
             <div className="auto-edit__player-wrapper">
               <Player
+                ref={playerRef}
                 component={VideoComposition}
                 inputProps={{ edl, sources, audioUrl, clipDurations, words, captionStyle }}
                 durationInFrames={Math.max(1, Math.round((edl.duration ?? 0) * compositionSize.fps))}
@@ -167,7 +189,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
 
           {edl && hasNoAnchors && (
             <p className="settings__card-text auto-edit__note">
-              Este video se ilustró antes de las anclas del guion. Para sincronización exacta, vuelve a generar las imágenes con el Prompt 2 actualizado.
+              Este video se ilustró antes de las anclas del guion. Para sincronización exacta, vuelve a pedir las imágenes al ilustrador con el Prompt 2 actualizado.
             </p>
           )}
 
@@ -188,6 +210,88 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
               La edición de la IA se corrigió automáticamente en {adjustments}{' '}
               {adjustments === 1 ? 'punto' : 'puntos'}.
             </p>
+          )}
+
+          {edl && (
+            <details className="auto-edit__decisions" open>
+              <summary className="auto-edit__decisions-summary">
+                Decisiones de edición ({totalDecisions})
+              </summary>
+              <div className="auto-edit__decisions-list">
+                {edl.clips?.map((clip, index) => {
+                  const planItem = planItems[index];
+                  const isSlowed = (planItem?.playbackRate ?? 1) < 1;
+                  const isFrozen = (planItem?.holdFrames ?? 0) > 0;
+                  const durationSec = round3(clip.end - clip.start);
+                  const timeRange = `${formatDuration(clip.start)}–${formatDuration(clip.end)}`;
+                  const startFrame =
+                    planItem?.startFrame ?? Math.round(clip.start * compositionSize.fps);
+
+                  return (
+                    <div
+                      key={`clip-${clip.number}-${index}`}
+                      className="auto-edit__decision-row"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => playerRef.current?.seekTo(startFrame)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          playerRef.current?.seekTo(startFrame);
+                        }
+                      }}
+                    >
+                      <div className="auto-edit__decision-header">
+                        <span className="auto-edit__decision-time">{timeRange}</span>
+                        <span className="auto-edit__decision-title">Video {clip.number}</span>
+                        <span className="auto-edit__decision-dur">{durationSec} s</span>
+                        <div className="auto-edit__decision-badges">
+                          {clip.transition && TRANSITION_LABELS[clip.transition] && (
+                            <span className="auto-edit__badge auto-edit__badge--transition">
+                              {TRANSITION_LABELS[clip.transition]}
+                            </span>
+                          )}
+                          {clip.motion && MOTION_LABELS[clip.motion] && (
+                            <span className="auto-edit__badge auto-edit__badge--motion">
+                              {MOTION_LABELS[clip.motion]}
+                            </span>
+                          )}
+                          {isSlowed && (
+                            <span className="auto-edit__badge auto-edit__badge--warning">
+                              Ralentizado
+                            </span>
+                          )}
+                          {isFrozen && (
+                            <span className="auto-edit__badge auto-edit__badge--info">
+                              Cuadro congelado
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {clip.reason && (
+                        <p className="auto-edit__decision-reason">{clip.reason}</p>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {Array.isArray(edl.dropped) &&
+                  edl.dropped.map((d, index) => (
+                    <div
+                      key={`dropped-${d.number}-${index}`}
+                      className="auto-edit__decision-row auto-edit__decision-row--dropped"
+                    >
+                      <div className="auto-edit__decision-header">
+                        <span className="auto-edit__decision-title">Video {d.number}</span>
+                        <span className="auto-edit__badge auto-edit__badge--dropped">Descartado</span>
+                      </div>
+                      <p className="auto-edit__decision-reason">
+                        Descartado: {d.reason || 'Sin justificación'}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            </details>
           )}
         </div>
       </div>

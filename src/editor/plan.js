@@ -115,17 +115,21 @@ export function buildPlan(edl, { fps = FPS, clipDurations = {} } = {}) {
         : DEFAULT_CLIP_SECONDS;
 
     let playbackRate = 1;
-    let loop = false;
+    let holdFrames = 0;
 
     if (segmentSeconds <= source) {
       playbackRate = 1;
-      loop = false;
-    } else if (segmentSeconds <= source * 1.6) {
-      playbackRate = round3(source / segmentSeconds);
-      loop = false;
+      holdFrames = 0;
     } else {
-      playbackRate = 1;
-      loop = true;
+      const naturalRate = source / segmentSeconds;
+      if (naturalRate >= 0.85) {
+        playbackRate = round3(naturalRate);
+        holdFrames = 0;
+      } else {
+        playbackRate = 0.85;
+        const playedFrames = Math.round((source / playbackRate) * fps);
+        holdFrames = Math.max(0, sequenceFrames - playedFrames);
+      }
     }
 
     return {
@@ -138,7 +142,7 @@ export function buildPlan(edl, { fps = FPS, clipDurations = {} } = {}) {
       punchIn: item.punchIn,
       motion: item.clip.motion || 'none',
       playbackRate,
-      loop,
+      holdFrames,
     };
   });
 

@@ -298,6 +298,30 @@ test('normalizeEdl preserves and normalizes captionStyle when provided', () => {
   assert.equal(warnings.length, 0);
 });
 
+test('normalizeEdl preserves clip reasons (capped at 140 chars) and dropped list', () => {
+  const longReason = 'Corte rápido para dar dinamismo a la narración. '.repeat(5);
+  const raw = {
+    version: 1,
+    clips: [
+      { number: 1, start: 0, end: 5, transition: 'fade', motion: 'zoom-in', reason: '  Inicio con fundido suave.  ' },
+      { number: 2, start: 5, end: 10, transition: 'cut', motion: 'none', reason: longReason },
+    ],
+    dropped: [
+      { number: 3, reason: '  Clip de 1.2s descartado por duración.  ' },
+      { number: 'invalid', reason: 'bad' },
+      null,
+    ],
+  };
+
+  const { edl, warnings } = normalizeEdl(raw, { duration: 10, available: [1, 2] });
+  assert.ok(edl);
+  assert.equal(edl.clips[0].reason, 'Inicio con fundido suave.');
+  assert.ok(edl.clips[1].reason.length <= 140);
+  assert.deepEqual(edl.dropped, [
+    { number: 3, reason: 'Clip de 1.2s descartado por duración.' },
+  ]);
+});
+
 if (failures > 0) {
   console.log(`\n${failures} test(s) failed`);
   process.exit(1);

@@ -159,19 +159,19 @@ test('punchIn is true for zoom transition, false otherwise', () => {
   assert.equal(plan.items[1].punchIn, false);
 });
 
-// --- Speed rules ------------------------------------------------------------
-test('speed rules: rate 1, slowed rate, loop, and default 8s source', () => {
+// --- Speed and hold rules ---------------------------------------------------
+test('speed rules: rate 1, slowed rate, holdFrames, and default 8s source', () => {
   const edl = {
-    duration: 35,
+    duration: 34,
     clips: [
-      // 6s segment <= 8s default source -> playbackRate 1, loop false
+      // 6s segment <= 8s default source -> playbackRate 1, holdFrames 0
       { number: 1, start: 0, end: 6, transition: 'cut' },
-      // 10s segment <= 8s * 1.6 (12.8s) -> playbackRate = round3(8/10) = 0.8, loop false
-      { number: 2, start: 6, end: 16, transition: 'cut' },
-      // 15s segment > 8s * 1.6 -> playbackRate 1, loop true
-      { number: 3, start: 16, end: 31, transition: 'cut' },
-      // 4s segment with custom duration of 3s -> 4 <= 3 * 1.6 (4.8) -> rate = round3(3/4) = 0.75, loop false
-      { number: 4, start: 31, end: 35, transition: 'cut' },
+      // 9s segment > 8s but 8/9 = 0.8888... >= 0.85 -> playbackRate = 0.889, holdFrames 0
+      { number: 2, start: 6, end: 15, transition: 'cut' },
+      // 15s segment > 8s / 0.85 -> playbackRate = 0.85, holdFrames = 450 - round((8/0.85)*30) = 450 - 282 = 168
+      { number: 3, start: 15, end: 30, transition: 'cut' },
+      // 4s segment with custom duration 3s -> 3/4 = 0.75 < 0.85 -> playbackRate = 0.85, holdFrames = 120 - round((3/0.85)*30) = 14
+      { number: 4, start: 30, end: 34, transition: 'cut' },
     ],
   };
 
@@ -185,19 +185,28 @@ test('speed rules: rate 1, slowed rate, loop, and default 8s source', () => {
 
   // c1: segmentSeconds = 6 <= 8 (default fallback for -5)
   assert.equal(c1.playbackRate, 1);
-  assert.equal(c1.loop, false);
+  assert.equal(c1.holdFrames, 0);
+  assert.equal(c1.loop, undefined);
 
-  // c2: segmentSeconds = 10 <= 12.8 (default fallback for 0)
-  assert.equal(c2.playbackRate, 0.8);
-  assert.equal(c2.loop, false);
+  // c2: segmentSeconds = 9 > 8 but 8/9 >= 0.85
+  assert.equal(c2.playbackRate, 0.889);
+  assert.equal(c2.holdFrames, 0);
+  assert.equal(c2.loop, undefined);
 
-  // c3: segmentSeconds = 15 > 12.8 (default fallback for null)
-  assert.equal(c3.playbackRate, 1);
-  assert.equal(c3.loop, true);
+  // c3: segmentSeconds = 15 > 8/0.85
+  assert.equal(c3.playbackRate, 0.85);
+  assert.equal(c3.holdFrames, 168);
+  assert.equal(c3.loop, undefined);
 
-  // c4: segmentSeconds = 4 <= 4.8 (custom source 3s)
-  assert.equal(c4.playbackRate, 0.75);
-  assert.equal(c4.loop, false);
+  // c4: segmentSeconds = 4 with custom source 3s
+  assert.equal(c4.playbackRate, 0.85);
+  assert.equal(c4.holdFrames, 14);
+  assert.equal(c4.loop, undefined);
+
+  // Total frames invariant holds
+  const sumFrames = plan.items.reduce((sum, item) => sum + item.frames, 0);
+  assert.equal(sumFrames, plan.durationInFrames);
+  assert.equal(plan.durationInFrames, 34 * 30);
 });
 
 // --- Tiny clip merge --------------------------------------------------------

@@ -2,7 +2,7 @@
 // Uses TransitionSeries for scene transitions and interpolate for camera effects.
 
 import React from 'react';
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Freeze, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Video, Audio } from '@remotion/media';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
@@ -68,22 +68,33 @@ function Shot({ item, src }) {
     ...(translate ? { translate } : {}),
   };
 
+  const activeFrames = item.sequenceFrames - (item.holdFrames ?? 0);
+  const freezeFrame = Math.max(0, activeFrames - 1);
+  const shouldFreeze = (item.holdFrames ?? 0) > 0 && frame >= freezeFrame;
+
+  const videoElement = src ? (
+    <Video
+      src={src}
+      muted
+      playbackRate={item.playbackRate}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+      }}
+    />
+  ) : (
+    <AbsoluteFill style={{ backgroundColor: '#111111' }} />
+  );
+
   return (
     <AbsoluteFill style={motionStyle}>
-      {src ? (
-        <Video
-          src={src}
-          muted
-          loop={item.loop}
-          playbackRate={item.playbackRate}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-          }}
-        />
+      {src && (item.holdFrames ?? 0) > 0 ? (
+        <Freeze frame={freezeFrame} active={shouldFreeze}>
+          {videoElement}
+        </Freeze>
       ) : (
-        <AbsoluteFill style={{ backgroundColor: '#111111' }} />
+        videoElement
       )}
     </AbsoluteFill>
   );

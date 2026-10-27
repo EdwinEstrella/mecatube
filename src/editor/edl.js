@@ -177,12 +177,21 @@ export function normalizeEdl(raw, { duration, available, phrases = [], minClip =
       );
     }
 
+    let reason = undefined;
+    if (typeof clip.reason === 'string') {
+      const trimmed = clip.reason.trim();
+      if (trimmed.length > 0) {
+        reason = trimmed.slice(0, 140);
+      }
+    }
+
     initialClips.push({
       number: clip.number,
       start: clampedStart,
       end: clampedEnd,
       transition,
       motion,
+      ...(reason !== undefined ? { reason } : {}),
     });
   }
 
@@ -278,6 +287,19 @@ export function normalizeEdl(raw, { duration, available, phrases = [], minClip =
   const captionStyle =
     parsed.captionStyle !== undefined ? normalizeCaptionStyle(parsed.captionStyle) : undefined;
 
+  const dropped = [];
+  if (Array.isArray(parsed.dropped)) {
+    for (const d of parsed.dropped) {
+      if (d && typeof d === 'object' && Number.isInteger(d.number)) {
+        const item = { number: d.number };
+        if (typeof d.reason === 'string') {
+          item.reason = d.reason.trim().slice(0, 140);
+        }
+        dropped.push(item);
+      }
+    }
+  }
+
   return {
     edl: {
       version: 1,
@@ -288,8 +310,10 @@ export function normalizeEdl(raw, { duration, available, phrases = [], minClip =
         end: round3(c.end),
         transition: c.transition,
         motion: c.motion,
+        ...(c.reason !== undefined ? { reason: c.reason } : {}),
       })),
       subtitles,
+      dropped,
       ...(captionStyle !== undefined ? { captionStyle } : {}),
     },
     warnings,
@@ -335,5 +359,6 @@ export function fallbackEdl({ duration, available, phrases = [] } = {}) {
     duration: round3(duration),
     clips,
     subtitles,
+    dropped: [],
   };
 }

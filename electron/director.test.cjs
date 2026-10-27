@@ -33,23 +33,29 @@ async function test(name, fn) {
       { number: 2, title: 'Concept', prompt: 'Detailed diagram of the topic.' },
     ];
 
-    await test('director message building contains clips and notes with fixed-timings prompt', () => {
+    await test('director message building contains clips and notes with senior editor prompt', () => {
       const messages = buildDirectorMessages({
         duration: 6.0,
-        clips: validClips,
+        clips: [
+          { number: 1, start: 0, end: 2.5, text: 'Hello and welcome to this video.', summary: 'Intro summary', kind: 'scene' },
+          { number: 2, start: 2.5, end: 6.0, text: 'Here we explain the concept clearly.', summary: 'Concept summary', kind: 'explainer' },
+        ],
         notes: 'Keep the pace fast and dynamic.',
       });
 
       assert.equal(messages.length, 2);
       assert.equal(messages[0].role, 'system');
-      assert.match(messages[0].content, /FIXED/);
+      assert.match(messages[0].content, /senior YouTube video editor/i);
       assert.match(messages[0].content, /cut\|fade\|slide\|zoom/);
       assert.match(messages[0].content, /none\|zoom-in\|zoom-out\|pan-left\|pan-right/);
 
       assert.equal(messages[1].role, 'user');
       const payload = JSON.parse(messages[1].content);
       assert.equal(payload.duration, 6.0);
-      assert.deepEqual(payload.clips, validClips);
+      assert.deepEqual(payload.clips, [
+        { number: 1, start: 0, end: 2.5, duration: 2.5, text: 'Hello and welcome to this video.', summary: 'Intro summary', kind: 'scene' },
+        { number: 2, start: 2.5, end: 6.0, duration: 3.5, text: 'Here we explain the concept clearly.', summary: 'Concept summary', kind: 'explainer' },
+      ]);
       assert.equal(payload.notes, 'Keep the pace fast and dynamic.');
 
       // Omits notes when empty
@@ -62,13 +68,13 @@ async function test(name, fn) {
       assert.equal(Object.prototype.hasOwnProperty.call(parsedWithout, 'notes'), false);
     });
 
-    await test('align message building truncates long prompts and includes scenes and phrases', () => {
+    await test('align message building truncates long summaries/prompts and includes scenes and phrases', () => {
       const longPrompt = 'A'.repeat(800);
       const messages = buildAlignMessages({
         phrases: validPhrases,
         scenes: [
           { number: 1, title: 'Intro', prompt: longPrompt, needed: true },
-          { number: 2, title: 'Concept', prompt: 'Short prompt', needed: false, fixedPhrase: 1 },
+          { number: 2, title: 'Concept', summary: 'Short summary', needed: false, fixedPhrase: 1 },
         ],
       });
 
@@ -79,8 +85,9 @@ async function test(name, fn) {
       assert.equal(messages[1].role, 'user');
       const payload = JSON.parse(messages[1].content);
       assert.deepEqual(payload.phrases, validPhrases);
-      assert.equal(payload.scenes[0].prompt.length, 700);
+      assert.equal(payload.scenes[0].summary.length, 700);
       assert.equal(payload.scenes[0].needed, true);
+      assert.equal(payload.scenes[1].summary, 'Short summary');
       assert.equal(payload.scenes[1].needed, false);
       assert.equal(payload.scenes[1].fixedPhrase, 1);
     });

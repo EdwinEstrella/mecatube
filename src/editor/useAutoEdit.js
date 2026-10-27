@@ -8,6 +8,7 @@ import {
   phrasesToWordIndex,
   placeVideos,
 } from './placement.js';
+import { sceneSummaries } from './sceneSummary.js';
 import { probeDurations } from './clipDurations.js';
 import { animationVideoUrl, latestVideo } from '../flow/animationStatus.js';
 import { latestFiles, sceneImageUrl } from '../flow/sceneStatus.js';
@@ -158,6 +159,7 @@ export function useAutoEdit(videoId, options = {}) {
             title: scene.title || `Escena ${scene.number}`,
             prompt: scene.prompt || '',
             scriptAnchor: '',
+            kind: scene.kind,
           });
         }
       }
@@ -169,6 +171,7 @@ export function useAutoEdit(videoId, options = {}) {
             title: scene.title || existing.title || `Escena ${scene.number}`,
             prompt: scene.prompt || existing.prompt || '',
             scriptAnchor: scene.scriptAnchor || existing.scriptAnchor || '',
+            kind: scene.kind || existing.kind,
           });
         }
       }
@@ -185,6 +188,7 @@ export function useAutoEdit(videoId, options = {}) {
           title: item?.title || `Escena ${num}`,
           prompt: item?.prompt || '',
           scriptAnchor: item?.scriptAnchor || '',
+          kind: item?.kind,
         };
       });
 
@@ -370,6 +374,9 @@ export function useAutoEdit(videoId, options = {}) {
       const finalNotices = [];
       let isFallback = false;
 
+      const summaries = sceneSummaries(scenesMeta);
+      const summaryMap = new Map(summaries.map((s) => [s.number, s.summary]));
+
       // 1. Initial placement with anchors only
       let placement = placeVideos({
         words,
@@ -415,7 +422,7 @@ export function useAutoEdit(videoId, options = {}) {
           return {
             number: s.number,
             title: s.title || `Escena ${s.number}`,
-            prompt: s.prompt || '',
+            summary: summaryMap.get(s.number) || '',
             needed: !isAnchored,
             fixedPhrase: isAnchored ? (anchoredPhraseMap.get(s.number) ?? null) : null,
           };
@@ -464,11 +471,24 @@ export function useAutoEdit(videoId, options = {}) {
           .map((w) => w.w.trim())
           .join(' ')
           .slice(0, 2000);
+        const sMeta = scenesMeta.find((s) => s.number === c.number);
+        const isExplainer =
+          sMeta?.kind === 'explanation' ||
+          sMeta?.kind === 'explainer' ||
+          /explicaci/i.test(sMeta?.title || '') ||
+          /reads exactly/i.test(sMeta?.prompt || '') ||
+          /layout:/i.test(sMeta?.prompt || '');
+        const kind = isExplainer ? 'explainer' : 'scene';
+        const clipDuration = Math.round((c.end - c.start + Number.EPSILON) * 1000) / 1000;
+
         return {
           number: c.number,
           start: c.start,
           end: c.end,
+          duration: clipDuration,
           text: clipText,
+          summary: summaryMap.get(c.number) || '',
+          kind,
         };
       });
 
