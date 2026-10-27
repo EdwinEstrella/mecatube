@@ -8,6 +8,7 @@ import {
   DEFAULT_CAPTION_STYLE,
   PAGE_EFFECTS,
   WORD_EFFECTS,
+  SHADOW_TYPES,
   PRESETS,
   normalizeCaptionStyle,
 } from './captionStyle.js';
@@ -102,6 +103,20 @@ export default function CaptionStyleEditor({
     []
   );
 
+  const shadowTypeOptions = useMemo(
+    () =>
+      SHADOW_TYPES.map((t) => ({
+        value: t.id,
+        label: t.label,
+      })),
+    []
+  );
+
+  const showBlur = ['soft', 'outline-glow'].includes(style.shadowType);
+  const showDistance = ['soft', 'hard', 'double', 'long'].includes(style.shadowType);
+  const showAngle = ['soft', 'hard', 'double', 'long'].includes(style.shadowType);
+  const showOpacity = style.shadowType !== 'none';
+
   const handleUpdate = (patch) => {
     onChange?.({ ...style, ...patch });
   };
@@ -119,7 +134,8 @@ export default function CaptionStyleEditor({
                 style.textColor === p.style.textColor &&
                 style.highlightColor === p.style.highlightColor &&
                 style.pageEffect === p.style.pageEffect &&
-                style.wordEffect === p.style.wordEffect;
+                style.wordEffect === p.style.wordEffect &&
+                style.shadowType === p.style.shadowType;
               return (
                 <button
                   key={p.id}
@@ -178,11 +194,6 @@ export default function CaptionStyleEditor({
               checked={style.uppercase}
               label="Mayúsculas"
               onChange={(checked) => handleUpdate({ uppercase: checked })}
-            />
-            <CustomCheckbox
-              checked={style.shadow}
-              label="Sombra de texto"
-              onChange={(checked) => handleUpdate({ shadow: checked })}
             />
           </div>
 
@@ -255,6 +266,105 @@ export default function CaptionStyleEditor({
               onChange={(e) => handleUpdate({ strokeWidth: Number(e.target.value) })}
             />
           </div>
+
+          <div className="auto-edit__caption-field">
+            <label className="auto-edit__label">Sombra</label>
+            <CustomSelect
+              value={style.shadowType}
+              options={shadowTypeOptions}
+              onChange={(shadowType) => handleUpdate({ shadowType })}
+              ariaLabel="Tipo de sombra"
+            />
+          </div>
+
+          {style.shadowType !== 'none' && (
+            <div className="auto-edit__caption-color-item">
+              <label className="auto-edit__label">
+                {style.shadowType === 'box' ? 'Color de fondo' : 'Color de sombra'}
+              </label>
+              <div className="auto-edit__color-picker-wrap">
+                <input
+                  type="color"
+                  value={style.shadowColor}
+                  className="auto-edit__color-input"
+                  onChange={(e) => handleUpdate({ shadowColor: e.target.value })}
+                />
+                <span className="auto-edit__color-hex">{style.shadowColor}</span>
+              </div>
+            </div>
+          )}
+
+          {showBlur && (
+            <div className="auto-edit__caption-field">
+              <div className="auto-edit__caption-field-header">
+                <label className="auto-edit__label">Desenfoque</label>
+                <span className="auto-edit__caption-value">{style.shadowBlur} px</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={40}
+                step={1}
+                value={style.shadowBlur}
+                className="auto-edit__caption-range"
+                onChange={(e) => handleUpdate({ shadowBlur: Number(e.target.value) })}
+              />
+            </div>
+          )}
+
+          {showDistance && (
+            <div className="auto-edit__caption-field">
+              <div className="auto-edit__caption-field-header">
+                <label className="auto-edit__label">Distancia</label>
+                <span className="auto-edit__caption-value">{style.shadowDistance} px</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={30}
+                step={1}
+                value={style.shadowDistance}
+                className="auto-edit__caption-range"
+                onChange={(e) => handleUpdate({ shadowDistance: Number(e.target.value) })}
+              />
+            </div>
+          )}
+
+          {showAngle && (
+            <div className="auto-edit__caption-field">
+              <div className="auto-edit__caption-field-header">
+                <label className="auto-edit__label">Ángulo</label>
+                <span className="auto-edit__caption-value">{style.shadowAngle}°</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={359}
+                step={1}
+                value={style.shadowAngle}
+                className="auto-edit__caption-range"
+                onChange={(e) => handleUpdate({ shadowAngle: Number(e.target.value) })}
+              />
+            </div>
+          )}
+
+          {showOpacity && (
+            <div className="auto-edit__caption-field">
+              <div className="auto-edit__caption-field-header">
+                <label className="auto-edit__label">Opacidad</label>
+                <span className="auto-edit__caption-value">{Math.round(style.shadowOpacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={style.shadowOpacity}
+                className="auto-edit__caption-range"
+                onChange={(e) => handleUpdate({ shadowOpacity: Number(e.target.value) })}
+              />
+            </div>
+          )}
 
           <div className="auto-edit__caption-field">
             <div className="auto-edit__caption-field-header">

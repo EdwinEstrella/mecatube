@@ -60,6 +60,7 @@ function Word({
   textColor,
   strokeColor,
   strokeWidth,
+  baseTextShadow,
   shadow,
   size,
   wordEffect,
@@ -119,7 +120,11 @@ function Word({
         extrapolateRight: 'clamp',
       });
       const glowShadow = `0 0 ${glowRadius}px ${highlightColor}, 0 0 ${Math.round(glowRadius * 1.5)}px ${highlightColor}`;
-      textShadow = shadow ? `${glowShadow}, 0 6px 18px rgba(0,0,0,0.55)` : glowShadow;
+      const effectiveBaseShadow =
+        baseTextShadow !== undefined
+          ? (baseTextShadow !== 'none' ? baseTextShadow : null)
+          : (shadow ? '0 6px 18px rgba(0,0,0,0.55)' : null);
+      textShadow = effectiveBaseShadow ? `${glowShadow}, ${effectiveBaseShadow}` : glowShadow;
     } else if (wordEffect === 'underline') {
       // A highlight-colored bar under the word growing 0 -> 100% width over 5 frames
       underlineWidthPercent = interpolate(diff, [0, 5], [0, 100], {
@@ -311,7 +316,7 @@ function Page({ page, pageIndex, style }) {
         position: 'absolute',
         ...positionStyles,
         left: '50%',
-        width: '100%',
+        width: style.shadowType === 'box' ? 'fit-content' : '100%',
         maxWidth: '85%',
         pointerEvents: 'none',
         ...css,
@@ -328,7 +333,8 @@ function Page({ page, pageIndex, style }) {
             textColor={style.textColor}
             strokeColor={style.strokeColor}
             strokeWidth={style.strokeWidth}
-            shadow={style.shadow}
+            baseTextShadow={css.textShadow}
+            shadow={style.shadowType !== 'none'}
             size={style.size}
             wordEffect={style.wordEffect}
             pageEffect={style.pageEffect}
