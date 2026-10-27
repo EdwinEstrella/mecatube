@@ -18,6 +18,7 @@ const { createCreditStore } = require('./credits.cjs');
 const { createSavedVoiceStore } = require('./saved-voices.cjs');
 const { createUpdater } = require('./updates.cjs');
 const { createFlowStore, createFlowService, registerFlowIpc } = require('./flow.cjs');
+const { createDirectorService, registerDirectorIpc } = require('./director.cjs');
 
 const isDev = process.argv.includes('--dev');
 const DEV_SERVER_URL = 'http://127.0.0.1:5173';
@@ -384,6 +385,16 @@ app.whenReady().then(() => {
     ipcMain,
     shell,
     service: flowService,
+  });
+
+  const directorService = createDirectorService({
+    getWorkspacePath: () => activeWorkspacePath,
+    getApiKey: () => secrets.getDeepSeekKey(),
+    streamChat: deepseek.streamChat,
+  });
+  registerDirectorIpc({
+    ipcMain,
+    service: directorService,
   });
 
   ipcMain.handle('workspace:get-current', () => workspaceStore.getActive());
