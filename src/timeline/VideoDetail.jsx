@@ -1,9 +1,20 @@
 import { useRef, useState } from 'react';
-import StageTrack from './StageTrack.jsx';
+import StageTrack, { STATUS_LABELS } from './StageTrack.jsx';
 import VoicePanel from '../voice/VoicePanel.jsx';
 import CustomSelect from '../ui/CustomSelect.jsx';
 import CharactersPanel from '../flow/CharactersPanel.jsx';
 import AutoEditPanel from '../editor/AutoEditPanel.jsx';
+
+const ILLUSTRATOR_HINTS = {
+  images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
+  animations: 'Las animaciones se generan desde el chat del ilustrador.',
+  thumbnail: 'La miniatura se genera desde el chat del ilustrador.',
+};
+
+function getInitialStageKey(stageList) {
+  const notDone = stageList.find((stage) => stage.status !== 'done');
+  return notDone?.key ?? stageList[stageList.length - 1]?.key ?? null;
+}
 
 // state: 'ok' | 'deleted' | 'none' for one linked chat
 function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onStart, openLabel, startLabel }) {
@@ -38,7 +49,7 @@ function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onS
 // Presentational: 1 single timeline for the workspace
 export default function VideoDetail({
   video,
-  stages,
+  stages = [],
   doneCount = 0,
   chatStates,
   conversations,
@@ -62,6 +73,16 @@ export default function VideoDetail({
   const [isConfirming, setIsConfirming] = useState(false);
   const settledRef = useRef(false);
 
+  const [prevVideoId, setPrevVideoId] = useState(video.id);
+  const [selectedKey, setSelectedKey] = useState(() => getInitialStageKey(stages));
+
+  if (video.id !== prevVideoId) {
+    setPrevVideoId(video.id);
+    setSelectedKey(getInitialStageKey(stages));
+  }
+
+  const selectedStage = stages.find((stage) => stage.key === selectedKey) ?? stages[0] ?? null;
+
   const startEditing = () => {
     settledRef.current = false;
     setDraft(video.title);
@@ -75,6 +96,24 @@ export default function VideoDetail({
     const title = draft.trim();
     if (save && title && title !== video.title) onRename(video.id, title);
   };
+
+  const override = selectedStage ? video.overrides?.[selectedStage.key] : undefined;
+  let currentStatusText = '';
+  let nextActionLabel = 'Marcar como completada';
+
+  if (selectedStage) {
+    if (override === true) {
+      currentStatusText = 'Completada (manual)';
+      nextActionLabel = 'Marcar como pendiente';
+    } else if (override === false) {
+      currentStatusText = 'Pendiente (manual)';
+      nextActionLabel = 'Volver a automático';
+    } else {
+      const statusLabel = STATUS_LABELS[selectedStage.status] ?? selectedStage.status;
+      currentStatusText = `Automático (${statusLabel})`;
+      nextActionLabel = 'Marcar como completada';
+    }
+  }
 
   return (
     <div className="video-detail" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
@@ -127,42 +166,90 @@ export default function VideoDetail({
       </div>
 
       <div style={{ marginBottom: '24px' }}>
-        <StageTrack stages={stages} onToggle={(stage) => onToggleStage(video, stage)} />
+        <StageTrack
+          stages={stages}
+          selectedKey={selectedStage?.key}
+          onSelect={(stage) => setSelectedKey(stage.key)}
+        />
       </div>
 
-      <ChatLink
-        label="Guion"
-        linkedId={video.scriptConversationId}
-        state={chatStates.script}
-        conversations={conversations}
-        onChange={(id) => onLink(video.id, 'scriptConversationId', id)}
-        onOpen={onOpenChat}
-        onStart={() => onStartPrompt(video.id, 'script')}
-        openLabel="Abrir chat del guion"
-        startLabel="Enviar Prompt 1"
-      />
-      <ChatLink
-        label="Ilustrador"
-        linkedId={video.illustratorConversationId}
-        state={chatStates.illustrator}
-        conversations={conversations}
-        onChange={(id) => onLink(video.id, 'illustratorConversationId', id)}
-        onOpen={onOpenChat}
-        onStart={() => onStartPrompt(video.id, 'illustrator')}
-        openLabel="Abrir chat del ilustrador"
-        startLabel="Enviar Prompt 2"
-      />
+      {selectedStage && (
+        <section className="video-detail__stage-section">
+          <h2 className="video-detail__stage-heading">{selectedStage.label}</h2>
 
-      <VoicePanel video={video} scriptMessages={scriptMessages} voice={voice} onSaveNarration={onSaveNarration} />
+          {(selectedStage.key === 'idea' || selectedStage.key === 'script' || selectedStage.key === 'metadata') && (
+            <ChatLink
+              label="Guion"
+              linkedId={video.scriptConversationId}
+              state={chatStates.script}
+              conversations={conversations}
+              onChange={(id) => onLink(video.id, 'scriptConversationId', id)}
+              onOpen={onOpenChat}
+              onStart={() => onStartPrompt(video.id, 'script')}
+              openLabel="Abrir chat del guion"
+              startLabel="Enviar Prompt 1"
+            />
+          )}
 
-      <CharactersPanel
-        video={video}
-        characters={characters}
-        onSetProject={onSetFlowProject}
-        onOpenProject={onOpenFlowProject}
-      />
+          {selectedStage.key === 'voice' && (
+            <VoicePanel
+              video={video}
+              scriptMessages={scriptMessages}
+              voice={voice}
+              onSaveNarration={onSaveNarration}
+            />
+          )}
 
-      <AutoEditPanel videoId={video.id} stages={stages} onEdited={onEdited} />
+          {selectedStage.key === 'characters' && (
+            <CharactersPanel
+              video={video}
+              characters={characters}
+              onSetProject={onSetFlowProject}
+              onOpenProject={onOpenFlowProject}
+            />
+          )}
+
+          {(selectedStage.key === 'images' || selectedStage.key === 'animations' || selectedStage.key === 'thumbnail') && (
+            <>
+              <ChatLink
+                label="Ilustrador"
+                linkedId={video.illustratorConversationId}
+                state={chatStates.illustrator}
+                conversations={conversations}
+                onChange={(id) => onLink(video.id, 'illustratorConversationId', id)}
+                onOpen={onOpenChat}
+                onStart={() => onStartPrompt(video.id, 'illustrator')}
+                openLabel="Abrir chat del ilustrador"
+                startLabel="Enviar Prompt 2"
+              />
+              <p className="video-detail__stage-hint">{ILLUSTRATOR_HINTS[selectedStage.key]}</p>
+            </>
+          )}
+
+          {selectedStage.key === 'editing' && (
+            <AutoEditPanel videoId={video.id} stages={stages} onEdited={onEdited} />
+          )}
+
+          {selectedStage.key === 'published' && (
+            <p className="video-detail__stage-hint">
+              Marca esta etapa cuando el video esté publicado en YouTube.
+            </p>
+          )}
+
+          <div className="video-detail__status-control">
+            <span className="video-detail__status-label">
+              Estado: <strong>{currentStatusText}</strong>
+            </span>
+            <button
+              type="button"
+              className="settings__button settings__button--ghost"
+              onClick={() => onToggleStage(video, selectedStage)}
+            >
+              {nextActionLabel}
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="saved-idea__actions" style={{ marginTop: '16px' }}>
         {isConfirming ? (
