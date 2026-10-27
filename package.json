@@ -21,7 +21,9 @@
     "wait-on": "^9.5.1"
   },
   "dependencies": {
+    "@remotion/media": "^4.0.538",
     "@remotion/player": "^4.0.538",
+    "@remotion/transitions": "^4.0.538",
     "electron-updater": "^6.8.11",
     "motion": "^14.6.0",
     "react": "^19.3.1",
