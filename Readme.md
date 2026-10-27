@@ -53,6 +53,12 @@ Para conectarse con DeepSeek y Flow usa una pequeña extensión de Chrome (inclu
 3. Abre Mecatube. Si la extensión está bien instalada, la app mostrará que está **conectada**.
 4. Empieza un chat nuevo y sigue los pasos de la app.
 
+## Material recomendado
+
+Para crear los videos en Google Flow necesitas créditos. Con Gemini por 18 meses obtienes **1050 puntos en Flow**:
+
+- [Comprar Gemini 18 meses](https://licenhub.lat/product/57)
+
 ## Actualizar
 
 - **La app:** pulsa el botón **Actualizar** en la barra superior. Cuando haya una versión nueva dirá "Actualizar a vX.Y.Z"; púlsalo, espera la descarga y luego pulsa "Reiniciar y actualizar".
@@ -66,9 +72,13 @@ Para conectarse con DeepSeek y Flow usa una pequeña extensión de Chrome (inclu
 
 ## Apoya el proyecto
 
-Si Mecatube te es útil, puedes apoyar su desarrollo con una donación.
+Si Mecatube te es útil, puedes apoyar su desarrollo con una donación. Haz clic en el banner:
 
-[![Donar con Stripe](https://img.shields.io/badge/Donate-Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white)](https://buy.stripe.com/dRm8wI8Hk0wq3Y692vcEw0h)
+<p align="center">
+  <a href="https://buy.stripe.com/dRm8wI8Hk0wq3Y692vcEw0h">
+    <img src="docs/assets/donate-banner.svg" width="100%" alt="Donar a Mecatube con Stripe" />
+  </a>
+</p>
 
 Enlace directo: https://buy.stripe.com/dRm8wI8Hk0wq3Y692vcEw0h
 
