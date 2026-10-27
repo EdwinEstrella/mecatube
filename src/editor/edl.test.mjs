@@ -284,6 +284,20 @@ test('fallbackEdl mapping and normalizeEdl(fallbackEdl(...)) idempotency with 0 
   assert.equal(fallbackEdl({ duration, available: [] }), null);
 });
 
+test('normalizeEdl preserves and normalizes captionStyle when provided', () => {
+  const raw = {
+    version: 1,
+    clips: [{ number: 1, start: 0, end: 5, transition: 'cut', motion: 'none' }],
+    captionStyle: { font: 'anton', size: 90 },
+  };
+  const { edl, warnings } = normalizeEdl(raw, { duration: 5, available: [1] });
+  assert.ok(edl);
+  assert.equal(edl.captionStyle.font, 'anton');
+  assert.equal(edl.captionStyle.size, 90);
+  assert.equal(edl.captionStyle.weight, 400);
+  assert.equal(warnings.length, 0);
+});
+
 if (failures > 0) {
   console.log(`\n${failures} test(s) failed`);
   process.exit(1);

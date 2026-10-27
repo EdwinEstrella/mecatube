@@ -1,17 +1,18 @@
 // Animated TikTok/YouTube-style karaoke captions driven by narration per-word timestamps.
-import '@fontsource/montserrat/900.css';
+import './fonts.js';
 import React, { useMemo } from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { buildCaptionPages, activePage, activeWordIndex } from './captions.js';
+import { normalizeCaptionStyle, captionCss } from './captionStyle.js';
 
-function Word({ word, index, activeIndex, highlightColor }) {
+function Word({ word, index, activeIndex, highlightColor, textColor, animation }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
   const isCurrent = index === activeIndex;
   const isSpoken = activeIndex >= 0 && index < activeIndex;
 
-  let color = '#ffffff';
+  let color = textColor;
   let opacity = 0.85;
   let scale = 1;
 
@@ -19,14 +20,16 @@ function Word({ word, index, activeIndex, highlightColor }) {
     color = highlightColor;
     opacity = 1;
 
-    const wordStartFrame = Math.round(word.start * fps);
-    // Pop from 1.0 to 1.15 at word start, then settle to 1.08
-    scale = interpolate(frame - wordStartFrame, [0, 4, 8], [1, 1.15, 1.08], {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-    });
+    if (animation === 'pop') {
+      const wordStartFrame = Math.round(word.start * fps);
+      // Pop from 1.0 to 1.15 at word start, then settle to 1.08
+      scale = interpolate(frame - wordStartFrame, [0, 4, 8], [1, 1.15, 1.08], {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      });
+    }
   } else if (isSpoken) {
-    color = '#ffffff';
+    color = textColor;
     opacity = 1;
     scale = 1;
   }
@@ -45,34 +48,45 @@ function Word({ word, index, activeIndex, highlightColor }) {
   );
 }
 
-function Page({ page, pageIndex }) {
+function Page({ page, pageIndex, style }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const seconds = frame / fps;
 
-  const pageStartFrame = Math.round(page.start * fps);
-  const pageProgress = spring({
-    frame: Math.max(0, frame - pageStartFrame),
-    fps,
-    durationInFrames: 6,
-  });
+  let pageScale = 1;
+  let pageOpacity = 1;
 
-  const pageScale = interpolate(pageProgress, [0, 1], [0.85, 1]);
-  const pageOpacity = interpolate(pageProgress, [0, 1], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  if (style.animation === 'pop') {
+    const pageStartFrame = Math.round(page.start * fps);
+    const pageProgress = spring({
+      frame: Math.max(0, frame - pageStartFrame),
+      fps,
+      durationInFrames: 6,
+    });
+    pageScale = interpolate(pageProgress, [0, 1], [0.85, 1]);
+    pageOpacity = interpolate(pageProgress, [0, 1], [0, 1], {
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    });
+  }
 
   const activeIndex = activeWordIndex(page, seconds);
-  const highlightColor = pageIndex % 3 === 2 ? '#2BFF88' : '#FFE600';
+  const highlightColor = pageIndex % 3 === 2 ? style.altHighlightColor : style.highlightColor;
+
+  const positionStyles = {
+    top: style.position === 'top' ? 120 : style.position === 'middle' ? '50%' : 'auto',
+    bottom: style.position === 'bottom' ? 140 : 'auto',
+    translate: style.position === 'middle' ? '-50% -50%' : '-50% 0',
+  };
+
+  const css = captionCss(style);
 
   return (
     <div
       style={{
         position: 'absolute',
-        bottom: 140,
+        ...positionStyles,
         left: '50%',
-        translate: '-50% 0',
         width: '100%',
         maxWidth: '85%',
         display: 'flex',
@@ -83,15 +97,7 @@ function Page({ page, pageIndex }) {
         pointerEvents: 'none',
         scale: pageScale,
         opacity: pageOpacity,
-        fontFamily: 'Montserrat',
-        fontWeight: 900,
-        fontSize: 86,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        lineHeight: 1.15,
-        WebkitTextStroke: '12px #000',
-        paintOrder: 'stroke fill',
-        textShadow: '0 6px 18px rgba(0,0,0,0.55)',
+        ...css,
       }}
     >
       {page.words.map((word, index) => (
@@ -101,13 +107,15 @@ function Page({ page, pageIndex }) {
           index={index}
           activeIndex={activeIndex}
           highlightColor={highlightColor}
+          textColor={style.textColor}
+          animation={style.animation}
         />
       ))}
     </div>
   );
 }
 
-function ActiveCaption({ pages }) {
+function ActiveCaption({ pages, style }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const seconds = frame / fps;
@@ -118,15 +126,19 @@ function ActiveCaption({ pages }) {
   }
 
   const pageIndex = pages.indexOf(page);
-  return <Page key={page.start} page={page} pageIndex={pageIndex} />;
+  return <Page key={page.start} page={page} pageIndex={pageIndex} style={style} />;
 }
 
-export default function KaraokeCaptions({ words }) {
-  const pages = useMemo(() => buildCaptionPages(words), [words]);
+export default function KaraokeCaptions({ words, style }) {
+  const normStyle = useMemo(() => normalizeCaptionStyle(style), [style]);
+  const pages = useMemo(
+    () => buildCaptionPages(words, { maxWords: normStyle.wordsPerPage }),
+    [words, normStyle.wordsPerPage]
+  );
 
   if (!pages || pages.length === 0) {
     return null;
   }
 
-  return <ActiveCaption pages={pages} />;
+  return <ActiveCaption pages={pages} style={normStyle} />;
 }

@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Player } from '@remotion/player';
 import VideoComposition, { compositionSize } from './VideoComposition.jsx';
+import CaptionStyleEditor from './CaptionStyleEditor.jsx';
 import { useAutoEdit } from './useAutoEdit.js';
 import { formatDuration } from '../voice/constants.js';
 
@@ -23,6 +24,10 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
   const audioUrl = customProps.audioUrl ?? hookResult.audioUrl;
   const words = customProps.words ?? hookResult.words ?? [];
   const clipDurations = customProps.clipDurations ?? hookResult.clipDurations;
+  const captionStyle = customProps.captionStyle ?? hookResult.captionStyle;
+  const setCaptionStyle = customProps.setCaptionStyle ?? hookResult.setCaptionStyle;
+  const available = customProps.available ?? hookResult.available ?? [];
+  const sceneImages = customProps.sceneImages ?? hookResult.sceneImages ?? {};
 
   const [notes, setNotes] = useState('');
 
@@ -116,11 +121,20 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
         </p>
       )}
 
+      <CaptionStyleEditor
+        captionStyle={captionStyle}
+        onChange={setCaptionStyle}
+        sources={sources}
+        sceneImages={sceneImages}
+        available={available}
+        words={words}
+      />
+
       {edl && (
         <div className="auto-edit__player-wrapper">
           <Player
             component={VideoComposition}
-            inputProps={{ edl, sources, audioUrl, clipDurations, words }}
+            inputProps={{ edl, sources, audioUrl, clipDurations, words, captionStyle }}
             durationInFrames={Math.max(1, Math.round((edl.duration ?? 0) * compositionSize.fps))}
             compositionWidth={compositionSize.width}
             compositionHeight={compositionSize.height}

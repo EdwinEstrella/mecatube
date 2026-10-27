@@ -4,6 +4,8 @@ import { buildPhrases } from './timing.js';
 import { fallbackEdl, normalizeEdl } from './edl.js';
 import { probeDurations } from './clipDurations.js';
 import { animationVideoUrl, latestVideo } from '../flow/animationStatus.js';
+import { latestFiles, sceneImageUrl } from '../flow/sceneStatus.js';
+import { DEFAULT_CAPTION_STYLE, normalizeCaptionStyle } from './captionStyle.js';
 import { cleanIpcError } from '../voice/constants.js';
 
 function isEditingDone(stages) {
@@ -39,6 +41,13 @@ export function useAutoEdit(videoId, options = {}) {
   const [audioUrl, setAudioUrl] = useState('');
   const [words, setWords] = useState([]);
   const [clipDurations, setClipDurations] = useState({});
+  const [captionStyle, setCaptionStyleState] = useState(DEFAULT_CAPTION_STYLE);
+  const [available, setAvailable] = useState([]);
+  const [sceneImages, setSceneImages] = useState({});
+
+  const captionStyleRef = useRef(DEFAULT_CAPTION_STYLE);
+  const edlRef = useRef(null);
+  const saveStyleTimeoutRef = useRef(null);
 
   const dataRef = useRef({
     duration: 0,
@@ -56,6 +65,7 @@ export function useAutoEdit(videoId, options = {}) {
       setStatus('missing');
       setMissing(['No se ha seleccionado ningún video.']);
       setEdl(null);
+      edlRef.current = null;
       setSources({});
       setAudioUrl('');
       setWords([]);
@@ -63,6 +73,10 @@ export function useAutoEdit(videoId, options = {}) {
       setWarnings([]);
       setAdjustments(0);
       setNotices([]);
+      setCaptionStyleState(DEFAULT_CAPTION_STYLE);
+      captionStyleRef.current = DEFAULT_CAPTION_STYLE;
+      setAvailable([]);
+      setSceneImages({});
       return;
     }
 
@@ -74,11 +88,12 @@ export function useAutoEdit(videoId, options = {}) {
 
     const api = window.electronAPI;
     try {
-      const [voiceMeta, anims, savedEdit, busy] = await Promise.all([
+      const [voiceMeta, anims, savedEdit, busy, scenesList] = await Promise.all([
         api?.getVoice?.(videoId) ?? null,
         api?.getAnimations?.(videoId) ?? [],
         api?.getEdit?.(videoId) ?? null,
         api?.getEditBusy?.() ?? false,
+        api?.getScenes?.(videoId) ?? [],
       ]);
 
       if (reqId !== reqIdRef.current) return;
@@ -93,12 +108,22 @@ export function useAutoEdit(videoId, options = {}) {
         if (!anim || typeof anim !== 'object' || !Number.isInteger(anim.number)) return false;
         return latestVideo(anim) !== null;
       });
-      const available = availableItems.map((a) => a.number);
+      const availableNums = availableItems.map((a) => a.number);
 
       const currentSources = {};
       for (const anim of availableItems) {
         const file = latestVideo(anim);
         currentSources[anim.number] = animationVideoUrl(videoId, anim.number, file);
+      }
+
+      const currentSceneImages = {};
+      for (const scene of Array.isArray(scenesList) ? scenesList : []) {
+        if (scene && Number.isInteger(scene.number)) {
+          const file = scene.selectedFile || latestFiles(scene)[0];
+          if (file) {
+            currentSceneImages[scene.number] = sceneImageUrl(videoId, scene.number, file);
+          }
+        }
       }
 
       const currentAudioUrl = `mecatube-media://voice/${encodeURIComponent(videoId)}`;
@@ -109,13 +134,13 @@ export function useAutoEdit(videoId, options = {}) {
       if (!hasVoice) {
         missingReasons.push('Falta la voz en off (genera la narración en el panel de Voz).');
       }
-      if (available.length === 0) {
+      if (availableNums.length === 0) {
         missingReasons.push('No hay animaciones con video generado (genera al menos una animación).');
       }
 
       dataRef.current = {
         duration: typeof duration === 'number' && Number.isFinite(duration) ? duration : 0,
-        available,
+        available: availableNums,
         phrases,
         animList,
         sources: currentSources,
@@ -123,9 +148,18 @@ export function useAutoEdit(videoId, options = {}) {
       };
 
       setSources(currentSources);
+      setSceneImages(currentSceneImages);
+      setAvailable(availableNums);
       setAudioUrl(currentAudioUrl);
       setWords(wordsList);
       setMissing(missingReasons);
+
+      // Initialize caption style from saved edit, or default if absent
+      const initialStyle = savedEdit?.captionStyle
+        ? normalizeCaptionStyle(savedEdit.captionStyle)
+        : DEFAULT_CAPTION_STYLE;
+      setCaptionStyleState(initialStyle);
+      captionStyleRef.current = initialStyle;
 
       // Probe clip durations in the background
       if (Object.keys(currentSources).length > 0) {
@@ -140,19 +174,21 @@ export function useAutoEdit(videoId, options = {}) {
 
       // Re-normalize saved edit against current available animations before use
       if (savedEdit) {
-        if (hasVoice && available.length > 0) {
+        if (hasVoice && availableNums.length > 0) {
           const { edl: normEdl, warnings: normWarnings } = normalizeEdl(savedEdit, {
             duration,
-            available,
+            available: availableNums,
             phrases,
           });
           setEdl(normEdl);
+          edlRef.current = normEdl;
           setWarnings(normWarnings);
           setAdjustments(normWarnings.length);
           setNotices([]);
           setUsedFallback(Boolean(savedEdit.isFallback));
         } else {
           setEdl(null);
+          edlRef.current = null;
           setWarnings([]);
           setAdjustments(0);
           setNotices([]);
@@ -160,6 +196,7 @@ export function useAutoEdit(videoId, options = {}) {
         }
       } else {
         setEdl(null);
+        edlRef.current = null;
         setWarnings([]);
         setAdjustments(0);
         setNotices([]);
@@ -186,6 +223,48 @@ export function useAutoEdit(videoId, options = {}) {
       reqIdRef.current += 1;
     };
   }, [load]);
+
+  useEffect(() => {
+    return () => {
+      if (saveStyleTimeoutRef.current) {
+        clearTimeout(saveStyleTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const setCaptionStyle = useCallback(
+    (next) => {
+      let resolvedStyle;
+      setCaptionStyleState((prev) => {
+        const resolved = typeof next === 'function' ? next(prev) : next;
+        resolvedStyle = normalizeCaptionStyle(resolved);
+        captionStyleRef.current = resolvedStyle;
+        return resolvedStyle;
+      });
+
+      if (saveStyleTimeoutRef.current) {
+        clearTimeout(saveStyleTimeoutRef.current);
+        saveStyleTimeoutRef.current = null;
+      }
+
+      if (edlRef.current) {
+        saveStyleTimeoutRef.current = setTimeout(async () => {
+          if (!videoId || !edlRef.current) return;
+          const currentStyle = captionStyleRef.current;
+          const mergedEdl = { ...edlRef.current, captionStyle: currentStyle };
+          setEdl(mergedEdl);
+          edlRef.current = mergedEdl;
+          try {
+            await window.electronAPI?.saveEdit?.(videoId, mergedEdl);
+            await onEditedRef.current?.();
+          } catch (err) {
+            console.error('Failed to save caption style', err);
+          }
+        }, 500);
+      }
+    },
+    [videoId]
+  );
 
   const generate = useCallback(
     async (notes) => {
@@ -263,13 +342,18 @@ export function useAutoEdit(videoId, options = {}) {
 
       if (finalEdl) {
         try {
-          const toSave = { ...finalEdl, isFallback };
+          const withStyle = {
+            ...finalEdl,
+            captionStyle: captionStyleRef.current,
+          };
+          const toSave = { ...withStyle, isFallback };
           await api?.saveEdit?.(videoId, toSave);
           if (!isEditingDone(stagesRef.current)) {
             await api?.setVideoStage?.(videoId, 'editing', true);
           }
           await onEditedRef.current?.();
-          setEdl(finalEdl);
+          setEdl(withStyle);
+          edlRef.current = withStyle;
           setWarnings(finalWarnings);
           setAdjustments(finalAdjustments);
           setNotices(finalNotices);
@@ -308,14 +392,20 @@ export function useAutoEdit(videoId, options = {}) {
       return;
     }
 
+    const withStyle = {
+      ...edlResult,
+      captionStyle: captionStyleRef.current,
+    };
+
     try {
-      const toSave = { ...edlResult, isFallback: true };
+      const toSave = { ...withStyle, isFallback: true };
       await api?.saveEdit?.(videoId, toSave);
       if (!isEditingDone(stagesRef.current)) {
         await api?.setVideoStage?.(videoId, 'editing', true);
       }
       await onEditedRef.current?.();
-      setEdl(edlResult);
+      setEdl(withStyle);
+      edlRef.current = withStyle;
       setWarnings([]);
       setAdjustments(0);
       setNotices([]);
@@ -339,6 +429,10 @@ export function useAutoEdit(videoId, options = {}) {
     audioUrl,
     words,
     clipDurations,
+    captionStyle,
+    setCaptionStyle,
+    available,
+    sceneImages,
     generate,
     runFallback,
   };

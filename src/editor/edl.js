@@ -2,6 +2,7 @@
 // EDL version 1 with contiguous clips, valid transitions/motions, and timed subtitles.
 
 import { assignByPhrases } from './timing.js';
+import { normalizeCaptionStyle } from './captionStyle.js';
 
 export const TRANSITIONS = ['cut', 'fade', 'slide', 'zoom'];
 export const MOTIONS = ['none', 'zoom-in', 'zoom-out', 'pan-left', 'pan-right'];
@@ -274,6 +275,9 @@ export function normalizeEdl(raw, { duration, available, phrases = [], minClip =
     subtitles.sort((a, b) => a.start - b.start || a.end - b.end);
   }
 
+  const captionStyle =
+    parsed.captionStyle !== undefined ? normalizeCaptionStyle(parsed.captionStyle) : undefined;
+
   return {
     edl: {
       version: 1,
@@ -286,6 +290,7 @@ export function normalizeEdl(raw, { duration, available, phrases = [], minClip =
         motion: c.motion,
       })),
       subtitles,
+      ...(captionStyle !== undefined ? { captionStyle } : {}),
     },
     warnings,
   };

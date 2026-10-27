@@ -136,6 +136,7 @@ export default function VideoComposition({
   audioUrl,
   clipDurations = {},
   words,
+  captionStyle,
 }) {
   const { fps } = useVideoConfig();
   const plan = buildPlan(edl, { fps, clipDurations });
@@ -168,7 +169,7 @@ export default function VideoComposition({
       )}
       {audioUrl && <Audio src={audioUrl} />}
       {Array.isArray(words) && words.length > 0 ? (
-        <KaraokeCaptions words={words} />
+        <KaraokeCaptions words={words} style={captionStyle ?? edl?.captionStyle} />
       ) : (
         <Subtitles subtitles={edl?.subtitles} />
       )}
