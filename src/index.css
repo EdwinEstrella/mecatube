@@ -2345,3 +2345,140 @@ body {
   color: #ff8a8a;
   border-color: rgba(255, 138, 138, 0.4);
 }
+
+
+/* Automatic video editing section */
+
+.auto-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.auto-edit__title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.auto-edit__missing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 170, 0, 0.07);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.auto-edit__missing-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.82rem;
+  color: #ffb74d;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auto-edit__missing-item {
+  line-height: 1.4;
+}
+
+.auto-edit__error {
+  margin: 0;
+}
+
+.auto-edit__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auto-edit__label {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.auto-edit__textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.85rem;
+  box-sizing: border-box;
+}
+
+.auto-edit__char-count {
+  align-self: flex-end;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.auto-edit__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.auto-edit__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auto-edit__summary-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.auto-edit__summary-separator {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.auto-edit__warnings {
+  background: rgba(255, 170, 0, 0.07);
+  border: 1px solid rgba(255, 170, 0, 0.25);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
+.auto-edit__warnings-summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #ffb74d;
+}
+
+.auto-edit__warnings-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.auto-edit__warning-item {
+  line-height: 1.4;
+}
+
+.auto-edit__player-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auto-edit__note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+}

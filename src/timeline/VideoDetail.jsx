@@ -3,6 +3,7 @@ import StageTrack from './StageTrack.jsx';
 import VoicePanel from '../voice/VoicePanel.jsx';
 import CustomSelect from '../ui/CustomSelect.jsx';
 import CharactersPanel from '../flow/CharactersPanel.jsx';
+import AutoEditPanel from '../editor/AutoEditPanel.jsx';
 
 // state: 'ok' | 'deleted' | 'none' for one linked chat
 function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onStart, openLabel, startLabel }) {
@@ -54,6 +55,7 @@ export default function VideoDetail({
   onStartPrompt,
   onToggleStage,
   onDelete,
+  onEdited,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -159,6 +161,8 @@ export default function VideoDetail({
         onSetProject={onSetFlowProject}
         onOpenProject={onOpenFlowProject}
       />
+
+      <AutoEditPanel videoId={video.id} stages={stages} onEdited={onEdited} />
 
       <div className="saved-idea__actions" style={{ marginTop: '16px' }}>
         {isConfirming ? (

@@ -116,6 +116,7 @@ export default function TimelineView({ onOpenChat, onChatAction }) {
     onStartPrompt: handleStartPrompt,
     onToggleStage: handleToggleStage,
     onDelete: (id) => run(() => window.electronAPI.deleteVideo(id)),
+    onEdited: () => refresh().catch((refreshError) => setError(cleanError(refreshError))),
   };
 
   return (
