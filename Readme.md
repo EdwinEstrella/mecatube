@@ -21,13 +21,13 @@ Para conectarse con DeepSeek y Flow usa una pequeña extensión de Chrome (inclu
 
 | Qué | Enlace |
 | --- | --- |
-| **Aplicación para Windows** | [Descargar Mecatube-Setup.exe](https://github.com/EdwinEstrella/mecatube/releases/latest/download/Mecatube-Setup.exe) |
-| **Extensión para Chrome** | [Descargar Mecatube-Extension.zip](https://github.com/EdwinEstrella/mecatube/releases/latest/download/Mecatube-Extension.zip) |
+| **Aplicación para Windows** | [Descargar Mecatube.exe](https://github.com/EdwinEstrella/mecatube/releases/latest/download/Mecatube.exe) |
+| **Extensión para Chrome** | [Descargar extension.zip](https://github.com/EdwinEstrella/mecatube/releases/latest/download/extension.zip) |
 | Todas las versiones | [Ver versiones](https://github.com/EdwinEstrella/mecatube/releases) |
 
 ## Instalar la app paso a paso
 
-1. Descarga **Mecatube-Setup.exe** con el enlace de arriba.
+1. Descarga **Mecatube.exe** con el enlace de arriba.
 2. Haz doble clic en el archivo descargado.
 3. Si Windows muestra **"Windows protegió su PC"**, es normal: la app aún no tiene firma digital de pago. Haz clic en **Más información** y luego en **Ejecutar de todas formas**.
 4. Elige la carpeta de instalación (o deja la que aparece) y pulsa **Instalar**.
@@ -35,7 +35,7 @@ Para conectarse con DeepSeek y Flow usa una pequeña extensión de Chrome (inclu
 
 ## Instalar la extensión en Chrome paso a paso
 
-1. Descarga **Mecatube-Extension.zip** con el enlace de arriba.
+1. Descarga **extension.zip** con el enlace de arriba.
 2. Descomprímelo en una carpeta que **no vayas a borrar ni mover** (por ejemplo `Documentos\Mecatube-Extension`). Chrome usa esa carpeta cada vez que se abre.
 3. En Chrome escribe `chrome://extensions` en la barra de direcciones y pulsa Enter.
 4. Activa **Modo de desarrollador** (interruptor arriba a la derecha).
@@ -85,7 +85,7 @@ Consulta la guía en [docs/chrome-web-store.md](docs/chrome-web-store.md).
 npm install              # instala dependencias
 npm run dev              # app en modo desarrollo
 npm run dist             # genera el instalador en release/
-npm run pack:extension   # genera release/Mecatube-Extension.zip
+npm run pack:extension   # genera release/extension.zip
 ```
 
 **Publicar una versión:**
@@ -93,6 +93,6 @@ npm run pack:extension   # genera release/Mecatube-Extension.zip
 1. Sube la versión en `package.json` (por ejemplo `0.1.1`) y haz commit.
 2. Ejecuta `npm run dist` y `npm run pack:extension`.
 3. Crea un tag `vX.Y.Z` y una release en GitHub.
-4. Adjunta a la release: `Mecatube-Setup-X.Y.Z.exe`, `Mecatube-Setup.exe`, `latest.yml`, `Mecatube-Setup-X.Y.Z.exe.blockmap` y `Mecatube-Extension.zip`. El actualizador de la app lee `latest.yml`, y los enlaces de este README usan `Mecatube-Setup.exe` y `Mecatube-Extension.zip`.
+4. Adjunta a la release: `Mecatube.exe`, `Mecatube.exe.blockmap`, `latest.yml` y `extension.zip`. Los nombres no llevan versión: el actualizador de la app lee la versión desde `latest.yml`, y los enlaces de este README siempre apuntan a la última release.
 
 </details>

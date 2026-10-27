@@ -11,6 +11,7 @@ import { useFlowCharacters } from './flow/useFlowCharacters.js';
 import { useFlowScenes } from './flow/useFlowScenes.js';
 import { useFlowAnimations } from './flow/useFlowAnimations.js';
 import { latestCharacterKeys } from './flow/currentCharacters.js';
+import { withImageBudget } from './flow/imageBudget.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -130,6 +131,12 @@ export default function ChatView({
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [refreshList, refreshIdeas]);
+
+  // Typed messages only: a script answering prompt-2's request carries the exact image count
+  const handleCompose = (rawText) => {
+    const lastAssistant = [...messages].reverse().find((message) => message?.role === 'assistant');
+    return handleSend(withImageBudget(rawText, lastAssistant?.content));
+  };
 
   const handleSend = async (text) => {
     setError('');
@@ -354,7 +361,7 @@ export default function ChatView({
           onSend={handlePreset}
           onSendConnectors={handleSend}
         />
-        <Composer disabled={!canChat || isBusy} placeholder={placeholder} onSend={handleSend} />
+        <Composer disabled={!canChat || isBusy} placeholder={placeholder} onSend={handleCompose} />
       </section>
       {deleteRequest && (
         <DeleteChatDialog

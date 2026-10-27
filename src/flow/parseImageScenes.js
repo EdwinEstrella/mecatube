@@ -35,6 +35,16 @@ const SHEET_GROUP = /\(\s*hojas?\s[^)]*\)/gi;
 
 const KINDS = { escena: 'scene', explicacion: 'explanation' };
 
+const SCRIPT_ANCHOR = /^\s*[*_]{0,2}gui[oó]n[*_]{0,2}\s*:\s*(.+)$/i;
+
+// Strips markdown, surrounding quotes/guillemets («» “” ‘’ " '), and collapses spaces
+function cleanAnchor(raw) {
+  if (!raw) return '';
+  let text = String(raw).replace(/[*_`]/g, '').trim();
+  text = text.replace(/^[\s«»“”‘’"']+|[\s«»“”‘’"']+$/g, '').trim();
+  return text.replace(/\s+/g, ' ');
+}
+
 // Splits the "Gancho" tag out of a heading remainder: { text, hook }
 function takeHook(rest) {
   const segments = String(rest ?? '').split(/\s*[·•|]\s*/);
@@ -82,7 +92,7 @@ function parseHeading(number, rawRest) {
 
 // Items of a finished assistant message, or null when it is not an image/animation block delivery:
 // { kind: 'images' | 'animations', block: { index, total, from, to } | null, intro,
-//   scenes: [{ number, kind, title, sheetRefs, hook, prompt }], outro }
+//   scenes: [{ number, kind, title, sheetRefs, hook, scriptAnchor, prompt }], outro }
 // `scenes` holds the images or the animations (see `kind`); item `kind` is scene | explanation | other.
 // sheetRefs are the sheet labels as written ("1", "2", "1B"), in order of appearance.
 export function parseImageScenes(content) {
@@ -130,10 +140,18 @@ export function parseImageScenes(content) {
     if (headingMatch) {
       // Re-read the heading with its original accents and casing
       const original = unmark(line).replace(HEADING_PREFIX, '');
-      current = { ...parseHeading(Number(headingMatch[2]), original), prompt: null, heading: headingMatch[1] === 'animacion' ? 'animations' : 'images' };
+      current = { ...parseHeading(Number(headingMatch[2]), original), scriptAnchor: '', prompt: null, heading: headingMatch[1] === 'animacion' ? 'animations' : 'images' };
       scenes.push(current);
       tail = [];
       continue;
+    }
+
+    if (current && current.prompt === null) {
+      const anchorMatch = SCRIPT_ANCHOR.exec(line);
+      if (anchorMatch) {
+        current.scriptAnchor = cleanAnchor(anchorMatch[1]);
+        continue;
+      }
     }
 
     if (scenes.length === 0) intro.push(line);
@@ -153,4 +171,28 @@ export function parseImageScenes(content) {
     scenes: found,
     outro: tail.join('\n').trim(),
   };
+}
+
+// Collects all image scenes across assistant messages in a conversation.
+// Later messages with the same scene number override earlier ones.
+// Returns an array of scenes sorted by scene number.
+export function collectImageScenes(messages) {
+  if (!Array.isArray(messages)) return [];
+  const sceneMap = new Map();
+
+  for (const message of messages) {
+    if (!message || message.role !== 'assistant' || typeof message.content !== 'string') {
+      continue;
+    }
+    const parsed = parseImageScenes(message.content);
+    if (parsed && parsed.kind === 'images' && Array.isArray(parsed.scenes)) {
+      for (const scene of parsed.scenes) {
+        if (scene && typeof scene.number === 'number') {
+          sceneMap.set(scene.number, scene);
+        }
+      }
+    }
+  }
+
+  return Array.from(sceneMap.values()).sort((a, b) => a.number - b.number);
 }

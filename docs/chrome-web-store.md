@@ -5,7 +5,7 @@ Esta guía es para el dueño del proyecto. Publicar en la tienda evita que los u
 ## Antes de empezar
 
 1. Crea una cuenta en el [panel de desarrolladores de Chrome](https://chrome.google.com/webstore/devconsole). Tiene un **pago único de 5 USD**.
-2. Genera el zip con `npm run pack:extension` (queda en `release/Mecatube-Extension.zip`, con `manifest.json` en la raíz).
+2. Genera el zip con `npm run pack:extension` (queda en `release/extension.zip`, con `manifest.json` en la raíz).
 3. Ten a mano capturas de pantalla (1280x800 o 640x400), el icono de 128x128 y una descripción.
 
 ## Pasos

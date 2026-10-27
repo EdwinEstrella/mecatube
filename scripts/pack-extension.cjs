@@ -1,4 +1,4 @@
-// Zips extension/ into release/Mecatube-Extension.zip (manifest.json at the zip root),
+// Zips extension/ into release/extension.zip (manifest.json at the zip root),
 // leaving out tests and docs. Uses the tar (bsdtar) that ships with Windows 10+.
 const fs = require('node:fs');
 const os = require('node:os');
@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const root = path.join(__dirname, '..');
 const source = path.join(root, 'extension');
 const releaseDir = path.join(root, 'release');
-const output = path.join(releaseDir, 'Mecatube-Extension.zip');
+const output = path.join(releaseDir, 'extension.zip');
 const EXCLUDED = [/\.test\.cjs$/, /^README\.md$/i];
 
 function copyFiltered(from, to) {

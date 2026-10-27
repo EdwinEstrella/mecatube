@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mecatube Bridge",
-  "version": "0.2.1",
+  "version": "0.0.1",
   "description": "Relays Mecatube prompts to chat.deepseek.com and Google Flow, and returns the replies and generated images.",
   "icons": {
     "16": "icons/icon-16.png",

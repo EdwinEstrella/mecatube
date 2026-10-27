@@ -7,7 +7,8 @@ import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
 import SceneCards, { ThumbnailCard } from '../flow/SceneCards.jsx';
 import AnimationCards from '../flow/AnimationCards.jsx';
 import { nextStepPrompt } from './nextStep.js';
-import { parseImageScenes } from '../flow/parseImageScenes.js';
+import { collectImageScenes, parseImageScenes } from '../flow/parseImageScenes.js';
+import { animationSeconds } from '../flow/animationSeconds.js';
 import { parseThumbnail } from '../flow/parseThumbnail.js';
 import { chosenIdeaNumber, hasUserMessageAfter } from './chosenIdea.js';
 import { isScriptMessage } from '../timeline/stages.js';
@@ -100,16 +101,30 @@ export default function MessageList({
       ),
     [messages, parsed, flow?.available],
   );
-  // Image-block deliveries (ETAPA 3): one card per prompt with a "Generar en Flow" button
-  const imageBlocks = useMemo(
-    () =>
-      messages.map((message, index) =>
-        flow?.available && scenes?.available && message.role === 'assistant' && !parsed[index] && !sheets[index]
-          ? parseImageScenes(message.content)
-          : null,
-      ),
-    [messages, parsed, sheets, flow?.available, scenes?.available],
-  );
+  // Image-block deliveries (ETAPA 3) and animation-block deliveries (ETAPA 4)
+  const imageBlocks = useMemo(() => {
+    const rawBlocks = messages.map((message, index) =>
+      flow?.available && scenes?.available && message.role === 'assistant' && !parsed[index] && !sheets[index]
+        ? parseImageScenes(message.content)
+        : null,
+    );
+    const imageScenes = collectImageScenes(messages);
+    const anchorByNumber = new Map(imageScenes.map((scene) => [scene.number, scene.scriptAnchor]));
+    return rawBlocks.map((block) => {
+      if (!block || block.kind !== 'animations') return block;
+      return {
+        ...block,
+        scenes: block.scenes.map((scene) => {
+          const scriptAnchor = scene.scriptAnchor || anchorByNumber.get(scene.number) || '';
+          return {
+            ...scene,
+            scriptAnchor,
+            seconds: animationSeconds(scriptAnchor),
+          };
+        }),
+      };
+    });
+  }, [messages, parsed, sheets, flow?.available, scenes?.available]);
   // Thumbnail delivery (ETAPA 5): one card with a "Generar miniatura en Flow" button
   const thumbnails = useMemo(
     () =>
