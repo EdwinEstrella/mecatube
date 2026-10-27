@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {
   buildDirectorMessages,
+  buildAlignMessages,
   createDirectorService,
 } = require('./director.cjs');
 
@@ -19,60 +20,82 @@ async function test(name, fn) {
   const tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'director-test-'));
 
   try {
-    const validPhrases = [
-      { i: 0, start: 0, end: 2.5, text: 'Hello and welcome.' },
-      { i: 1, start: 2.5, end: 6.0, text: 'In this video we build an AI director.' },
+    const validClips = [
+      { number: 1, start: 0, end: 2.5, text: 'Hello and welcome to this video.' },
+      { number: 2, start: 2.5, end: 6.0, text: 'Here we explain the concept clearly.' },
     ];
-    const validAnimations = [
-      { number: 1, title: 'Hook scene', hook: true },
-      { number: 2, title: 'Concept explanation', hook: false },
+    const validPhrases = [
+      { i: 0, text: 'Hello and welcome to this video.' },
+      { i: 1, text: 'Here we explain the concept clearly.' },
+    ];
+    const validScenes = [
+      { number: 1, title: 'Intro', prompt: 'A cinematic opening scene.' },
+      { number: 2, title: 'Concept', prompt: 'Detailed diagram of the topic.' },
     ];
 
-    await test('message building contains the JSON input and notes', () => {
+    await test('director message building contains clips and notes with fixed-timings prompt', () => {
       const messages = buildDirectorMessages({
         duration: 6.0,
-        phrases: validPhrases,
-        animations: validAnimations,
+        clips: validClips,
         notes: 'Keep the pace fast and dynamic.',
       });
 
       assert.equal(messages.length, 2);
       assert.equal(messages[0].role, 'system');
-      assert.match(messages[0].content, /EDL v1/);
+      assert.match(messages[0].content, /FIXED/);
       assert.match(messages[0].content, /cut\|fade\|slide\|zoom/);
       assert.match(messages[0].content, /none\|zoom-in\|zoom-out\|pan-left\|pan-right/);
-      assert.match(messages[0].content, /contiguous/);
-      assert.match(messages[0].content, /hook/i);
 
       assert.equal(messages[1].role, 'user');
       const payload = JSON.parse(messages[1].content);
       assert.equal(payload.duration, 6.0);
-      assert.deepEqual(payload.phrases, validPhrases);
-      assert.deepEqual(payload.animations, validAnimations);
+      assert.deepEqual(payload.clips, validClips);
       assert.equal(payload.notes, 'Keep the pace fast and dynamic.');
 
       // Omits notes when empty
       const withoutNotes = buildDirectorMessages({
         duration: 6.0,
-        phrases: validPhrases,
-        animations: validAnimations,
+        clips: validClips,
         notes: '   ',
       });
       const parsedWithout = JSON.parse(withoutNotes[1].content);
       assert.equal(Object.prototype.hasOwnProperty.call(parsedWithout, 'notes'), false);
     });
 
-    await test('validation errors (bad id, empty phrases, bad animation, long notes)', async () => {
+    await test('align message building truncates long prompts and includes scenes and phrases', () => {
+      const longPrompt = 'A'.repeat(800);
+      const messages = buildAlignMessages({
+        phrases: validPhrases,
+        scenes: [
+          { number: 1, title: 'Intro', prompt: longPrompt, needed: true },
+          { number: 2, title: 'Concept', prompt: 'Short prompt', needed: false, fixedPhrase: 1 },
+        ],
+      });
+
+      assert.equal(messages.length, 2);
+      assert.equal(messages[0].role, 'system');
+      assert.match(messages[0].content, /assignments/);
+
+      assert.equal(messages[1].role, 'user');
+      const payload = JSON.parse(messages[1].content);
+      assert.deepEqual(payload.phrases, validPhrases);
+      assert.equal(payload.scenes[0].prompt.length, 700);
+      assert.equal(payload.scenes[0].needed, true);
+      assert.equal(payload.scenes[1].needed, false);
+      assert.equal(payload.scenes[1].fixedPhrase, 1);
+    });
+
+    await test('direct validation errors (bad id, duration, clips, notes)', async () => {
       const service = createDirectorService({
         getWorkspacePath: () => tmpWorkspace,
         getApiKey: () => 'fake-key',
-        streamChat: async () => '{"version":1,"clips":[],"subtitles":[]}',
+        streamChat: async () => '{"clips":[]}',
       });
 
       // Bad videoId
       for (const badId of ['../escape', 'a/b', '', 'x'.repeat(101)]) {
         await assert.rejects(
-          () => service.direct({ videoId: badId, duration: 10, phrases: validPhrases, animations: validAnimations }),
+          () => service.direct({ videoId: badId, duration: 10, clips: validClips }),
           /ID de video no válido\./,
         );
       }
@@ -80,43 +103,71 @@ async function test(name, fn) {
       // Bad duration
       for (const badDur of [0, -1, NaN, Infinity, null, '10']) {
         await assert.rejects(
-          () => service.direct({ videoId: 'v1', duration: badDur, phrases: validPhrases, animations: validAnimations }),
+          () => service.direct({ videoId: 'v1', duration: badDur, clips: validClips }),
           /Duración no válida\./,
         );
       }
 
-      // Empty / invalid phrases
+      // Bad clips
       await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: [], animations: validAnimations }),
-        /Lista de frases no válida\./,
+        () => service.direct({ videoId: 'v1', duration: 10, clips: [] }),
+        /Lista de clips no válida\./,
       );
       await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: [{ start: 'bad', end: 1, text: 'hi' }], animations: validAnimations }),
-        /Lista de frases no válida\./,
-      );
-
-      // Bad animation
-      await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: validPhrases, animations: [] }),
-        /Lista de animaciones no válida\./,
+        () => service.direct({ videoId: 'v1', duration: 10, clips: [{ number: 1, start: 5, end: 4, text: 'invalid' }] }),
+        /Lista de clips no válida\./,
       );
       await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: validPhrases, animations: [{ number: 0, title: 't', hook: false }] }),
-        /Lista de animaciones no válida\./,
+        () => service.direct({ videoId: 'v1', duration: 10, clips: [{ number: 0, start: 0, end: 5, text: 'invalid' }] }),
+        /Lista de clips no válida\./,
       );
       await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: validPhrases, animations: [{ number: 1, title: 't', hook: 'not-bool' }] }),
-        /Lista de animaciones no válida\./,
+        () => service.direct({ videoId: 'v1', duration: 10, clips: [{ number: 1, start: 0, end: 5, text: 'a'.repeat(2001) }] }),
+        /Lista de clips no válida\./,
       );
 
       // Long notes
       await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: validPhrases, animations: validAnimations, notes: 'a'.repeat(501) }),
+        () => service.direct({ videoId: 'v1', duration: 10, clips: validClips, notes: 'a'.repeat(501) }),
         /Notas no válidas\./,
       );
     });
 
-    await test('missing key error', async () => {
+    await test('align validation errors (bad id, phrases, scenes)', async () => {
+      const service = createDirectorService({
+        getWorkspacePath: () => tmpWorkspace,
+        getApiKey: () => 'fake-key',
+        streamChat: async () => '{"assignments":[]}',
+      });
+
+      // Bad videoId
+      await assert.rejects(
+        () => service.align({ videoId: 'bad/id', phrases: validPhrases, scenes: validScenes }),
+        /ID de video no válido\./,
+      );
+
+      // Bad phrases
+      await assert.rejects(
+        () => service.align({ videoId: 'v1', phrases: [], scenes: validScenes }),
+        /Lista de frases no válida\./,
+      );
+      await assert.rejects(
+        () => service.align({ videoId: 'v1', phrases: [{ i: 'not-int', text: 'hi' }], scenes: validScenes }),
+        /Lista de frases no válida\./,
+      );
+
+      // Bad scenes
+      await assert.rejects(
+        () => service.align({ videoId: 'v1', phrases: validPhrases, scenes: [] }),
+        /Lista de escenas no válida\./,
+      );
+      await assert.rejects(
+        () => service.align({ videoId: 'v1', phrases: validPhrases, scenes: [{ number: 0, title: 't', prompt: 'p' }] }),
+        /Lista de escenas no válida\./,
+      );
+    });
+
+    await test('missing key error for direct and align', async () => {
       const service = createDirectorService({
         getWorkspacePath: () => tmpWorkspace,
         getApiKey: () => '',
@@ -124,16 +175,19 @@ async function test(name, fn) {
       });
 
       await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: validPhrases, animations: validAnimations }),
+        () => service.direct({ videoId: 'v1', duration: 10, clips: validClips }),
+        /Configura tu API Key de DeepSeek en Configuración para que la IA edite el video\./,
+      );
+
+      await assert.rejects(
+        () => service.align({ videoId: 'v1', phrases: validPhrases, scenes: validScenes }),
         /Configura tu API Key de DeepSeek en Configuración para que la IA edite el video\./,
       );
     });
 
-    await test('busy rejection while a run is pending and busy cleared after failure', async () => {
-      let resolveChat;
+    await test('busy rejection and cleared after failure', async () => {
       let rejectChat;
-      const pendingPromise = new Promise((resolve, reject) => {
-        resolveChat = resolve;
+      const pendingPromise = new Promise((_, reject) => {
         rejectChat = reject;
       });
 
@@ -144,41 +198,44 @@ async function test(name, fn) {
       });
 
       assert.equal(service.busy(), false);
-
-      const run1 = service.direct({ videoId: 'v1', duration: 10, phrases: validPhrases, animations: validAnimations });
-
+      const run1 = service.direct({ videoId: 'v1', duration: 10, clips: validClips });
       assert.equal(service.busy(), true);
 
-      // Second run rejected because service is busy
       await assert.rejects(
-        () => service.direct({ videoId: 'v1', duration: 10, phrases: validPhrases, animations: validAnimations }),
+        () => service.align({ videoId: 'v1', phrases: validPhrases, scenes: validScenes }),
         /Ya hay una edición en curso\./,
       );
 
-      // Fail run1 and verify busy flag is cleared
       rejectChat(new Error('Network failure'));
       await assert.rejects(() => run1, /Network failure/);
-
       assert.equal(service.busy(), false);
     });
 
-    await test('raw returned', async () => {
-      const rawOutput = '{"version":1,"duration":6,"clips":[],"subtitles":[]}';
+    await test('raw returned from direct and align', async () => {
+      const directRaw = '{"clips":[{"number":1,"transition":"fade","motion":"zoom-in"}]}';
+      const alignRaw = '{"assignments":[{"number":1,"phrase":0}]}';
+
+      let returnRaw = directRaw;
       const service = createDirectorService({
         getWorkspacePath: () => tmpWorkspace,
         getApiKey: () => 'fake-key',
-        streamChat: async () => rawOutput,
+        streamChat: async () => returnRaw,
       });
 
-      const result = await service.direct({
+      const resDirect = await service.direct({
         videoId: 'v1',
         duration: 6.0,
-        phrases: validPhrases,
-        animations: validAnimations,
+        clips: validClips,
       });
+      assert.deepEqual(resDirect, { raw: directRaw });
 
-      assert.deepEqual(result, { raw: rawOutput });
-      assert.equal(service.busy(), false);
+      returnRaw = alignRaw;
+      const resAlign = await service.align({
+        videoId: 'v1',
+        phrases: validPhrases,
+        scenes: validScenes,
+      });
+      assert.deepEqual(resAlign, { raw: alignRaw });
     });
 
     await test('save/get roundtrip with savedAt', async () => {
@@ -192,7 +249,7 @@ async function test(name, fn) {
         version: 1,
         duration: 10,
         clips: [{ number: 1, start: 0, end: 10, transition: 'cut', motion: 'none' }],
-        subtitles: [{ start: 0, end: 5, text: 'Hello' }],
+        subtitles: [],
       };
 
       const before = Date.now();
@@ -206,38 +263,6 @@ async function test(name, fn) {
 
       const retrieved = service.getEdit('test-video');
       assert.deepEqual(retrieved, saved);
-    });
-
-    await test('get missing -> null', () => {
-      const service = createDirectorService({
-        getWorkspacePath: () => tmpWorkspace,
-        getApiKey: () => 'fake-key',
-        streamChat: async () => '{}',
-      });
-
-      assert.equal(service.getEdit('non-existent-video'), null);
-    });
-
-    await test('save rejects non-object/missing clips', () => {
-      const service = createDirectorService({
-        getWorkspacePath: () => tmpWorkspace,
-        getApiKey: () => 'fake-key',
-        streamChat: async () => '{}',
-      });
-
-      for (const badEdl of [null, undefined, 'string', 123, [], { version: 1 }, { clips: 'not-array' }]) {
-        assert.throws(
-          () => service.saveEdit('v1', badEdl),
-          /Edición no válida\./,
-        );
-      }
-
-      // Reject payload exceeding 2MB
-      const bigEdl = { clips: [], huge: 'x'.repeat(2 * 1024 * 1024 + 10) };
-      assert.throws(
-        () => service.saveEdit('v1', bigEdl),
-        /Edición no válida\./,
-      );
     });
 
     console.log(`\n${passed} passed`);

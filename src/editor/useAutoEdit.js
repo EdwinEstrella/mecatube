@@ -1,10 +1,17 @@
 // Hook managing automatic video editing state, AI direct-edit generation, and fallback logic.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { buildPhrases } from './timing.js';
-import { fallbackEdl, normalizeEdl } from './edl.js';
+import { extractJsonCandidate, normalizeEdl } from './edl.js';
+import {
+  applyStyling,
+  defaultStyling,
+  phrasesToWordIndex,
+  placeVideos,
+} from './placement.js';
 import { probeDurations } from './clipDurations.js';
 import { animationVideoUrl, latestVideo } from '../flow/animationStatus.js';
 import { latestFiles, sceneImageUrl } from '../flow/sceneStatus.js';
+import { collectImageScenes } from '../flow/parseImageScenes.js';
 import { DEFAULT_CAPTION_STYLE, normalizeCaptionStyle } from './captionStyle.js';
 import { cleanIpcError } from '../voice/constants.js';
 
@@ -16,6 +23,17 @@ function isEditingDone(stages) {
     return stages.editing === true || stages.editing === 'done' || stages.editing?.status === 'done';
   }
   return false;
+}
+
+function isValidWord(item) {
+  return (
+    item !== null &&
+    typeof item === 'object' &&
+    typeof item.s === 'number' &&
+    Number.isFinite(item.s) &&
+    typeof item.e === 'number' &&
+    Number.isFinite(item.e)
+  );
 }
 
 export function useAutoEdit(videoId, options = {}) {
@@ -32,6 +50,7 @@ export function useAutoEdit(videoId, options = {}) {
   const [status, setStatus] = useState('loading');
   const [missing, setMissing] = useState([]);
   const [edl, setEdl] = useState(null);
+  const [syncStats, setSyncStats] = useState(null);
   const [warnings, setWarnings] = useState([]);
   const [adjustments, setAdjustments] = useState(0);
   const [notices, setNotices] = useState([]);
@@ -56,6 +75,9 @@ export function useAutoEdit(videoId, options = {}) {
     animList: [],
     sources: {},
     audioUrl: '',
+    words: [],
+    anchors: [],
+    scenesMeta: [],
   });
 
   const load = useCallback(async () => {
@@ -66,6 +88,7 @@ export function useAutoEdit(videoId, options = {}) {
       setMissing(['No se ha seleccionado ningún video.']);
       setEdl(null);
       edlRef.current = null;
+      setSyncStats(null);
       setSources({});
       setAudioUrl('');
       setWords([]);
@@ -88,12 +111,13 @@ export function useAutoEdit(videoId, options = {}) {
 
     const api = window.electronAPI;
     try {
-      const [voiceMeta, anims, savedEdit, busy, scenesList] = await Promise.all([
+      const [voiceMeta, anims, savedEdit, busy, scenesList, videosList] = await Promise.all([
         api?.getVoice?.(videoId) ?? null,
         api?.getAnimations?.(videoId) ?? [],
         api?.getEdit?.(videoId) ?? null,
         api?.getEditBusy?.() ?? false,
         api?.getScenes?.(videoId) ?? [],
+        api?.listVideos?.() ?? [],
       ]);
 
       if (reqId !== reqIdRef.current) return;
@@ -109,6 +133,60 @@ export function useAutoEdit(videoId, options = {}) {
         return latestVideo(anim) !== null;
       });
       const availableNums = availableItems.map((a) => a.number);
+
+      // Collect image scenes from illustrator conversation if present
+      const currentVideo = Array.isArray(videosList) ? videosList.find((v) => v?.id === videoId) : null;
+      let collectedChatScenes = [];
+      if (currentVideo?.illustratorConversationId) {
+        try {
+          const conv = await api?.getConversation?.(currentVideo.illustratorConversationId);
+          if (conv?.messages) {
+            collectedChatScenes = collectImageScenes(conv.messages);
+          }
+        } catch {
+          collectedChatScenes = [];
+        }
+      }
+
+      if (reqId !== reqIdRef.current) return;
+
+      const sceneMap = new Map();
+      for (const scene of Array.isArray(scenesList) ? scenesList : []) {
+        if (scene && Number.isInteger(scene.number)) {
+          sceneMap.set(scene.number, {
+            number: scene.number,
+            title: scene.title || `Escena ${scene.number}`,
+            prompt: scene.prompt || '',
+            scriptAnchor: '',
+          });
+        }
+      }
+      for (const scene of collectedChatScenes) {
+        if (scene && Number.isInteger(scene.number)) {
+          const existing = sceneMap.get(scene.number) || {};
+          sceneMap.set(scene.number, {
+            number: scene.number,
+            title: scene.title || existing.title || `Escena ${scene.number}`,
+            prompt: scene.prompt || existing.prompt || '',
+            scriptAnchor: scene.scriptAnchor || existing.scriptAnchor || '',
+          });
+        }
+      }
+
+      const anchors = availableNums.map((num) => ({
+        number: num,
+        text: sceneMap.get(num)?.scriptAnchor || '',
+      }));
+
+      const scenesMeta = availableNums.map((num) => {
+        const item = sceneMap.get(num);
+        return {
+          number: num,
+          title: item?.title || `Escena ${num}`,
+          prompt: item?.prompt || '',
+          scriptAnchor: item?.scriptAnchor || '',
+        };
+      });
 
       const currentSources = {};
       for (const anim of availableItems) {
@@ -145,6 +223,9 @@ export function useAutoEdit(videoId, options = {}) {
         animList,
         sources: currentSources,
         audioUrl: currentAudioUrl,
+        words: wordsList,
+        anchors,
+        scenesMeta,
       };
 
       setSources(currentSources);
@@ -178,10 +259,12 @@ export function useAutoEdit(videoId, options = {}) {
           const { edl: normEdl, warnings: normWarnings } = normalizeEdl(savedEdit, {
             duration,
             available: availableNums,
-            phrases,
+            phrases: [],
           });
-          setEdl(normEdl);
-          edlRef.current = normEdl;
+          const resolvedEdl = normEdl ? { ...normEdl, syncStats: savedEdit.syncStats } : null;
+          setEdl(resolvedEdl);
+          edlRef.current = resolvedEdl;
+          setSyncStats(savedEdit.syncStats || null);
           setWarnings(normWarnings);
           setAdjustments(normWarnings.length);
           setNotices([]);
@@ -189,6 +272,7 @@ export function useAutoEdit(videoId, options = {}) {
         } else {
           setEdl(null);
           edlRef.current = null;
+          setSyncStats(null);
           setWarnings([]);
           setAdjustments(0);
           setNotices([]);
@@ -197,6 +281,7 @@ export function useAutoEdit(videoId, options = {}) {
       } else {
         setEdl(null);
         edlRef.current = null;
+        setSyncStats(null);
         setWarnings([]);
         setAdjustments(0);
         setNotices([]);
@@ -269,7 +354,7 @@ export function useAutoEdit(videoId, options = {}) {
   const generate = useCallback(
     async (notes) => {
       const api = window.electronAPI;
-      const { duration, available, phrases, animList } = dataRef.current;
+      const { duration, available, phrases, words, anchors, scenesMeta } = dataRef.current;
 
       if (!duration || !available || available.length === 0 || !phrases || phrases.length === 0) {
         setError('No se puede generar la edición porque faltan recursos necesarios.');
@@ -282,61 +367,135 @@ export function useAutoEdit(videoId, options = {}) {
       setAdjustments(0);
       setNotices([]);
 
-      const phrasesPayload = phrases.map((p, idx) => ({
-        i: typeof p.index === 'number' ? p.index : idx,
-        start: p.start,
-        end: p.end,
-        text: p.text,
-      }));
-
-      const availableSet = new Set(available);
-      const animationsPayload = animList
-        .filter((a) => availableSet.has(a.number))
-        .map((a) => ({
-          number: a.number,
-          title: a.title ?? `Animación ${a.number}`,
-          hook: Boolean(a.hook),
-        }));
-
-      let finalEdl = null;
-      let finalWarnings = [];
-      let finalAdjustments = 0;
-      let finalNotices = [];
+      const finalNotices = [];
       let isFallback = false;
 
+      // 1. Initial placement with anchors only
+      let placement = placeVideos({
+        words,
+        duration,
+        available,
+        anchors,
+        aiAssignments: [],
+      });
+
+      // 2. If anchors did not cover all videos, attempt AI alignment pass
+      if (placement.stats.anchor < placement.stats.total) {
+        const anchoredClips = placement.clips.filter((c) => c.source === 'anchor');
+        const anchoredSet = new Set(anchoredClips.map((c) => c.number));
+        const anchoredPhraseMap = new Map();
+
+        for (const clip of anchoredClips) {
+          const pIdx = phrases.findIndex(
+            (p) => clip.start >= p.start && clip.start <= p.end
+          );
+          if (pIdx !== -1) {
+            anchoredPhraseMap.set(clip.number, phrases[pIdx].i ?? phrases[pIdx].index ?? pIdx);
+          } else {
+            let bestIdx = 0;
+            let bestDiff = Infinity;
+            for (let i = 0; i < phrases.length; i += 1) {
+              const diff = Math.abs(phrases[i].start - clip.start);
+              if (diff < bestDiff) {
+                bestDiff = diff;
+                bestIdx = i;
+              }
+            }
+            anchoredPhraseMap.set(clip.number, phrases[bestIdx].i ?? phrases[bestIdx].index ?? bestIdx);
+          }
+        }
+
+        const phrasesPayload = phrases.map((p, idx) => ({
+          i: typeof p.i === 'number' ? p.i : (p.index ?? idx),
+          text: p.text,
+        }));
+
+        const scenesPayload = scenesMeta.map((s) => {
+          const isAnchored = anchoredSet.has(s.number);
+          return {
+            number: s.number,
+            title: s.title || `Escena ${s.number}`,
+            prompt: s.prompt || '',
+            needed: !isAnchored,
+            fixedPhrase: isAnchored ? (anchoredPhraseMap.get(s.number) ?? null) : null,
+          };
+        });
+
+        try {
+          const alignRes = await api?.alignEdit?.({
+            videoId,
+            phrases: phrasesPayload,
+            scenes: scenesPayload,
+          });
+          const jsonCandidate = extractJsonCandidate(alignRes?.raw);
+          const parsed = jsonCandidate ? JSON.parse(jsonCandidate) : null;
+          if (parsed && Array.isArray(parsed.assignments)) {
+            const phraseToWord = phrasesToWordIndex(phrases, words);
+            const aiAssignments = [];
+            for (const item of parsed.assignments) {
+              if (item && Number.isInteger(item.number) && Number.isInteger(item.phrase)) {
+                const wIdx = phraseToWord[item.phrase];
+                if (typeof wIdx === 'number' && Number.isInteger(wIdx)) {
+                  aiAssignments.push({ number: item.number, wordIndex: wIdx });
+                }
+              }
+            }
+            placement = placeVideos({
+              words,
+              duration,
+              available,
+              anchors,
+              aiAssignments,
+            });
+          } else {
+            finalNotices.push('No se pudo alinear con IA; algunos videos se ubicaron por estimación.');
+          }
+        } catch {
+          finalNotices.push('No se pudo alinear con IA; algunos videos se ubicaron por estimación.');
+        }
+      }
+
+      // 3. Fixed clips ready: prepare payload with narration text for visual styling
+      const clipsPayload = placement.clips.map((c) => {
+        const coveredWords = words.filter(
+          (w) => isValidWord(w) && w.e > c.start && w.s < c.end
+        );
+        const clipText = coveredWords
+          .map((w) => w.w.trim())
+          .join(' ')
+          .slice(0, 2000);
+        return {
+          number: c.number,
+          start: c.start,
+          end: c.end,
+          text: clipText,
+        };
+      });
+
+      let finalEdl = null;
+      let finalWarnings = placement.warnings || [];
+
       try {
-        const result = await api?.directEdit?.({
+        const directRes = await api?.directEdit?.({
           videoId,
           duration,
-          phrases: phrasesPayload,
-          animations: animationsPayload,
+          clips: clipsPayload,
           notes: typeof notes === 'string' && notes.trim() ? notes.trim() : undefined,
         });
 
-        const raw = result?.raw;
-        const normalized = normalizeEdl(raw, { duration, available, phrases });
-        if (normalized.edl) {
-          finalEdl = normalized.edl;
-          finalWarnings = normalized.warnings;
-          finalAdjustments = normalized.warnings.length;
-          finalNotices = [];
+        const styled = applyStyling(placement.clips, directRes?.raw, { duration });
+        if (styled.edl) {
+          finalEdl = styled.edl;
+          finalWarnings = [...finalWarnings, ...styled.warnings];
           isFallback = false;
         } else {
-          finalEdl = fallbackEdl({ duration, available, phrases });
-          finalWarnings = normalized.warnings;
-          finalAdjustments = normalized.warnings.length;
-          finalNotices = [
-            'La IA no devolvió un formato válido; se aplicó una edición de respaldo automática.',
-          ];
+          finalEdl = defaultStyling(placement.clips, { duration });
+          finalNotices.push('La IA no devolvió un formato válido; se aplicó el estilo predeterminado.');
           isFallback = true;
         }
-      } catch (err) {
-        const errorMsg = cleanIpcError(err);
-        setError(errorMsg);
-        finalEdl = fallbackEdl({ duration, available, phrases });
-        finalWarnings = [];
-        finalAdjustments = 0;
-        finalNotices = ['Error al comunicarse con la IA; se aplicó una edición de respaldo automática.'];
+      } catch {
+        finalEdl = defaultStyling(placement.clips, { duration });
+        finalNotices.push('Error al comunicarse con la IA; se aplicó el estilo predeterminado.');
         isFallback = true;
       }
 
@@ -345,6 +504,7 @@ export function useAutoEdit(videoId, options = {}) {
           const withStyle = {
             ...finalEdl,
             captionStyle: captionStyleRef.current,
+            syncStats: placement.stats,
           };
           const toSave = { ...withStyle, isFallback };
           await api?.saveEdit?.(videoId, toSave);
@@ -354,8 +514,9 @@ export function useAutoEdit(videoId, options = {}) {
           await onEditedRef.current?.();
           setEdl(withStyle);
           edlRef.current = withStyle;
+          setSyncStats(placement.stats);
           setWarnings(finalWarnings);
-          setAdjustments(finalAdjustments);
+          setAdjustments(finalWarnings.length);
           setNotices(finalNotices);
           setUsedFallback(isFallback);
           setStatus('ready');
@@ -368,14 +529,14 @@ export function useAutoEdit(videoId, options = {}) {
         setError('No se pudo generar la edición.');
       }
     },
-    [videoId],
+    [videoId]
   );
 
   const runFallback = useCallback(async () => {
     const api = window.electronAPI;
-    const { duration, available, phrases } = dataRef.current;
+    const { duration, available, words, anchors } = dataRef.current;
 
-    if (!duration || !available || available.length === 0 || !phrases || phrases.length === 0) {
+    if (!duration || !available || available.length === 0) {
       setError('No se puede generar la edición porque faltan recursos necesarios.');
       return;
     }
@@ -385,7 +546,15 @@ export function useAutoEdit(videoId, options = {}) {
     setAdjustments(0);
     setNotices([]);
 
-    const edlResult = fallbackEdl({ duration, available, phrases });
+    const placement = placeVideos({
+      words,
+      duration,
+      available,
+      anchors,
+      aiAssignments: [],
+    });
+
+    const edlResult = defaultStyling(placement.clips, { duration });
     if (!edlResult) {
       setError('No se pudo generar la edición de respaldo.');
       setStatus('error');
@@ -395,6 +564,7 @@ export function useAutoEdit(videoId, options = {}) {
     const withStyle = {
       ...edlResult,
       captionStyle: captionStyleRef.current,
+      syncStats: placement.stats,
     };
 
     try {
@@ -406,6 +576,7 @@ export function useAutoEdit(videoId, options = {}) {
       await onEditedRef.current?.();
       setEdl(withStyle);
       edlRef.current = withStyle;
+      setSyncStats(placement.stats);
       setWarnings([]);
       setAdjustments(0);
       setNotices([]);
@@ -421,6 +592,7 @@ export function useAutoEdit(videoId, options = {}) {
     status,
     missing,
     edl,
+    syncStats: syncStats || edl?.syncStats || null,
     adjustments,
     notices,
     error,

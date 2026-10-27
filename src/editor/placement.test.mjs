@@ -47,15 +47,11 @@ test('phrasesToWordIndex maps phrase start time to first word index', () => {
   ];
 
   const map = phrasesToWordIndex(phrases, words);
-  assert.equal(map(0), 0); // 'En'
-  assert.equal(map[0], 0);
-  assert.equal(map(1), 4); // 'caminaba'
-  assert.equal(map[1], 4);
-  assert.equal(map(2), 8); // 'Buscaba'
-  assert.equal(map[2], 8);
-  assert.equal(map(3), 12); // 'Al'
+  assert.equal(map[0], 0); // 'En'
+  assert.equal(map[1], 4); // 'caminaba'
+  assert.equal(map[2], 8); // 'Buscaba'
   assert.equal(map[3], 12);
-  assert.equal(map(99), null);
+  assert.equal(map[99], undefined);
 });
 
 test('placeVideos with anchors only aligns all clips accurately', () => {

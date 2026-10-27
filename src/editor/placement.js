@@ -15,63 +15,28 @@ function isValidWord(item) {
 }
 
 // Map a phrase index to the word index of its first word by matching start timestamps.
-export function phrasesToWordIndex(phrases, words, optionalIndex) {
-  // Support polymorphic calls: (phraseIndex, phrases, words) or (phrases, words, phraseIndex)
-  if (typeof phrases === 'number' && Array.isArray(words) && Array.isArray(optionalIndex)) {
-    const targetIdx = phrases;
-    const actualPhrases = words;
-    const actualWords = optionalIndex;
-    const map = phrasesToWordIndex(actualPhrases, actualWords);
-    return map(targetIdx);
-  }
-
+// Word index of each phrase's first word (matched by start time), null when no word starts there
+export function phrasesToWordIndex(phrases, words) {
   const phraseList = Array.isArray(phrases) ? phrases : [];
   const wordList = Array.isArray(words) ? words : [];
 
-  const mapArr = [];
-
-  for (let i = 0; i < phraseList.length; i += 1) {
-    const p = phraseList[i];
-    if (!p || typeof p.start !== 'number' || !Number.isFinite(p.start)) {
-      mapArr.push(null);
-      continue;
-    }
-
+  return phraseList.map((p) => {
+    if (!p || typeof p.start !== 'number' || !Number.isFinite(p.start)) return null;
     const pStart = round3(p.start);
     let matchedWordIdx = -1;
     let minDiff = Infinity;
-
     for (let w = 0; w < wordList.length; w += 1) {
       const item = wordList[w];
-      if (isValidWord(item)) {
-        const diff = Math.abs(round3(item.s) - pStart);
-        if (diff < minDiff) {
-          minDiff = diff;
-          matchedWordIdx = w;
-          if (diff < 0.001) break;
-        }
+      if (!isValidWord(item)) continue;
+      const diff = Math.abs(round3(item.s) - pStart);
+      if (diff < minDiff) {
+        minDiff = diff;
+        matchedWordIdx = w;
+        if (diff < 0.001) break;
       }
     }
-
-    mapArr.push(matchedWordIdx !== -1 && minDiff <= 0.05 ? matchedWordIdx : null);
-  }
-
-  const lookup = function (phraseIndex) {
-    if (typeof phraseIndex !== 'number' || !Number.isInteger(phraseIndex)) return null;
-    return mapArr[phraseIndex] ?? null;
-  };
-
-  for (let i = 0; i < mapArr.length; i += 1) {
-    lookup[i] = mapArr[i];
-  }
-  lookup.map = mapArr;
-  lookup.get = (i) => mapArr[i] ?? null;
-
-  if (typeof optionalIndex === 'number') {
-    return lookup(optionalIndex);
-  }
-
-  return lookup;
+    return matchedWordIdx !== -1 && minDiff <= 0.05 ? matchedWordIdx : null;
+  });
 }
 
 // Places available animations along narration words.

@@ -6,6 +6,23 @@ import CaptionStyleEditor from './CaptionStyleEditor.jsx';
 import { useAutoEdit } from './useAutoEdit.js';
 import { formatDuration } from '../voice/constants.js';
 
+function formatSyncStats(stats) {
+  if (!stats || typeof stats.total !== 'number' || stats.total === 0) return null;
+  const parts = [];
+  const anchorCount = stats.anchor ?? 0;
+  const totalCount = stats.total;
+  parts.push(
+    `${anchorCount} de ${totalCount} ${totalCount === 1 ? 'video sincronizado' : 'videos sincronizados'} con el guion`
+  );
+  if (stats.ai > 0) {
+    parts.push(`${stats.ai} ${stats.ai === 1 ? 'ubicado' : 'ubicados'} por IA`);
+  }
+  if (stats.estimated > 0) {
+    parts.push(`${stats.estimated} ${stats.estimated === 1 ? 'estimado' : 'estimados'}`);
+  }
+  return parts.join(' · ');
+}
+
 export default function AutoEditPanel({ videoId, onEdited, stages, ...customProps }) {
   const effectiveOnEdited = customProps.onEdited ?? onEdited;
   const effectiveStages = customProps.stages ?? stages;
@@ -14,6 +31,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
   const status = customProps.status ?? hookResult.status;
   const missing = customProps.missing ?? hookResult.missing;
   const edl = customProps.edl ?? hookResult.edl;
+  const syncStats = customProps.syncStats ?? hookResult.syncStats ?? edl?.syncStats;
   const adjustments = customProps.adjustments ?? hookResult.adjustments ?? 0;
   const notices = customProps.notices ?? hookResult.notices ?? [];
   const error = customProps.error ?? hookResult.error;
@@ -34,6 +52,9 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
   const isDirecting = status === 'directing';
   const isBlocked = isDirecting || status === 'loading' || status === 'missing';
   const primaryLabel = isDirecting ? 'La IA está editando…' : edl ? 'Volver a editar' : 'Editar con IA';
+
+  const syncStatsText = formatSyncStats(syncStats);
+  const hasNoAnchors = Boolean(syncStats && syncStats.total > 0 && (syncStats.anchor ?? 0) === 0);
 
   return (
     <div className="auto-edit">
@@ -136,6 +157,18 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
                 {usedFallback ? 'Edición rápida sin IA' : 'Edición con IA'}
               </span>
             </div>
+          )}
+
+          {edl && syncStatsText && (
+            <p className="settings__card-text auto-edit__note">
+              {syncStatsText}
+            </p>
+          )}
+
+          {edl && hasNoAnchors && (
+            <p className="settings__card-text auto-edit__note">
+              Este video se ilustró antes de las anclas del guion. Para sincronización exacta, vuelve a generar las imágenes con el Prompt 2 actualizado.
+            </p>
           )}
 
           {notices && notices.length > 0 && (
