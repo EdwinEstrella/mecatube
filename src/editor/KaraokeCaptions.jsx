@@ -182,7 +182,6 @@ function Word({
             backgroundColor: highlightColor,
             borderRadius: Math.max(6, Math.round(size * 0.12)),
             scale: boxScale,
-            zIndex: 0,
             pointerEvents: 'none',
           }}
         />
@@ -197,12 +196,11 @@ function Word({
             height: Math.max(4, Math.round(size * 0.08)),
             backgroundColor: highlightColor,
             borderRadius: 2,
-            zIndex: 0,
             pointerEvents: 'none',
           }}
         />
       )}
-      <span style={{ position: 'relative', zIndex: 1 }}>{wordInner}</span>
+      <span style={{ position: 'relative' }}>{wordInner}</span>
     </span>
   );
 }

@@ -1,11 +1,12 @@
 // Presentational panel for automatic video editing and Remotion playback preview.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Player } from '@remotion/player';
 import VideoComposition, { compositionSize } from './VideoComposition.jsx';
 import CaptionStyleEditor from './CaptionStyleEditor.jsx';
 import { useAutoEdit } from './useAutoEdit.js';
 import { buildPlan } from './plan.js';
-import { formatDuration } from '../voice/constants.js';
+import { formatDuration, cleanIpcError } from '../voice/constants.js';
+import { exportVideo } from './exportVideo.js';
 
 const TRANSITION_LABELS = {
   cut: 'Corte',
@@ -62,16 +63,115 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
   const setCaptionStyle = customProps.setCaptionStyle ?? hookResult.setCaptionStyle;
   const available = customProps.available ?? hookResult.available ?? [];
   const sceneImages = customProps.sceneImages ?? hookResult.sceneImages ?? {};
+  const videoTitle = customProps.videoTitle ?? hookResult.videoTitle ?? '';
 
   const [notes, setNotes] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportPercent, setExportPercent] = useState(0);
+  const [exportError, setExportError] = useState('');
+  const [exportedPath, setExportedPath] = useState('');
+  const exportAbortControllerRef = useRef(null);
   const playerRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    if (videoId && window.electronAPI?.getExport) {
+      window.electronAPI.getExport(videoId)
+        .then((latest) => {
+          if (active && latest) {
+            setExportedPath(latest);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setExportedPath('');
+    }
+    return () => {
+      active = false;
+    };
+  }, [videoId]);
+
+  useEffect(() => {
+    return () => {
+      exportAbortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const handleStartExport = async () => {
+    if (!edl || isExporting) return;
+
+    setIsExporting(true);
+    setExportPercent(0);
+    setExportError('');
+
+    const controller = new AbortController();
+    exportAbortControllerRef.current = controller;
+
+    try {
+      const durationInFrames = Math.max(1, Math.round((edl.duration ?? 0) * compositionSize.fps));
+      const blob = await exportVideo({
+        component: VideoComposition,
+        durationInFrames,
+        fps: compositionSize.fps,
+        width: compositionSize.width,
+        height: compositionSize.height,
+        inputProps: { edl, sources, audioUrl, clipDurations, words, captionStyle },
+        onProgress: (p) => {
+          if (typeof p?.progress === 'number') {
+            setExportPercent(Math.round(p.progress * 100));
+          }
+        },
+        signal: controller.signal,
+      });
+
+      if (controller.signal.aborted) return;
+
+      const buffer = await blob.arrayBuffer();
+      const savedPath = await window.electronAPI?.saveExport?.({
+        videoId,
+        fileName: videoTitle || 'video-final',
+        bytes: new Uint8Array(buffer),
+      });
+
+      if (!controller.signal.aborted) {
+        setExportedPath(savedPath);
+        setIsExporting(false);
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setExportError(cleanIpcError(err));
+        setIsExporting(false);
+      }
+    } finally {
+      if (exportAbortControllerRef.current === controller) {
+        exportAbortControllerRef.current = null;
+      }
+    }
+  };
+
+  const handleCancelExport = () => {
+    if (exportAbortControllerRef.current) {
+      exportAbortControllerRef.current.abort();
+      exportAbortControllerRef.current = null;
+    }
+    setIsExporting(false);
+    setExportPercent(0);
+  };
+
+  const handleOpenFolder = async () => {
+    try {
+      await window.electronAPI?.openExportFolder?.(videoId);
+    } catch (err) {
+      setExportError(cleanIpcError(err));
+    }
+  };
 
   const plan = edl ? buildPlan(edl, { fps: compositionSize.fps, clipDurations }) : null;
   const planItems = plan?.items ?? [];
   const totalDecisions = (edl?.clips?.length ?? 0) + (edl?.dropped?.length ?? 0);
 
   const isDirecting = status === 'directing';
-  const isBlocked = isDirecting || status === 'loading' || status === 'missing';
+  const isBlocked = isDirecting || status === 'loading' || status === 'missing' || isExporting;
   const primaryLabel = isDirecting ? 'La IA está editando…' : edl ? 'Volver a editar' : 'Editar con IA';
 
   const syncStatsText = formatSyncStats(syncStats);
@@ -97,9 +197,63 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
                   aspectRatio: '16 / 9',
                 }}
               />
-              <p className="settings__card-text auto-edit__note">
-                La exportación a MP4 llegará en el siguiente paso.
-              </p>
+              <div className="auto-edit__export-container">
+                {isExporting ? (
+                  <div className="auto-edit__export-progress-wrap">
+                    <div className="auto-edit__export-progress-header">
+                      <span className="auto-edit__export-progress-text">
+                        Exportando… {exportPercent} %
+                      </span>
+                      <button
+                        type="button"
+                        className="settings__button settings__button--ghost"
+                        onClick={handleCancelExport}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                    <div className="auto-edit__export-progress-bar">
+                      <div
+                        className="auto-edit__export-progress-fill"
+                        style={{ width: `${Math.min(100, Math.max(0, exportPercent))}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="auto-edit__export-actions">
+                    <button
+                      type="button"
+                      className="settings__button settings__button--primary"
+                      disabled={isBlocked}
+                      onClick={handleStartExport}
+                    >
+                      Exportar MP4
+                    </button>
+
+                    {exportedPath && (
+                      <div className="auto-edit__export-success">
+                        <span className="auto-edit__export-success-label">Video guardado</span>
+                        <span className="auto-edit__export-path" title={exportedPath}>
+                          {exportedPath}
+                        </span>
+                        <button
+                          type="button"
+                          className="settings__button settings__button--ghost"
+                          onClick={handleOpenFolder}
+                        >
+                          Abrir carpeta
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {exportError && (
+                  <p className="chat-messages__error auto-edit__error auto-edit__export-error">
+                    {exportError}
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <div className="auto-edit__player-placeholder">
@@ -141,7 +295,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
               className="chat-list__rename auto-edit__textarea"
               value={notes}
               maxLength={500}
-              disabled={isDirecting}
+              disabled={isDirecting || isExporting}
               placeholder="Indicaciones para la IA (opcional)"
               onChange={(e) => setNotes(e.target.value)}
             />
