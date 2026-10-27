@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import StageTrack, { STATUS_LABELS } from './StageTrack.jsx';
 import VoicePanel from '../voice/VoicePanel.jsx';
 import CustomSelect from '../ui/CustomSelect.jsx';
@@ -68,10 +68,7 @@ export default function VideoDetail({
   onDelete,
   onEdited,
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState('');
   const [isConfirming, setIsConfirming] = useState(false);
-  const settledRef = useRef(false);
 
   const [prevVideoId, setPrevVideoId] = useState(video.id);
   const [selectedKey, setSelectedKey] = useState(() => getInitialStageKey(stages));
@@ -82,20 +79,6 @@ export default function VideoDetail({
   }
 
   const selectedStage = stages.find((stage) => stage.key === selectedKey) ?? stages[0] ?? null;
-
-  const startEditing = () => {
-    settledRef.current = false;
-    setDraft(video.title);
-    setIsEditing(true);
-  };
-
-  const finishEditing = (save) => {
-    if (settledRef.current) return;
-    settledRef.current = true;
-    setIsEditing(false);
-    const title = draft.trim();
-    if (save && title && title !== video.title) onRename(video.id, title);
-  };
 
   const override = selectedStage ? video.overrides?.[selectedStage.key] : undefined;
   let currentStatusText = '';
@@ -116,56 +99,14 @@ export default function VideoDetail({
   }
 
   return (
-    <div className="video-detail" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-          {isEditing ? (
-            <input
-              className="chat-list__rename video-detail__rename"
-              style={{ fontSize: '1.4rem', fontWeight: 600, padding: '4px 8px' }}
-              value={draft}
-              maxLength={120}
-              autoFocus
-              aria-label="Título del video"
-              onFocus={(event) => event.target.select()}
-              onChange={(event) => setDraft(event.target.value)}
-              onBlur={() => finishEditing(true)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') finishEditing(true);
-                else if (event.key === 'Escape') finishEditing(false);
-              }}
-            />
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
-              <h1 className="settings__title" style={{ margin: 0, fontSize: '1.6rem' }}>
-                {video.title}
-              </h1>
-              <button
-                type="button"
-                className="chat-list__rename-button video-detail__edit"
-                aria-label="Renombrar video"
-                title="Renombrar video"
-                onClick={startEditing}
-              >
-                ✎
-              </button>
-              <span className="settings__card-text" style={{ fontSize: '0.82rem', opacity: 0.65 }}>
-                {doneCount}/{stages.length} etapas completadas
-              </span>
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          className="settings__button settings__button--primary"
-          onClick={onSendPrompt1}
-        >
-          Enviar Prompt 1
-        </button>
+    <div className="video-detail">
+      <div className="video-detail__header-bar">
+        <span className="video-detail__completed-counter">
+          {doneCount}/{stages.length} etapas completadas
+        </span>
       </div>
 
-      <div style={{ marginBottom: '24px' }}>
+      <div className="video-detail__track-wrapper">
         <StageTrack
           stages={stages}
           selectedKey={selectedStage?.key}
@@ -174,7 +115,11 @@ export default function VideoDetail({
       </div>
 
       {selectedStage && (
-        <section className="video-detail__stage-section">
+        <section
+          className={`video-detail__stage-section ${
+            selectedStage.key === 'editing' ? 'video-detail__stage-section--editing' : ''
+          }`}
+        >
           <h2 className="video-detail__stage-heading">{selectedStage.label}</h2>
 
           {(selectedStage.key === 'idea' || selectedStage.key === 'script' || selectedStage.key === 'metadata') && (
