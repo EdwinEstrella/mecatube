@@ -4,6 +4,7 @@ import VoicePanel from '../voice/VoicePanel.jsx';
 import CustomSelect from '../ui/CustomSelect.jsx';
 import CharactersPanel from '../flow/CharactersPanel.jsx';
 import AutoEditPanel from '../editor/AutoEditPanel.jsx';
+import PublishKit from './PublishKit.jsx';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
@@ -176,9 +177,7 @@ export default function VideoDetail({
           )}
 
           {selectedStage.key === 'published' && (
-            <p className="video-detail__stage-hint">
-              Marca esta etapa cuando el video esté publicado en YouTube.
-            </p>
+            <PublishKit video={video} scriptMessages={scriptMessages} />
           )}
 
           <div className="video-detail__status-control">

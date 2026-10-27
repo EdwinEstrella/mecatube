@@ -1,0 +1,157 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  width: 320px;
+  min-height: 100%;
+  background: linear-gradient(135deg, #1e1b4b 0%, #2e1065 45%, #4f46e5 85%, #635BFF 100%);
+}
+
+body {
+  width: 320px;
+  min-height: 100%;
+  margin: 0;
+  padding: 18px 16px;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+  color: #ffffff;
+  background: transparent;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.logo {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #c7d2fe;
+  background-color: rgba(255, 255, 255, 0.14);
+  padding: 2px 6px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  line-height: 1;
+}
+
+.version-badge:empty {
+  display: none;
+}
+
+.description {
+  font-size: 13px;
+  color: #e0e7ff;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.btn-donate {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background-color: #ffffff;
+  color: #635BFF;
+  border: none;
+  border-radius: 9999px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  text-decoration: none;
+}
+
+.btn-donate:hover {
+  background-color: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.btn-donate:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.caption {
+  font-size: 12px;
+  color: #c7d2fe;
+  margin: 0;
+}
+
+.link-github {
+  margin-top: 4px;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  color: #e0e7ff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.link-github:hover {
+  color: #ffffff;
+}
+
+.link-github:focus,
+.btn-donate:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}

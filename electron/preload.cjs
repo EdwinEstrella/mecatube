@@ -87,6 +87,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getEdit: (videoId) => ipcRenderer.invoke('editor:get', { videoId }),
   saveEdit: (videoId, edl) => ipcRenderer.invoke('editor:save', { videoId, edl }),
   getEditBusy: () => ipcRenderer.invoke('editor:busy'),
+  getExport: (videoId) =>
+    ipcRenderer.invoke('editor:get-export', typeof videoId === 'object' && videoId !== null ? videoId : { videoId }),
+  saveExport: async (payload, maybeFileName, maybeBytes) => {
+    const videoId = typeof payload === 'object' && payload !== null ? payload.videoId : payload;
+    const fileName = typeof payload === 'object' && payload !== null ? payload.fileName : maybeFileName;
+    const bytes = typeof payload === 'object' && payload !== null ? payload.bytes : maybeBytes;
+
+    const byteLength = bytes?.byteLength ?? bytes?.length ?? 0;
+    const CHUNK_SIZE = 8 * 1024 * 1024;
+    if (byteLength <= CHUNK_SIZE) {
+      return ipcRenderer.invoke('editor:save-export', { videoId, fileName, bytes });
+    }
+    const { exportId } = await ipcRenderer.invoke('editor:export-start', {
+      videoId,
+      fileName,
+      totalSize: byteLength,
+    });
+    try {
+      const uint8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      for (let offset = 0; offset < byteLength; offset += CHUNK_SIZE) {
+        const slice = uint8.subarray(offset, Math.min(offset + CHUNK_SIZE, byteLength));
+        await ipcRenderer.invoke('editor:export-chunk', { exportId, chunk: slice });
+      }
+      return await ipcRenderer.invoke('editor:export-finish', { exportId });
+    } catch (err) {
+      await ipcRenderer.invoke('editor:export-abort', { exportId }).catch(() => {});
+      throw err;
+    }
+  },
+  openExportFolder: (videoId) =>
+    ipcRenderer.invoke('editor:open-export-folder', typeof videoId === 'object' && videoId !== null ? videoId : { videoId }),
+  saveThumbnail: (payload, maybeSourcePath) => {
+    const videoId = typeof payload === 'object' && payload !== null ? payload.videoId : payload;
+    const sourcePath = typeof payload === 'object' && payload !== null ? payload.sourcePath : maybeSourcePath;
+    return ipcRenderer.invoke('editor:save-thumbnail', { videoId, sourcePath });
+  },
   getPromptOverrides: () => ipcRenderer.invoke('prompts:get-overrides'),
   savePrompt: (id, text) => ipcRenderer.invoke('prompts:save', { id, text }),
   resetPrompt: (id) => ipcRenderer.invoke('prompts:reset', { id }),

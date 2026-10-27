@@ -19,6 +19,7 @@ const { createSavedVoiceStore } = require('./saved-voices.cjs');
 const { createUpdater } = require('./updates.cjs');
 const { createFlowStore, createFlowService, registerFlowIpc } = require('./flow.cjs');
 const { createDirectorService, registerDirectorIpc } = require('./director.cjs');
+const { createExporterService, registerExporterIpc } = require('./exporter.cjs');
 
 const isDev = process.argv.includes('--dev');
 const DEV_SERVER_URL = 'http://127.0.0.1:5173';
@@ -395,6 +396,15 @@ app.whenReady().then(() => {
   registerDirectorIpc({
     ipcMain,
     service: directorService,
+  });
+
+  const exporterService = createExporterService({
+    getWorkspacePath: () => activeWorkspacePath,
+    shell,
+  });
+  registerExporterIpc({
+    ipcMain,
+    service: exporterService,
   });
 
   ipcMain.handle('workspace:get-current', () => workspaceStore.getActive());

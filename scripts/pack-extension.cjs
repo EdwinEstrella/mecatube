@@ -1,5 +1,6 @@
 // Zips extension/ into release/extension.zip (manifest.json at the zip root),
-// leaving out tests and docs. Uses the tar (bsdtar) that ships with Windows 10+.
+// leaving out tests, docs and the Web Store listing images (icons/store, uploaded separately).
+// Uses the tar (bsdtar) that ships with Windows 10+.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -9,7 +10,7 @@ const root = path.join(__dirname, '..');
 const source = path.join(root, 'extension');
 const releaseDir = path.join(root, 'release');
 const output = path.join(releaseDir, 'extension.zip');
-const EXCLUDED = [/\.test\.cjs$/, /^README\.md$/i];
+const EXCLUDED = [/\.test\.cjs$/, /^README\.md$/i, /^store$/];
 
 function copyFiltered(from, to) {
   fs.mkdirSync(to, { recursive: true });

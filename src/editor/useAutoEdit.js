@@ -64,6 +64,7 @@ export function useAutoEdit(videoId, options = {}) {
   const [captionStyle, setCaptionStyleState] = useState(DEFAULT_CAPTION_STYLE);
   const [available, setAvailable] = useState([]);
   const [sceneImages, setSceneImages] = useState({});
+  const [videoTitle, setVideoTitle] = useState('');
 
   const captionStyleRef = useRef(DEFAULT_CAPTION_STYLE);
   const edlRef = useRef(null);
@@ -101,6 +102,7 @@ export function useAutoEdit(videoId, options = {}) {
       captionStyleRef.current = DEFAULT_CAPTION_STYLE;
       setAvailable([]);
       setSceneImages({});
+      setVideoTitle('');
       return;
     }
 
@@ -137,6 +139,7 @@ export function useAutoEdit(videoId, options = {}) {
 
       // Collect image scenes from illustrator conversation if present
       const currentVideo = Array.isArray(videosList) ? videosList.find((v) => v?.id === videoId) : null;
+      setVideoTitle(currentVideo?.title || '');
       let collectedChatScenes = [];
       if (currentVideo?.illustratorConversationId) {
         try {
@@ -625,6 +628,7 @@ export function useAutoEdit(videoId, options = {}) {
     setCaptionStyle,
     available,
     sceneImages,
+    videoTitle,
     generate,
     runFallback,
   };
