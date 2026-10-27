@@ -11,6 +11,26 @@ export const FONTS = [
   { id: 'luckiest-guy', label: 'Luckiest Guy', family: 'Luckiest Guy', weights: [400] },
 ];
 
+export const PAGE_EFFECTS = [
+  { id: 'none', label: 'Sin efecto' },
+  { id: 'pop', label: 'Rebote' },
+  { id: 'fade', label: 'Aparecer' },
+  { id: 'slide-up', label: 'Deslizar hacia arriba' },
+  { id: 'zoom', label: 'Zoom desde lejos' },
+  { id: 'blur', label: 'Desenfoque' },
+  { id: 'typewriter', label: 'Máquina de escribir' },
+];
+
+export const WORD_EFFECTS = [
+  { id: 'none', label: 'Solo color' },
+  { id: 'pop', label: 'Salto' },
+  { id: 'bounce', label: 'Brinco' },
+  { id: 'shake', label: 'Vibración' },
+  { id: 'glow', label: 'Brillo' },
+  { id: 'underline', label: 'Subrayado' },
+  { id: 'box', label: 'Caja' },
+];
+
 export const DEFAULT_CAPTION_STYLE = {
   font: 'montserrat',
   weight: 900,
@@ -24,7 +44,8 @@ export const DEFAULT_CAPTION_STYLE = {
   shadow: true,
   wordsPerPage: 4,
   position: 'bottom',
-  animation: 'pop',
+  pageEffect: 'pop',
+  wordEffect: 'pop',
 };
 
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
@@ -86,9 +107,24 @@ export function normalizeCaptionStyle(raw) {
     ? input.position
     : DEFAULT_CAPTION_STYLE.position;
 
-  const animation = ['pop', 'none'].includes(input.animation)
-    ? input.animation
-    : DEFAULT_CAPTION_STYLE.animation;
+  let defaultPageEffect = DEFAULT_CAPTION_STYLE.pageEffect;
+  let defaultWordEffect = DEFAULT_CAPTION_STYLE.wordEffect;
+
+  if (input.animation === 'none') {
+    defaultPageEffect = 'none';
+    defaultWordEffect = 'none';
+  } else if (input.animation === 'pop') {
+    defaultPageEffect = 'pop';
+    defaultWordEffect = 'pop';
+  }
+
+  const pageEffect = PAGE_EFFECTS.some((e) => e.id === input.pageEffect)
+    ? input.pageEffect
+    : defaultPageEffect;
+
+  const wordEffect = WORD_EFFECTS.some((e) => e.id === input.wordEffect)
+    ? input.wordEffect
+    : defaultWordEffect;
 
   return {
     font,
@@ -103,7 +139,8 @@ export function normalizeCaptionStyle(raw) {
     shadow,
     wordsPerPage,
     position,
-    animation,
+    pageEffect,
+    wordEffect,
   };
 }
 
@@ -141,7 +178,8 @@ export const PRESETS = [
       shadow: true,
       wordsPerPage: 4,
       position: 'bottom',
-      animation: 'pop',
+      pageEffect: 'pop',
+      wordEffect: 'pop',
     },
   },
   {
@@ -160,7 +198,8 @@ export const PRESETS = [
       shadow: true,
       wordsPerPage: 3,
       position: 'middle',
-      animation: 'pop',
+      pageEffect: 'zoom',
+      wordEffect: 'shake',
     },
   },
   {
@@ -179,7 +218,8 @@ export const PRESETS = [
       shadow: true,
       wordsPerPage: 4,
       position: 'bottom',
-      animation: 'pop',
+      pageEffect: 'pop',
+      wordEffect: 'bounce',
     },
   },
   {
@@ -198,7 +238,8 @@ export const PRESETS = [
       shadow: false,
       wordsPerPage: 5,
       position: 'bottom',
-      animation: 'none',
+      pageEffect: 'fade',
+      wordEffect: 'underline',
     },
   },
   {
@@ -217,7 +258,48 @@ export const PRESETS = [
       shadow: true,
       wordsPerPage: 4,
       position: 'bottom',
-      animation: 'pop',
+      pageEffect: 'blur',
+      wordEffect: 'glow',
+    },
+  },
+  {
+    id: 'caja-tiktok',
+    label: 'Caja TikTok',
+    style: {
+      font: 'montserrat',
+      weight: 900,
+      size: 84,
+      uppercase: true,
+      textColor: '#FFFFFF',
+      highlightColor: '#FFE600',
+      altHighlightColor: '#00F0FF',
+      strokeColor: '#000000',
+      strokeWidth: 10,
+      shadow: true,
+      wordsPerPage: 4,
+      position: 'bottom',
+      pageEffect: 'slide-up',
+      wordEffect: 'box',
+    },
+  },
+  {
+    id: 'maquina-de-escribir',
+    label: 'Máquina de escribir',
+    style: {
+      font: 'roboto',
+      weight: 700,
+      size: 74,
+      uppercase: false,
+      textColor: '#FFFFFF',
+      highlightColor: '#FFE600',
+      altHighlightColor: '#2BFF88',
+      strokeColor: '#000000',
+      strokeWidth: 6,
+      shadow: true,
+      wordsPerPage: 4,
+      position: 'bottom',
+      pageEffect: 'typewriter',
+      wordEffect: 'none',
     },
   },
 ];

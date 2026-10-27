@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   FONTS,
   DEFAULT_CAPTION_STYLE,
+  PAGE_EFFECTS,
+  WORD_EFFECTS,
   normalizeCaptionStyle,
   captionCss,
   PRESETS,
@@ -47,6 +49,32 @@ test('FONTS defines the 8 required fonts with families and weights', () => {
   assert.deepEqual(anton.weights, [400]);
 });
 
+test('PAGE_EFFECTS and WORD_EFFECTS define required options with Spanish labels', () => {
+  assert.deepEqual(
+    PAGE_EFFECTS.map((e) => e.id),
+    ['none', 'pop', 'fade', 'slide-up', 'zoom', 'blur', 'typewriter']
+  );
+  assert.equal(PAGE_EFFECTS.find((e) => e.id === 'none').label, 'Sin efecto');
+  assert.equal(PAGE_EFFECTS.find((e) => e.id === 'pop').label, 'Rebote');
+  assert.equal(PAGE_EFFECTS.find((e) => e.id === 'fade').label, 'Aparecer');
+  assert.equal(PAGE_EFFECTS.find((e) => e.id === 'slide-up').label, 'Deslizar hacia arriba');
+  assert.equal(PAGE_EFFECTS.find((e) => e.id === 'zoom').label, 'Zoom desde lejos');
+  assert.equal(PAGE_EFFECTS.find((e) => e.id === 'blur').label, 'Desenfoque');
+  assert.equal(PAGE_EFFECTS.find((e) => e.id === 'typewriter').label, 'Máquina de escribir');
+
+  assert.deepEqual(
+    WORD_EFFECTS.map((e) => e.id),
+    ['none', 'pop', 'bounce', 'shake', 'glow', 'underline', 'box']
+  );
+  assert.equal(WORD_EFFECTS.find((e) => e.id === 'none').label, 'Solo color');
+  assert.equal(WORD_EFFECTS.find((e) => e.id === 'pop').label, 'Salto');
+  assert.equal(WORD_EFFECTS.find((e) => e.id === 'bounce').label, 'Brinco');
+  assert.equal(WORD_EFFECTS.find((e) => e.id === 'shake').label, 'Vibración');
+  assert.equal(WORD_EFFECTS.find((e) => e.id === 'glow').label, 'Brillo');
+  assert.equal(WORD_EFFECTS.find((e) => e.id === 'underline').label, 'Subrayado');
+  assert.equal(WORD_EFFECTS.find((e) => e.id === 'box').label, 'Caja');
+});
+
 test('DEFAULT_CAPTION_STYLE has correct values', () => {
   assert.deepEqual(DEFAULT_CAPTION_STYLE, {
     font: 'montserrat',
@@ -61,7 +89,8 @@ test('DEFAULT_CAPTION_STYLE has correct values', () => {
     shadow: true,
     wordsPerPage: 4,
     position: 'bottom',
-    animation: 'pop',
+    pageEffect: 'pop',
+    wordEffect: 'pop',
   });
 });
 
@@ -138,15 +167,33 @@ test('normalizeCaptionStyle validates colors and booleans', () => {
   assert.equal(bools.shadow, false);
 });
 
-test('normalizeCaptionStyle validates position and animation enums', () => {
+test('normalizeCaptionStyle validates position and effect enums', () => {
   assert.equal(normalizeCaptionStyle({ position: 'top' }).position, 'top');
   assert.equal(normalizeCaptionStyle({ position: 'middle' }).position, 'middle');
   assert.equal(normalizeCaptionStyle({ position: 'bottom' }).position, 'bottom');
   assert.equal(normalizeCaptionStyle({ position: 'somewhere' }).position, 'bottom');
 
-  assert.equal(normalizeCaptionStyle({ animation: 'none' }).animation, 'none');
-  assert.equal(normalizeCaptionStyle({ animation: 'pop' }).animation, 'pop');
-  assert.equal(normalizeCaptionStyle({ animation: 'bounce' }).animation, 'pop');
+  assert.equal(normalizeCaptionStyle({ pageEffect: 'zoom' }).pageEffect, 'zoom');
+  assert.equal(normalizeCaptionStyle({ pageEffect: 'invalid' }).pageEffect, 'pop');
+  assert.equal(normalizeCaptionStyle({ wordEffect: 'bounce' }).wordEffect, 'bounce');
+  assert.equal(normalizeCaptionStyle({ wordEffect: 'unknown' }).wordEffect, 'pop');
+});
+
+test('normalizeCaptionStyle maps legacy animation field for backward compatibility', () => {
+  // Legacy 'pop' maps to pageEffect 'pop' and wordEffect 'pop'
+  const popLegacy = normalizeCaptionStyle({ animation: 'pop' });
+  assert.equal(popLegacy.pageEffect, 'pop');
+  assert.equal(popLegacy.wordEffect, 'pop');
+
+  // Legacy 'none' maps to pageEffect 'none' and wordEffect 'none'
+  const noneLegacy = normalizeCaptionStyle({ animation: 'none' });
+  assert.equal(noneLegacy.pageEffect, 'none');
+  assert.equal(noneLegacy.wordEffect, 'none');
+
+  // Explicit new fields override legacy animation fallback
+  const overrideLegacy = normalizeCaptionStyle({ animation: 'none', pageEffect: 'slide-up' });
+  assert.equal(overrideLegacy.pageEffect, 'slide-up');
+  assert.equal(overrideLegacy.wordEffect, 'none');
 });
 
 test('captionCss builds valid CSS style objects', () => {
@@ -165,14 +212,38 @@ test('captionCss builds valid CSS style objects', () => {
   assert.equal(cssNoStrokeNoShadow.textTransform, 'none');
 });
 
-test('PRESETS contains 5 named presets with valid styles', () => {
-  assert.ok(PRESETS.length >= 4 && PRESETS.length <= 6);
+test('PRESETS contains 7 named presets with valid styles showcasing combinations', () => {
+  assert.equal(PRESETS.length, 7);
   for (const preset of PRESETS) {
     assert.ok(typeof preset.id === 'string');
     assert.ok(typeof preset.label === 'string');
     const normalized = normalizeCaptionStyle(preset.style);
     assert.deepEqual(normalized, preset.style);
   }
+
+  const impacto = PRESETS.find((p) => p.id === 'impacto');
+  assert.equal(impacto.style.pageEffect, 'zoom');
+  assert.equal(impacto.style.wordEffect, 'shake');
+
+  const comic = PRESETS.find((p) => p.id === 'comic');
+  assert.equal(comic.style.pageEffect, 'pop');
+  assert.equal(comic.style.wordEffect, 'bounce');
+
+  const minimalista = PRESETS.find((p) => p.id === 'minimalista');
+  assert.equal(minimalista.style.pageEffect, 'fade');
+  assert.equal(minimalista.style.wordEffect, 'underline');
+
+  const neon = PRESETS.find((p) => p.id === 'neon');
+  assert.equal(neon.style.pageEffect, 'blur');
+  assert.equal(neon.style.wordEffect, 'glow');
+
+  const caja = PRESETS.find((p) => p.id === 'caja-tiktok');
+  assert.equal(caja.style.pageEffect, 'slide-up');
+  assert.equal(caja.style.wordEffect, 'box');
+
+  const typewriter = PRESETS.find((p) => p.id === 'maquina-de-escribir');
+  assert.equal(typewriter.style.pageEffect, 'typewriter');
+  assert.equal(typewriter.style.wordEffect, 'none');
 });
 
 if (failures > 0) {

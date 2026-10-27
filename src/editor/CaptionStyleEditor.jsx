@@ -6,6 +6,8 @@ import CaptionPreview from './CaptionPreview.jsx';
 import {
   FONTS,
   DEFAULT_CAPTION_STYLE,
+  PAGE_EFFECTS,
+  WORD_EFFECTS,
   PRESETS,
   normalizeCaptionStyle,
 } from './captionStyle.js';
@@ -82,6 +84,24 @@ export default function CaptionStyleEditor({
     [candidateNumbers, bgType]
   );
 
+  const pageEffectOptions = useMemo(
+    () =>
+      PAGE_EFFECTS.map((e) => ({
+        value: e.id,
+        label: e.label,
+      })),
+    []
+  );
+
+  const wordEffectOptions = useMemo(
+    () =>
+      WORD_EFFECTS.map((e) => ({
+        value: e.id,
+        label: e.label,
+      })),
+    []
+  );
+
   const handleUpdate = (patch) => {
     onChange?.({ ...style, ...patch });
   };
@@ -98,7 +118,8 @@ export default function CaptionStyleEditor({
                 style.font === p.style.font &&
                 style.textColor === p.style.textColor &&
                 style.highlightColor === p.style.highlightColor &&
-                style.animation === p.style.animation;
+                style.pageEffect === p.style.pageEffect &&
+                style.wordEffect === p.style.wordEffect;
               return (
                 <button
                   key={p.id}
@@ -284,27 +305,25 @@ export default function CaptionStyleEditor({
             </div>
           </div>
 
-          <div className="auto-edit__caption-field">
-            <label className="auto-edit__label">Animación</label>
-            <div className="auto-edit__segmented">
-              <button
-                type="button"
-                className={`settings__button auto-edit__segmented-btn ${
-                  style.animation === 'pop' ? 'settings__button--primary' : 'settings__button--ghost'
-                }`}
-                onClick={() => handleUpdate({ animation: 'pop' })}
-              >
-                Con salto
-              </button>
-              <button
-                type="button"
-                className={`settings__button auto-edit__segmented-btn ${
-                  style.animation === 'none' ? 'settings__button--primary' : 'settings__button--ghost'
-                }`}
-                onClick={() => handleUpdate({ animation: 'none' })}
-              >
-                Sin animación
-              </button>
+          <div className="auto-edit__caption-row">
+            <div className="auto-edit__caption-field">
+              <label className="auto-edit__label">Entrada del bloque</label>
+              <CustomSelect
+                value={style.pageEffect}
+                options={pageEffectOptions}
+                onChange={(pageEffect) => handleUpdate({ pageEffect })}
+                ariaLabel="Entrada del bloque"
+              />
+            </div>
+
+            <div className="auto-edit__caption-field">
+              <label className="auto-edit__label">Efecto de la palabra</label>
+              <CustomSelect
+                value={style.wordEffect}
+                options={wordEffectOptions}
+                onChange={(wordEffect) => handleUpdate({ wordEffect })}
+                ariaLabel="Efecto de la palabra"
+              />
             </div>
           </div>
 
