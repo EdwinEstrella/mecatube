@@ -331,7 +331,7 @@ test('alignAnchors prefers the earliest good match over a perfect repeated phras
   );
   assert.equal(result[0].wordIndex, 0);
   assert.equal(result[1].source, 'anchor');
-  assert.equal(result[1].wordIndex, 7);
+  assert.equal(result[1].wordIndex, 8);
 });
 
 if (failures > 0) {

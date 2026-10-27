@@ -184,7 +184,13 @@ export function alignAnchors(anchors, words, { minScore = 0.6 } = {}) {
 
     // Prefer the earliest good match: a near-perfect match far ahead (a repeated phrase) must not
     // skip over the script moments of the anchors in between
-    const chosen = candidates.find((c) => c.score >= minScore && c.score >= bestScore * 0.85);
+    // (then refine within the anchor's length, since a match may also start on its second word)
+    const first = candidates.find((c) => c.score >= minScore && c.score >= bestScore - 0.2);
+    const chosen = first
+      ? candidates
+          .filter((c) => c.p >= first.p && c.p <= first.p + anchorTokens.length)
+          .reduce((best, c) => (c.score > best.score ? c : best), first)
+      : null;
     if (chosen) {
       bestP = chosen.p;
       bestStart = round3(words[chosen.p].s);
