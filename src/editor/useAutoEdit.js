@@ -37,6 +37,7 @@ export function useAutoEdit(videoId, options = {}) {
   const [usedFallback, setUsedFallback] = useState(false);
   const [sources, setSources] = useState({});
   const [audioUrl, setAudioUrl] = useState('');
+  const [words, setWords] = useState([]);
   const [clipDurations, setClipDurations] = useState({});
 
   const dataRef = useRef({
@@ -57,6 +58,7 @@ export function useAutoEdit(videoId, options = {}) {
       setEdl(null);
       setSources({});
       setAudioUrl('');
+      setWords([]);
       setClipDurations({});
       setWarnings([]);
       setAdjustments(0);
@@ -82,8 +84,9 @@ export function useAutoEdit(videoId, options = {}) {
       if (reqId !== reqIdRef.current) return;
 
       const duration = voiceMeta?.duration;
-      const words = voiceMeta?.words;
-      const phrases = Array.isArray(words) ? buildPhrases(words) : [];
+      const rawWords = voiceMeta?.words;
+      const wordsList = Array.isArray(rawWords) ? rawWords : [];
+      const phrases = buildPhrases(wordsList);
 
       const animList = Array.isArray(anims) ? anims : [];
       const availableItems = animList.filter((anim) => {
@@ -121,6 +124,7 @@ export function useAutoEdit(videoId, options = {}) {
 
       setSources(currentSources);
       setAudioUrl(currentAudioUrl);
+      setWords(wordsList);
       setMissing(missingReasons);
 
       // Probe clip durations in the background
@@ -333,6 +337,7 @@ export function useAutoEdit(videoId, options = {}) {
     usedFallback,
     sources,
     audioUrl,
+    words,
     clipDurations,
     generate,
     runFallback,

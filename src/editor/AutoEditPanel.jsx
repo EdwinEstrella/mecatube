@@ -21,6 +21,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
   const runFallback = customProps.runFallback ?? hookResult.runFallback;
   const sources = customProps.sources ?? hookResult.sources;
   const audioUrl = customProps.audioUrl ?? hookResult.audioUrl;
+  const words = customProps.words ?? hookResult.words ?? [];
   const clipDurations = customProps.clipDurations ?? hookResult.clipDurations;
 
   const [notes, setNotes] = useState('');
@@ -119,7 +120,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
         <div className="auto-edit__player-wrapper">
           <Player
             component={VideoComposition}
-            inputProps={{ edl, sources, audioUrl, clipDurations }}
+            inputProps={{ edl, sources, audioUrl, clipDurations, words }}
             durationInFrames={Math.max(1, Math.round((edl.duration ?? 0) * compositionSize.fps))}
             compositionWidth={compositionSize.width}
             compositionHeight={compositionSize.height}

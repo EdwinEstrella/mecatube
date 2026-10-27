@@ -8,6 +8,7 @@ import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
 import { slide } from '@remotion/transitions/slide';
 import { buildPlan, activeSubtitle, PUNCH_FRAMES } from './plan.js';
+import KaraokeCaptions from './KaraokeCaptions.jsx';
 
 export { compositionSize } from './plan.js';
 
@@ -134,6 +135,7 @@ export default function VideoComposition({
   sources = {},
   audioUrl,
   clipDurations = {},
+  words,
 }) {
   const { fps } = useVideoConfig();
   const plan = buildPlan(edl, { fps, clipDurations });
@@ -165,7 +167,11 @@ export default function VideoComposition({
         </TransitionSeries>
       )}
       {audioUrl && <Audio src={audioUrl} />}
-      <Subtitles subtitles={edl?.subtitles} />
+      {Array.isArray(words) && words.length > 0 ? (
+        <KaraokeCaptions words={words} />
+      ) : (
+        <Subtitles subtitles={edl?.subtitles} />
+      )}
     </AbsoluteFill>
   );
 }
