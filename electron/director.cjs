@@ -1,4 +1,4 @@
-// AI director service: uses DeepSeek to assemble an Edit Decision List (EDL)
+// AI director service: uses DeepSeek to assemble visual styling and scene alignment,
 // and handles persistence of edit.json in the workspace.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -6,30 +6,48 @@ const crypto = require('node:crypto');
 
 const VIDEO_ID = /^[\w-]{1,100}$/;
 const MAX_PHRASES = 2000;
-const MAX_ANIMATIONS = 500;
+const MAX_SCENES = 500;
+const MAX_CLIPS = 1000;
+const MAX_PROMPT_CHARS = 700;
+const MAX_CLIP_TEXT_CHARS = 2000;
 const MAX_NOTES_CHARS = 500;
 const MAX_EDL_BYTES = 2 * 1024 * 1024;
 
 const DIRECTOR_SYSTEM_PROMPT =
   'You are a professional YouTube video editor for narrated faceless videos.\n' +
-  'Generate an Edit Decision List (EDL) following these strict rules:\n\n' +
-  '1. Output ONLY one JSON object, no prose, no code fences. Output exactly the EDL v1 shape with allowed transition values cut|fade|slide|zoom and motion values none|zoom-in|zoom-out|pan-left|pan-right:\n' +
+  'Clip timings and order are FIXED. Your role is ONLY to choose the transition and motion for each clip.\n\n' +
+  'Allowed transitions: cut | fade | slide | zoom\n' +
+  'Allowed motions: none | zoom-in | zoom-out | pan-left | pan-right\n\n' +
+  'Pacing guidance:\n' +
+  '- Opening hook: faster cuts and dynamic motion.\n' +
+  '- Mostly use \'cut\' transitions.\n' +
+  '- Use \'fade\' on topic changes.\n' +
+  '- Use \'zoom\' for reveals and strong emphasis.\n' +
+  '- Use \'slide\' rarely.\n' +
+  '- Vary motion so consecutive clips differ (alternate zoom-in / zoom-out, pan-left / pan-right).\n\n' +
+  'Rules:\n' +
+  '1. Output ONLY one JSON object, no prose, no code fences. Output exactly this shape with one entry per given clip, in the same order:\n' +
   '   {\n' +
-  '     "version": 1,\n' +
-  '     "duration": <number>,\n' +
   '     "clips": [\n' +
-  '       { "number": <int>, "start": <number>, "end": <number>, "transition": "<cut|fade|slide|zoom>", "motion": "<none|zoom-in|zoom-out|pan-left|pan-right>" }\n' +
-  '     ],\n' +
-  '     "subtitles": [\n' +
-  '       { "start": <number>, "end": <number>, "text": "<string>" }\n' +
+  '       { "number": <int>, "transition": "<cut|fade|slide|zoom>", "motion": "<none|zoom-in|zoom-out|pan-left|pan-right>" }\n' +
   '     ]\n' +
-  '   }\n\n' +
-  '2. Clips must be contiguous, cover 0..duration exactly, cut on phrase boundaries (use phrase start times), in narrative order.\n\n' +
-  '3. Animations are numbered in script order: the illustrator split the script in order and the last animation matches the end of the script; use that order as the backbone, every animation should appear at least once when possible; hook animations (hook=true) belong to the opening hook.\n\n' +
-  '4. Each source clip lasts about 8 seconds; prefer segments of 2-8 s; a longer segment is allowed (it will be slowed/looped) but split long phrases across two clips instead when possible; reusing a clip is allowed.\n\n' +
-  '5. Pacing: faster cuts in the hook, mostly \'cut\' transitions, \'fade\' on topic changes, \'zoom\' for reveals/emphasis, \'slide\' rarely; vary motion so consecutive clips differ.\n\n' +
-  '6. Subtitles: short chunks of at most ~7 words, aligned to the phrase timings, text copied from the phrases verbatim.\n\n' +
-  '7. If notes are given, they are the creator\'s instructions for this edit and take priority over style preferences (never over the JSON/coverage rules).';
+  '   }\n' +
+  '2. No timings, no subtitles (positions and captions are fixed).\n' +
+  '3. If notes are given, they are creator instructions for styling and take priority over style preferences.';
+
+const ALIGN_SYSTEM_PROMPT =
+  'You are an expert video editor matching illustrated scenes to the narration.\n' +
+  'Scenes are in script order and each scene illustrates the START of one moment.\n\n' +
+  'Input:\n' +
+  '- phrases: numbered narration phrases [{ "i": <int>, "text": "<string>" }] in chronological order.\n' +
+  '- scenes: scenes to place [{ "number": <int>, "title": "<string>", "prompt": "<string>", "needed": <bool>, "fixedPhrase": <int|null> }].\n\n' +
+  'Rules:\n' +
+  '1. Output ONLY a single JSON object, no prose, no code fences:\n' +
+  '   {"assignments":[{"number":N,"phrase":i}]}\n' +
+  '2. For scenes with needed=true (or needed omitted), return one assignment with the phrase index i where that scene begins.\n' +
+  '3. Anchored scenes (fixedPhrase) are fixed references in time. Use them to guide where the needed scenes belong.\n' +
+  '4. Phrase indices must be non-decreasing in number order, one per scene.\n' +
+  '5. The first scene usually starts at phrase 0.';
 
 function validVideoId(value) {
   if (typeof value !== 'string' || !VIDEO_ID.test(value)) throw new Error('ID de video no válido.');
@@ -42,19 +60,14 @@ function writeAtomic(file, data) {
   fs.renameSync(temp, file);
 }
 
-function buildDirectorMessages({ duration, phrases, animations, notes }) {
+function buildDirectorMessages({ duration, clips, notes }) {
   const userPayload = {
     duration,
-    phrases: (Array.isArray(phrases) ? phrases : []).map((p, index) => ({
-      i: typeof p.i === 'number' ? p.i : index,
-      start: p.start,
-      end: p.end,
-      text: p.text,
-    })),
-    animations: (Array.isArray(animations) ? animations : []).map((a) => ({
-      number: a.number,
-      title: a.title,
-      hook: Boolean(a.hook),
+    clips: (Array.isArray(clips) ? clips : []).map((c) => ({
+      number: c.number,
+      start: c.start,
+      end: c.end,
+      text: c.text,
     })),
   };
 
@@ -69,46 +82,55 @@ function buildDirectorMessages({ duration, phrases, animations, notes }) {
   ];
 }
 
+function buildAlignMessages({ phrases, scenes }) {
+  const userPayload = {
+    phrases: (Array.isArray(phrases) ? phrases : []).map((p, index) => ({
+      i: typeof p.i === 'number' ? p.i : index,
+      text: p.text,
+    })),
+    scenes: (Array.isArray(scenes) ? scenes : []).map((s) => ({
+      number: s.number,
+      title: s.title,
+      prompt: typeof s.prompt === 'string' ? s.prompt.slice(0, MAX_PROMPT_CHARS) : '',
+      ...(s.needed !== undefined ? { needed: Boolean(s.needed) } : {}),
+      ...(typeof s.fixedPhrase === 'number' ? { fixedPhrase: s.fixedPhrase } : {}),
+    })),
+  };
+
+  return [
+    { role: 'system', content: ALIGN_SYSTEM_PROMPT },
+    { role: 'user', content: JSON.stringify(userPayload) },
+  ];
+}
+
 function createDirectorService({ getWorkspacePath, getApiKey, streamChat }) {
   let inFlight = false;
 
-  async function direct({ videoId, duration, phrases, animations, notes }) {
+  async function direct({ videoId, duration, clips, notes }) {
     validVideoId(videoId);
 
     if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {
       throw new Error('Duración no válida.');
     }
 
-    if (!Array.isArray(phrases) || phrases.length < 1 || phrases.length > MAX_PHRASES) {
-      throw new Error('Lista de frases no válida.');
+    if (!Array.isArray(clips) || clips.length < 1 || clips.length > MAX_CLIPS) {
+      throw new Error('Lista de clips no válida.');
     }
-    for (const p of phrases) {
+    for (const c of clips) {
       if (
-        !p ||
-        typeof p !== 'object' ||
-        typeof p.start !== 'number' ||
-        !Number.isFinite(p.start) ||
-        typeof p.end !== 'number' ||
-        !Number.isFinite(p.end) ||
-        typeof p.text !== 'string'
+        !c ||
+        typeof c !== 'object' ||
+        !Number.isInteger(c.number) ||
+        c.number < 1 ||
+        typeof c.start !== 'number' ||
+        !Number.isFinite(c.start) ||
+        typeof c.end !== 'number' ||
+        !Number.isFinite(c.end) ||
+        c.start >= c.end ||
+        typeof c.text !== 'string' ||
+        c.text.length > MAX_CLIP_TEXT_CHARS
       ) {
-        throw new Error('Lista de frases no válida.');
-      }
-    }
-
-    if (!Array.isArray(animations) || animations.length < 1 || animations.length > MAX_ANIMATIONS) {
-      throw new Error('Lista de animaciones no válida.');
-    }
-    for (const a of animations) {
-      if (
-        !a ||
-        typeof a !== 'object' ||
-        !Number.isInteger(a.number) ||
-        a.number < 1 ||
-        typeof a.title !== 'string' ||
-        typeof a.hook !== 'boolean'
-      ) {
-        throw new Error('Lista de animaciones no válida.');
+        throw new Error('Lista de clips no válida.');
       }
     }
 
@@ -130,9 +152,66 @@ function createDirectorService({ getWorkspacePath, getApiKey, streamChat }) {
     try {
       const messages = buildDirectorMessages({
         duration,
-        phrases,
-        animations,
+        clips,
         notes: trimmedNotes,
+      });
+      const raw = await streamChat({
+        apiKey,
+        messages,
+        model: 'deepseek-chat',
+      });
+      return { raw };
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  async function align({ videoId, phrases, scenes }) {
+    validVideoId(videoId);
+
+    if (!Array.isArray(phrases) || phrases.length < 1 || phrases.length > MAX_PHRASES) {
+      throw new Error('Lista de frases no válida.');
+    }
+    for (const p of phrases) {
+      if (
+        !p ||
+        typeof p !== 'object' ||
+        typeof p.i !== 'number' ||
+        !Number.isInteger(p.i) ||
+        typeof p.text !== 'string'
+      ) {
+        throw new Error('Lista de frases no válida.');
+      }
+    }
+
+    if (!Array.isArray(scenes) || scenes.length < 1 || scenes.length > MAX_SCENES) {
+      throw new Error('Lista de escenas no válida.');
+    }
+    for (const s of scenes) {
+      if (
+        !s ||
+        typeof s !== 'object' ||
+        !Number.isInteger(s.number) ||
+        s.number < 1 ||
+        typeof s.title !== 'string' ||
+        typeof s.prompt !== 'string'
+      ) {
+        throw new Error('Lista de escenas no válida.');
+      }
+    }
+
+    const apiKey = getApiKey?.();
+    if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+      throw new Error('Configura tu API Key de DeepSeek en Configuración para que la IA edite el video.');
+    }
+
+    if (inFlight) throw new Error('Ya hay una edición en curso.');
+
+    inFlight = true;
+    try {
+      const messages = buildAlignMessages({
+        phrases,
+        scenes,
       });
       const raw = await streamChat({
         apiKey,
@@ -188,11 +267,12 @@ function createDirectorService({ getWorkspacePath, getApiKey, streamChat }) {
 
   const busy = () => inFlight;
 
-  return { direct, getEdit, saveEdit, busy };
+  return { direct, align, getEdit, saveEdit, busy };
 }
 
 function registerDirectorIpc({ ipcMain, service }) {
   ipcMain.handle('editor:direct', (_event, payload = {}) => service.direct(payload));
+  ipcMain.handle('editor:align', (_event, payload = {}) => service.align(payload));
   ipcMain.handle('editor:get', (_event, { videoId } = {}) => service.getEdit(videoId));
   ipcMain.handle('editor:save', (_event, { videoId, edl } = {}) => service.saveEdit(videoId, edl));
   ipcMain.handle('editor:busy', () => service.busy());
@@ -200,6 +280,7 @@ function registerDirectorIpc({ ipcMain, service }) {
 
 module.exports = {
   buildDirectorMessages,
+  buildAlignMessages,
   createDirectorService,
   registerDirectorIpc,
 };

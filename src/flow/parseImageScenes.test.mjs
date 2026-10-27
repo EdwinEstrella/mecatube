@@ -1,6 +1,6 @@
 // Run with: node src/flow/parseImageScenes.test.mjs
 import assert from 'node:assert/strict';
-import { parseImageScenes } from './parseImageScenes.js';
+import { parseImageScenes, collectImageScenes } from './parseImageScenes.js';
 
 const P1 = 'Wide shot of a caveman lighting a fire.\nThe character from character sheet [1].';
 const P2 = 'Infographic of the fire triangle, white background.';
@@ -299,6 +299,56 @@ test('anchor not leaking into the prompt', () => {
   assert.equal(result.scenes[0].prompt, promptContent);
   assert.equal(result.scenes[0].prompt.includes('Guion:'), false);
   assert.equal(result.scenes[0].prompt.includes('Texto exacto'), false);
+});
+
+
+test('collectImageScenes combines multiple blocks and allows later overrides', () => {
+  const msg1 = {
+    role: 'assistant',
+    content: [
+      '**Bloque 1 de 2 — Imágenes 1 a 2**',
+      '**Imagen 01 — Escena · Tomás (hoja 1)**',
+      'Guion: «Texto 1»',
+      '```',
+      'Prompt 1 original',
+      '```',
+      '**Imagen 02 — Escena · Ana (hoja 2)**',
+      'Guion: «Texto 2»',
+      '```',
+      'Prompt 2 original',
+      '```',
+    ].join('\n'),
+  };
+  const msgUser = { role: 'user', content: 'Cambia la imagen 2' };
+  const msg2 = {
+    role: 'assistant',
+    content: [
+      '**Imagen 02 — Escena · Ana (hoja 2)**',
+      'Guion: «Texto 2 corregido»',
+      '```',
+      'Prompt 2 corregido',
+      '```',
+      '**Imagen 03 — Escena · Tomás (hoja 1)**',
+      'Guion: «Texto 3»',
+      '```',
+      'Prompt 3',
+      '```',
+    ].join('\n'),
+  };
+
+  const scenes = collectImageScenes([msg1, msgUser, msg2]);
+  assert.equal(scenes.length, 3);
+  assert.deepEqual(scenes.map((s) => s.number), [1, 2, 3]);
+  assert.equal(scenes[0].scriptAnchor, 'Texto 1');
+  assert.equal(scenes[1].scriptAnchor, 'Texto 2 corregido');
+  assert.equal(scenes[1].prompt, 'Prompt 2 corregido');
+  assert.equal(scenes[2].scriptAnchor, 'Texto 3');
+});
+
+test('collectImageScenes returns empty array for null/empty/non-assistant messages', () => {
+  assert.deepEqual(collectImageScenes(null), []);
+  assert.deepEqual(collectImageScenes([]), []);
+  assert.deepEqual(collectImageScenes([{ role: 'user', content: 'hello' }]), []);
 });
 
 if (failures > 0) {

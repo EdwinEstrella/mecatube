@@ -83,6 +83,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onFlowResult: (callback) => subscribe('flow:result', callback),
   onFlowError: (callback) => subscribe('flow:error', callback),
   directEdit: (payload) => ipcRenderer.invoke('editor:direct', payload),
+  alignEdit: (payload) => ipcRenderer.invoke('editor:align', payload),
   getEdit: (videoId) => ipcRenderer.invoke('editor:get', { videoId }),
   saveEdit: (videoId, edl) => ipcRenderer.invoke('editor:save', { videoId, edl }),
   getEditBusy: () => ipcRenderer.invoke('editor:busy'),

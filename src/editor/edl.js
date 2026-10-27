@@ -58,7 +58,7 @@ function extractBalancedJson(str) {
   return null;
 }
 
-function extractJsonCandidate(str) {
+export function extractJsonCandidate(str) {
   if (typeof str !== 'string') return null;
 
   const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/i.exec(str);

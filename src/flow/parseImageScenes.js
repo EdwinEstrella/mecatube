@@ -41,7 +41,7 @@ const SCRIPT_ANCHOR = /^\s*[*_]{0,2}gui[oó]n[*_]{0,2}\s*:\s*(.+)$/i;
 function cleanAnchor(raw) {
   if (!raw) return '';
   let text = String(raw).replace(/[*_`]/g, '').trim();
-  text = text.replace(/^[\s«»“”‘’"\']+|[\s«»“”‘’"\']+$/g, '').trim();
+  text = text.replace(/^[\s«»“”‘’"']+|[\s«»“”‘’"']+$/g, '').trim();
   return text.replace(/\s+/g, ' ');
 }
 
@@ -171,4 +171,28 @@ export function parseImageScenes(content) {
     scenes: found,
     outro: tail.join('\n').trim(),
   };
+}
+
+// Collects all image scenes across assistant messages in a conversation.
+// Later messages with the same scene number override earlier ones.
+// Returns an array of scenes sorted by scene number.
+export function collectImageScenes(messages) {
+  if (!Array.isArray(messages)) return [];
+  const sceneMap = new Map();
+
+  for (const message of messages) {
+    if (!message || message.role !== 'assistant' || typeof message.content !== 'string') {
+      continue;
+    }
+    const parsed = parseImageScenes(message.content);
+    if (parsed && parsed.kind === 'images' && Array.isArray(parsed.scenes)) {
+      for (const scene of parsed.scenes) {
+        if (scene && typeof scene.number === 'number') {
+          sceneMap.set(scene.number, scene);
+        }
+      }
+    }
+  }
+
+  return Array.from(sceneMap.values()).sort((a, b) => a.number - b.number);
 }
