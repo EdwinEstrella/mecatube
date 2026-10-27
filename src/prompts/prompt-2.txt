@@ -389,10 +389,12 @@ como debe aparecer.
 **Formato de salida (exactamente esto, sin texto antes ni después):**
 **Bloque [N] de [TOTAL_BLOQUES] — Imágenes [X] a [Y]**
 **Imagen 01 — Escena · [Nombre] (hoja [N])**
+Guion: «[primeras 6 a 12 palabras EXACTAS del momento del guion que ilustra esta imagen]»
 ```
 [prompt en inglés]
 ```
 **Imagen 02 — Explicación ([disposición])**
+Guion: «[primeras 6 a 12 palabras EXACTAS del momento del guion que ilustra esta imagen]»
 ```
 [prompt en inglés]
 ```
@@ -401,8 +403,12 @@ guion (la apertura que engancha al espectador), añade `· Gancho` en el título
 `**Imagen 01 — Escena · Gancho · [Nombre] (hoja [N])**` y
 `**Imagen 02 — Explicación · Gancho ([disposición])**`. Las imágenes que no
 pertenecen al gancho llevan el título normal, sin esa marca.
-* Solo el título y el prompt. No escribas el momento del guion ni ninguna otra
-línea.
+* La línea Guion copia las palabras del guion de forma literal (misma ortografía,
+tildes y signos de puntuación, sin parafrasear y sin puntos suspensivos). Es el
+inicio del momento que cubre la imagen. Las anclas aparecen en el orden del
+guion y nunca se repiten. La primera imagen ancla las primeras palabras del
+guion.
+* Solo el título, la línea Guion y el prompt. Ninguna otra línea.
 (… hasta completar el bloque)
 Al final de cada bloque, excepto el último:
 ```
