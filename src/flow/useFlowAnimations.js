@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureIllustratorVideo } from './illustratorVideo.js';
 import { isActive } from './sceneStatus.js';
+import { animationSeconds } from './animationSeconds.js';
 
 function cleanError(error) {
   return String(error?.message ?? error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
@@ -61,7 +62,7 @@ export function useFlowAnimations(conversationId, conversationTitle, isConnected
     });
   }, []);
 
-  // list: [{ number, title, prompt, hook }] in the order they must run
+  // list: [{ number, title, prompt, hook, seconds, scriptAnchor }] in the order they must run
   const generate = useCallback(
     async (list) => {
       const api = window.electronAPI;
@@ -70,7 +71,13 @@ export function useFlowAnimations(conversationId, conversationTitle, isConnected
         const video = await ensureIllustratorVideo(api, conversationId, conversationTitle);
         await api.generateAnimations({
           videoId: video.id,
-          animations: list.map(({ number, title, prompt, hook }) => ({ number, title, prompt, hook: hook === true })),
+          animations: list.map(({ number, title, prompt, hook, seconds, scriptAnchor }) => ({
+            number,
+            title,
+            prompt,
+            hook: hook === true,
+            seconds: seconds ?? animationSeconds(scriptAnchor),
+          })),
         });
       } catch (generateError) {
         setError(cleanError(generateError));

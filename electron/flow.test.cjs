@@ -733,6 +733,28 @@ async function waitUntil(check, label) {
     assert.match(lastAnim(91).error, /se desconectó/);
   });
 
+  await test('animation seconds are validated on enqueue and passed to pump', async () => {
+    sent.length = 0;
+    // valid seconds (4, 6, 8, 10) are passed to the bridge
+    sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [{ ...animation(90), seconds: 6 }] });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].video.seconds, 6);
+    finishClip(sent[0]);
+
+    // invalid seconds fall back to 8
+    sent.length = 0;
+    sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [{ ...animation(90), seconds: 12 }] });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].video.seconds, 8);
+    finishClip(sent[0]);
+
+    sent.length = 0;
+    sceneService.generateAnimations({ videoId: sceneVideo.id, animations: [{ ...animation(90), seconds: 'invalid' }] });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].video.seconds, 8);
+    finishClip(sent[0]);
+  });
+
   await test('an animation has its own, longer watchdog', async () => {
     const watchedEvents = [];
     const watched = createFlowService({

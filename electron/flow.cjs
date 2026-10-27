@@ -51,6 +51,8 @@ const ANIMATIONS_PER_BATCH_MAX = 200;
 const ANIMATION_JOB_TIMEOUT_MS = 15 * 60 * 1000;
 // Video settings every animate job asks for (Omni 1.1 Flash); the extension applies them in the page
 const ANIMATION_VIDEO_SETTINGS = Object.freeze({ model: 'omni-1.1-flash', resolution: '720p', seconds: 8, aspect: '16:9', outputs: 1 });
+const ANIMATION_VIDEO_SECONDS = [4, 6, 8, 10];
+const validAnimationSeconds = (value) => (ANIMATION_VIDEO_SECONDS.includes(value) ? value : ANIMATION_VIDEO_SETTINGS.seconds);
 const MIME_BY_EXTENSION = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg' };
 
 // Flow asset id inside a result image/video URL: https://flow-content.google/image|video/<uuid>?Expires=... ; null when absent
@@ -680,7 +682,7 @@ function createFlowService({
             prompt: item.prompt,
             projectUrl: video.flowProjectUrl ?? null,
             sourceAssetId,
-            video: { ...ANIMATION_VIDEO_SETTINGS },
+            video: { ...ANIMATION_VIDEO_SETTINGS, seconds: item.seconds ?? ANIMATION_VIDEO_SETTINGS.seconds },
           });
         } catch (error) {
           finishJob();
@@ -777,6 +779,7 @@ function createFlowService({
         title: boundedText(animation?.title ?? '', NAME_MAX, 'animation title'),
         prompt,
         hook: animation?.hook === true,
+        seconds: validAnimationSeconds(animation?.seconds),
       };
     });
     return { queued: enqueue(videoId, items) };
