@@ -156,7 +156,8 @@ export default function VideoComposition({
                   })}
                 />
               )}
-              <TransitionSeries.Sequence durationInFrames={item.sequenceFrames}>
+              {/* Mount each shot 2 s early so its video is decoded before it shows (no preview stalls) */}
+              <TransitionSeries.Sequence durationInFrames={item.sequenceFrames} premountFor={2 * fps}>
                 <Shot item={item} src={sources?.[item.number]} />
               </TransitionSeries.Sequence>
             </React.Fragment>
