@@ -499,19 +499,6 @@ test('branch characters validation and flowProjectUrl validation', () => {
   // Non-array
   assert.throws(() => validCharacters('not-array'), /Lista de personajes no válida\./);
 
-  // voiceId validation on character
-  const withVoice = validCharacters([
-    { key: 'c1', name: 'Char 1', file: 'f.png', source: 'own', voiceId: 'voice-uuid-1234' },
-    { key: 'c2', name: 'Char 2', file: 'f.png', source: 'flow', voiceId: null },
-    { key: 'c3', name: 'Char 3', file: 'f.png', source: 'own' },
-  ]);
-  assert.equal(withVoice[0].voiceId, 'voice-uuid-1234');
-  assert.equal(withVoice[1].voiceId, null);
-  assert.equal(withVoice[2].voiceId, null);
-
-  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'f.png', source: 'own', voiceId: 'invalid voice id with spaces!' }]), /ID de voz de personaje no válido\./);
-  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'f.png', source: 'own', voiceId: 'a'.repeat(101) }]), /ID de voz de personaje no válido\./);
-  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'f.png', source: 'own', voiceId: 12345 }]), /ID de voz de personaje no válido\./);
 
   // validNarratorVoiceId
   assert.equal(validNarratorVoiceId(null), null);
@@ -541,16 +528,14 @@ test('setCharacters updates characters, flowProjectUrl, and synchronizes charact
   const updated = store.setCharacters(
     branch.id,
     [
-      { key: 'char-1', name: 'Personaje 1', description: 'Desc 1', file: 'char1.png', source: 'own', voiceId: 'voice-hector' },
-      { key: 'char-2', name: 'Personaje 2', description: 'Desc 2', file: 'char2.webp', source: 'flow', voiceId: null },
+      { key: 'char-1', name: 'Personaje 1', description: 'Desc 1', file: 'char1.png', source: 'own' },
+      { key: 'char-2', name: 'Personaje 2', description: 'Desc 2', file: 'char2.webp', source: 'flow' },
     ],
     'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
   );
 
   assert.equal(updated.characters.length, 2);
   assert.equal(updated.characters[0].key, 'char-1');
-  assert.equal(updated.characters[0].voiceId, 'voice-hector');
-  assert.equal(updated.characters[1].voiceId, null);
   assert.equal(updated.flowProjectUrl, 'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc');
   assert.ok(updated.characterImages.includes('char1.png'));
   assert.ok(updated.characterImages.includes('char2.webp'));
@@ -558,7 +543,6 @@ test('setCharacters updates characters, flowProjectUrl, and synchronizes charact
   // Re-read from disk
   const reloaded = store.get(branch.id);
   assert.deepEqual(reloaded.characters, updated.characters);
-  assert.equal(reloaded.characters[0].voiceId, 'voice-hector');
   assert.equal(reloaded.flowProjectUrl, updated.flowProjectUrl);
   assert.deepEqual(reloaded.characterImages, updated.characterImages);
 
@@ -573,13 +557,9 @@ test('branch narratorVoiceId create, update, and read roundtrip', () => {
   const branch = store.create({
     name: 'Rama Narrador',
     narratorVoiceId: 'narrator-cartesia-1',
-    characters: [
-      { key: 'protag', name: 'Protagonista', file: 'p.png', source: 'own', voiceId: 'voice-protag' },
-    ],
   });
 
   assert.equal(branch.narratorVoiceId, 'narrator-cartesia-1');
-  assert.equal(branch.characters[0].voiceId, 'voice-protag');
 
   // Update narratorVoiceId
   const updated = store.update(branch.id, { narratorVoiceId: 'narrator-cartesia-2' });
@@ -592,7 +572,19 @@ test('branch narratorVoiceId create, update, and read roundtrip', () => {
   // Re-read from disk
   const reloaded = store.get(branch.id);
   assert.equal(reloaded.narratorVoiceId, null);
-  assert.equal(reloaded.characters[0].voiceId, 'voice-protag');
+});
+
+test('a character input with a voiceId field is accepted and the field is dropped from the result', () => {
+  const result = validCharacters([
+    { key: 'c1', name: 'Char 1', file: 'f.png', source: 'own', voiceId: 'old-voice-id-123' },
+  ]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].key, 'c1');
+  assert.equal(result[0].name, 'Char 1');
+  assert.equal(result[0].file, 'f.png');
+  assert.equal(result[0].source, 'own');
+  assert.equal(result[0].voiceId, undefined);
+  assert.equal('voiceId' in result[0], false);
 });
 
 test('copyVideoCharacterFiles: copies with safe names and rejects traversal', () => {

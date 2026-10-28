@@ -47,7 +47,7 @@ export function useBranchForm(branch, isOpen) {
       setCharacterMode(branch.characterMode || 'create');
       setNarratorVoiceId(branch.narratorVoiceId || '');
       const loadedChars = Array.isArray(branch.characters) && branch.characters.length > 0
-        ? branch.characters.map((c) => ({ ...c, voiceId: c.voiceId || null }))
+        ? branch.characters.map((c) => ({ ...c }))
         : Array.isArray(branch.characterImages) && branch.characterImages.length > 0
           ? branch.characterImages.map((file, idx) => ({
               key: `personaje-${idx + 1}`,
@@ -55,7 +55,6 @@ export function useBranchForm(branch, isOpen) {
               description: '',
               file,
               source: branch.characterMode === 'create' ? 'flow' : 'own',
-              voiceId: null,
             }))
           : [];
       setCharacters(loadedChars);
@@ -156,10 +155,6 @@ export default function NewBranchWizard({
     ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
   ];
 
-  const characterVoiceOptions = [
-    { value: '', label: 'Sin voz (solo narración)' },
-    ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
-  ];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -194,7 +189,6 @@ export default function NewBranchWizard({
       fileName: file.name,
       path: file.path,
       previewUrl: URL.createObjectURL(file),
-      voiceId: null,
     }));
 
     setPendingCharacters((prev) => [...prev, ...allowed]);
@@ -284,7 +278,6 @@ export default function NewBranchWizard({
         description: p.description.trim(),
         file: uploadedFileNames[idx],
         source: 'own',
-        voiceId: p.voiceId || null,
       }));
 
       const allChars = [
@@ -294,7 +287,6 @@ export default function NewBranchWizard({
           description: c.description ? c.description.trim() : '',
           file: c.file,
           source: c.source || 'own',
-          voiceId: c.voiceId || null,
         })),
         ...newCharsFromPending,
       ];
@@ -570,18 +562,6 @@ export default function NewBranchWizard({
                           disabled={isBusy}
                           onChange={(e) => handleUpdateExistingCharacter(idx, 'description', e.target.value)}
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '4px' }}>
-                          <CustomSelect
-                            value={char.voiceId || ''}
-                            options={characterVoiceOptions}
-                            placeholder="Sin voz (solo narración)"
-                            ariaLabel={`Voz para ${char.name || 'personaje'}`}
-                            disabled={isBusy}
-                            onChange={(val) => handleUpdateExistingCharacter(idx, 'voiceId', val || null)}
-                            style={{ flex: 1, fontSize: '0.8rem' }}
-                          />
-                          <VoicePreviewButton voiceId={char.voiceId} />
-                        </div>
                       </div>
                     ))}
 
@@ -618,18 +598,6 @@ export default function NewBranchWizard({
                           disabled={isBusy}
                           onChange={(e) => handleUpdatePendingCharacter(idx, 'description', e.target.value)}
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '4px' }}>
-                          <CustomSelect
-                            value={file.voiceId || ''}
-                            options={characterVoiceOptions}
-                            placeholder="Sin voz (solo narración)"
-                            ariaLabel={`Voz para ${file.name || 'personaje'}`}
-                            disabled={isBusy}
-                            onChange={(val) => handleUpdatePendingCharacter(idx, 'voiceId', val || null)}
-                            style={{ flex: 1, fontSize: '0.8rem' }}
-                          />
-                          <VoicePreviewButton voiceId={file.voiceId} />
-                        </div>
                       </div>
                     ))}
                   </div>

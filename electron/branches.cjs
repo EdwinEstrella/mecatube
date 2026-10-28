@@ -105,20 +105,12 @@ function validCharacters(value) {
     if (typeof item.source !== 'string' || !CHARACTER_SOURCES.includes(item.source)) {
       throw new Error('Origen de personaje no válido.');
     }
-    let voiceId = null;
-    if (item.voiceId !== undefined && item.voiceId !== null && item.voiceId !== '') {
-      if (typeof item.voiceId !== 'string' || !VOICE_ID_PATTERN.test(item.voiceId)) {
-        throw new Error('ID de voz de personaje no válido.');
-      }
-      voiceId = item.voiceId;
-    }
     return {
       key: item.key,
       name,
       description,
       file: item.file,
       source: item.source,
-      voiceId,
     };
   });
 }
@@ -287,15 +279,6 @@ function createBranchStore(dir) {
               if (!mod.characters) mod = { ...mod, characters: [] };
               if (mod.flowProjectUrl === undefined) mod = { ...mod, flowProjectUrl: null };
               if (mod.narratorVoiceId === undefined) mod = { ...mod, narratorVoiceId: null };
-              if (Array.isArray(mod.characters)) {
-                mod = {
-                  ...mod,
-                  characters: mod.characters.map((c) => ({
-                    ...c,
-                    voiceId: c && typeof c === 'object' && c.voiceId ? c.voiceId : null,
-                  })),
-                };
-              }
               return mod;
             }
             return b;

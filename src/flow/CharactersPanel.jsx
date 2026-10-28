@@ -53,10 +53,6 @@ export default function CharactersPanel({
     ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
   ];
 
-  const characterVoiceOptions = [
-    { value: '', label: 'Sin voz (solo narración)' },
-    ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
-  ];
 
   const handleNarratorVoiceChange = async (val) => {
     if (!branch?.id || !window.electronAPI?.updateBranch) return;
@@ -66,16 +62,6 @@ export default function CharactersPanel({
     } catch {}
   };
 
-  const handleCharacterVoiceChange = async (charKey, val) => {
-    if (!branch?.id || !window.electronAPI?.updateBranch) return;
-    try {
-      const updated = branchCharacters.map((c) =>
-        c.key === charKey ? { ...c, voiceId: val || null } : c
-      );
-      await window.electronAPI.updateBranch(branch.id, { characters: updated });
-      onBranchUpdated?.();
-    } catch {}
-  };
 
   const handleSaveToBranch = async () => {
     if (!branch?.id || !video?.id || !window.electronAPI) return;
@@ -173,17 +159,6 @@ export default function CharactersPanel({
               ) : (
                 <span className="char-panel__state">Rama</span>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', width: '100%' }}>
-                <CustomSelect
-                  value={char.voiceId || ''}
-                  options={characterVoiceOptions}
-                  placeholder="Sin voz (solo narración)"
-                  ariaLabel={`Voz para ${char.name}`}
-                  onChange={(val) => handleCharacterVoiceChange(char.key, val)}
-                  style={{ flex: 1, fontSize: '0.8rem' }}
-                />
-                <VoicePreviewButton voiceId={char.voiceId} />
-              </div>
             </li>
           ))}
         </ul>
