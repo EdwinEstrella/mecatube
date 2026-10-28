@@ -15,13 +15,13 @@ const FLOW_PROJECT_URL = /^https:\/\/flow\.google\.com\/(?:u\/\d+\/)?project\/[0
 const STAGE_KEYS = [
   'idea',
   'script',
-  'metadata',
   'voice',
   'characters',
   'images',
   'animations',
   'thumbnail',
   'editing',
+  'metadata',
   'published',
 ];
 

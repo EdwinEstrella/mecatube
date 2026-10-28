@@ -10,7 +10,6 @@ import { usesCartesia } from '../voice/voiceMode.js';
 export const STAGES = [
   { key: 'idea', label: 'Idea', auto: true },
   { key: 'script', label: 'Guion', auto: true },
-  { key: 'metadata', label: 'Metadatos', auto: true },
   // Not chat-detected; it turns done by itself when a narration track exists (hasVoice)
   { key: 'voice', label: 'Voz en off', auto: false },
   { key: 'characters', label: 'Personajes', auto: true },
@@ -18,6 +17,7 @@ export const STAGES = [
   { key: 'animations', label: 'Animaciones', auto: true },
   { key: 'thumbnail', label: 'Miniatura', auto: true },
   { key: 'editing', label: 'Edición', auto: false },
+  { key: 'metadata', label: 'Metadatos', auto: true },
   { key: 'published', label: 'Publicado', auto: false },
 ];
 
