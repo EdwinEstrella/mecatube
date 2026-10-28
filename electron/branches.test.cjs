@@ -11,7 +11,9 @@ const {
   MODES,
   CHARACTER_MODES,
   VIDEO_TYPES,
+  VOICE_MODES,
   validVideoType,
+  validVoiceMode,
   copyCharacterImages,
   getCharacterFilePath,
   validCharacters,
@@ -20,6 +22,7 @@ const {
   VOICE_ID_PATTERN,
   copyVideoCharacterFiles,
   copyVideoCharacters,
+  mergeBranchCharacters,
 } = require('./branches.cjs');
 
 function makeTmpDir() {
@@ -100,6 +103,7 @@ test('create defaults applied when optional fields omitted', () => {
   assert.equal(branch.orientation, 'horizontal');
   assert.equal(branch.characterMode, 'create');
   assert.deepEqual(branch.characterImages, []);
+  assert.equal(branch.voiceMode, 'voiceover');
   assert.equal(branch.mode, 'free');
   assert.equal(branch.series, null);
   assert.deepEqual(branch.titles, []);
@@ -115,7 +119,8 @@ test('validation rejects invalid branch fields and unknown properties', () => {
   assert.throws(() => store.create({ name: 'a'.repeat(81) }), /El nombre de la rama es demasiado largo\./);
   assert.throws(() => store.create({ name: 123 }), /Nombre de rama no válido\./);
 
-  // Invalid orientation, characterMode, mode
+  // Invalid orientation, characterMode, mode, voiceMode
+  assert.throws(() => store.create({ name: 'X', voiceMode: 'invalid' }), /Modo de voz no válido\./);
   assert.throws(() => store.create({ name: 'X', orientation: 'diagonal' }), /Orientación de rama no válida\./);
   assert.throws(() => store.create({ name: 'X', characterMode: 'other' }), /Modo de personaje no válido\./);
   assert.throws(() => store.create({ name: 'X', mode: 'random' }), /Modo de rama no válido\./);
@@ -222,6 +227,7 @@ test('migration of a legacy workspace: default branch created and videos gain br
   assert.equal(defaultBranch.name, 'Principal');
   assert.equal(defaultBranch.orientation, 'horizontal');
   assert.equal(defaultBranch.characterMode, 'create');
+  assert.equal(defaultBranch.voiceMode, 'voiceover');
   assert.equal(defaultBranch.mode, 'free');
 
   // Verify videos.json on disk
@@ -239,6 +245,7 @@ test('migration on empty workspace creates default branch and one default video 
 
   const result = migrateWorkspace(dir);
   assert.equal(result.branches.length, 1);
+  assert.equal(result.branches[0].voiceMode, 'voiceover');
   assert.equal(result.videos.length, 1);
 
   const video = result.videos[0];
@@ -326,6 +333,65 @@ test('migration populates videoType explainer on existing branches missing it', 
 
   const onDisk = JSON.parse(fs.readFileSync(branchesFile, 'utf8'));
   assert.equal(onDisk[0].videoType, 'explainer');
+});
+test('voiceMode: validation, defaults, update, and backward compatibility', () => {
+  assert.deepEqual(VOICE_MODES, ['voiceover', 'flow']);
+  assert.equal(validVoiceMode('voiceover'), 'voiceover');
+  assert.equal(validVoiceMode('flow'), 'flow');
+  assert.throws(() => validVoiceMode('unknown'), /Modo de voz no válido\./);
+  assert.throws(() => validVoiceMode(123), /Modo de voz no válido\./);
+  assert.throws(() => validVoiceMode(null), /Modo de voz no válido\./);
+  assert.throws(() => validVoiceMode(undefined), /Modo de voz no válido\./);
+
+  const dir = makeTmpDir();
+  const store = createBranchStore(dir);
+
+  // Default is 'voiceover'
+  const b1 = store.create({ name: 'Rama Default' });
+  assert.equal(b1.voiceMode, 'voiceover');
+
+  // Explicit mode
+  const b2 = store.create({ name: 'Rama Flow', voiceMode: 'flow' });
+  assert.equal(b2.voiceMode, 'flow');
+
+  // Update
+  const updated = store.update(b1.id, { voiceMode: 'flow' });
+  assert.equal(updated.voiceMode, 'flow');
+
+  // Branches missing voiceMode on disk are read as 'voiceover'
+  const rawBranchesFile = path.join(dir, 'branches.json');
+  const onDisk = JSON.parse(fs.readFileSync(rawBranchesFile, 'utf8'));
+  delete onDisk[0].voiceMode;
+  fs.writeFileSync(rawBranchesFile, JSON.stringify(onDisk));
+
+  const reloaded = store.list();
+  assert.equal(reloaded[0].voiceMode, 'voiceover');
+});
+
+test('migration populates voiceMode voiceover on existing branches missing it', () => {
+  const dir = makeTmpDir();
+  const branchesFile = path.join(dir, 'branches.json');
+  const legacyBranch = {
+    id: 'legacy-branch-voice',
+    name: 'Rama Vieja Sin Voz',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    characterMode: 'create',
+    characterImages: [],
+    mode: 'free',
+    series: null,
+    titles: [],
+    createdAt: 1000,
+    updatedAt: 1000,
+  };
+  fs.writeFileSync(branchesFile, JSON.stringify([legacyBranch]));
+
+  const result = migrateWorkspace(dir);
+  assert.equal(result.branches.length, 1);
+  assert.equal(result.branches[0].voiceMode, 'voiceover');
+
+  const onDisk = JSON.parse(fs.readFileSync(branchesFile, 'utf8'));
+  assert.equal(onDisk[0].voiceMode, 'voiceover');
 });
 
 test('copyCharacterImages and getCharacterFilePath: copy, sanitization, and traversal rejection', () => {
@@ -499,19 +565,6 @@ test('branch characters validation and flowProjectUrl validation', () => {
   // Non-array
   assert.throws(() => validCharacters('not-array'), /Lista de personajes no válida\./);
 
-  // voiceId validation on character
-  const withVoice = validCharacters([
-    { key: 'c1', name: 'Char 1', file: 'f.png', source: 'own', voiceId: 'voice-uuid-1234' },
-    { key: 'c2', name: 'Char 2', file: 'f.png', source: 'flow', voiceId: null },
-    { key: 'c3', name: 'Char 3', file: 'f.png', source: 'own' },
-  ]);
-  assert.equal(withVoice[0].voiceId, 'voice-uuid-1234');
-  assert.equal(withVoice[1].voiceId, null);
-  assert.equal(withVoice[2].voiceId, null);
-
-  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'f.png', source: 'own', voiceId: 'invalid voice id with spaces!' }]), /ID de voz de personaje no válido\./);
-  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'f.png', source: 'own', voiceId: 'a'.repeat(101) }]), /ID de voz de personaje no válido\./);
-  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'f.png', source: 'own', voiceId: 12345 }]), /ID de voz de personaje no válido\./);
 
   // validNarratorVoiceId
   assert.equal(validNarratorVoiceId(null), null);
@@ -541,16 +594,14 @@ test('setCharacters updates characters, flowProjectUrl, and synchronizes charact
   const updated = store.setCharacters(
     branch.id,
     [
-      { key: 'char-1', name: 'Personaje 1', description: 'Desc 1', file: 'char1.png', source: 'own', voiceId: 'voice-hector' },
-      { key: 'char-2', name: 'Personaje 2', description: 'Desc 2', file: 'char2.webp', source: 'flow', voiceId: null },
+      { key: 'char-1', name: 'Personaje 1', description: 'Desc 1', file: 'char1.png', source: 'own' },
+      { key: 'char-2', name: 'Personaje 2', description: 'Desc 2', file: 'char2.webp', source: 'flow' },
     ],
     'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
   );
 
   assert.equal(updated.characters.length, 2);
   assert.equal(updated.characters[0].key, 'char-1');
-  assert.equal(updated.characters[0].voiceId, 'voice-hector');
-  assert.equal(updated.characters[1].voiceId, null);
   assert.equal(updated.flowProjectUrl, 'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc');
   assert.ok(updated.characterImages.includes('char1.png'));
   assert.ok(updated.characterImages.includes('char2.webp'));
@@ -558,7 +609,6 @@ test('setCharacters updates characters, flowProjectUrl, and synchronizes charact
   // Re-read from disk
   const reloaded = store.get(branch.id);
   assert.deepEqual(reloaded.characters, updated.characters);
-  assert.equal(reloaded.characters[0].voiceId, 'voice-hector');
   assert.equal(reloaded.flowProjectUrl, updated.flowProjectUrl);
   assert.deepEqual(reloaded.characterImages, updated.characterImages);
 
@@ -573,13 +623,9 @@ test('branch narratorVoiceId create, update, and read roundtrip', () => {
   const branch = store.create({
     name: 'Rama Narrador',
     narratorVoiceId: 'narrator-cartesia-1',
-    characters: [
-      { key: 'protag', name: 'Protagonista', file: 'p.png', source: 'own', voiceId: 'voice-protag' },
-    ],
   });
 
   assert.equal(branch.narratorVoiceId, 'narrator-cartesia-1');
-  assert.equal(branch.characters[0].voiceId, 'voice-protag');
 
   // Update narratorVoiceId
   const updated = store.update(branch.id, { narratorVoiceId: 'narrator-cartesia-2' });
@@ -592,7 +638,19 @@ test('branch narratorVoiceId create, update, and read roundtrip', () => {
   // Re-read from disk
   const reloaded = store.get(branch.id);
   assert.equal(reloaded.narratorVoiceId, null);
-  assert.equal(reloaded.characters[0].voiceId, 'voice-protag');
+});
+
+test('a character input with a voiceId field is accepted and the field is dropped from the result', () => {
+  const result = validCharacters([
+    { key: 'c1', name: 'Char 1', file: 'f.png', source: 'own', voiceId: 'old-voice-id-123' },
+  ]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].key, 'c1');
+  assert.equal(result[0].name, 'Char 1');
+  assert.equal(result[0].file, 'f.png');
+  assert.equal(result[0].source, 'own');
+  assert.equal(result[0].voiceId, undefined);
+  assert.equal('voiceId' in result[0], false);
 });
 
 test('copyVideoCharacterFiles: copies with safe names and rejects traversal', () => {
@@ -658,4 +716,33 @@ test('copyVideoCharacterFiles: copies with safe names and rejects traversal', ()
     () => copyVideoCharacterFiles(wsDir, branchId, videoId, [{ key: charKey, selectedFile: 'missing.png' }]),
     /Archivo no encontrado/
   );
+});
+
+test('mergeBranchCharacters merges by character key with incoming winning and preserving others', () => {
+  const existing = [
+    { key: 'char-1', name: 'Tomás Antiguo', file: 'tomas_old.png', source: 'flow' },
+    { key: 'char-2', name: 'Ana', file: 'ana.png', source: 'own' },
+  ];
+  const incoming = [
+    { key: 'char-1', name: 'Tomás Nuevo', file: 'tomas_new.png', source: 'flow' },
+    { key: 'char-3', name: 'Robot', file: 'robot.png', source: 'flow' },
+  ];
+
+  const merged = mergeBranchCharacters(existing, incoming);
+  assert.equal(merged.length, 3);
+  // char-1 updated
+  assert.equal(merged[0].key, 'char-1');
+  assert.equal(merged[0].name, 'Tomás Nuevo');
+  assert.equal(merged[0].file, 'tomas_new.png');
+  // char-2 kept in position
+  assert.equal(merged[1].key, 'char-2');
+  assert.equal(merged[1].name, 'Ana');
+  // char-3 appended
+  assert.equal(merged[2].key, 'char-3');
+  assert.equal(merged[2].name, 'Robot');
+
+  // Edge cases
+  assert.deepEqual(mergeBranchCharacters([], incoming), incoming);
+  assert.deepEqual(mergeBranchCharacters(existing, []), existing);
+  assert.deepEqual(mergeBranchCharacters(null, null), []);
 });

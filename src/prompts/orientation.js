@@ -1,4 +1,4 @@
-// Orientation prompt transformations for 16:9 horizontal vs 9:16 vertical video formats.
+// Orientation prompt transformations for horizontal vs vertical video formats.
 // Preserves prompt structure while replacing aspect ratios, dimensions, framing, and adding short-form notes.
 
 function replaceSubstring(text, from, to) {
@@ -53,7 +53,7 @@ Instrucciones para cada prompt:
 • Indica que se use la imagen adjunta del personaje principal como referencia y se
 mantenga su apariencia y estilo.
 • Escribe el prompt en inglés para mejor resultado del generador de imágenes.
-• Formato 16:9, contraste alto, punto focal claro y legible en tamaño pequeño.
+• Contraste alto, punto focal claro y legible en tamaño pequeño.
 Si el video es FORMATO A (Narrativo):
 • Un solo personaje principal como protagonista, ocupando gran parte del encuadre.
 • Emoción exagerada y legible que refleje la pregunta del título (miedo, asombro,
@@ -137,25 +137,13 @@ Descripción:
 Hashtags:
 [bloque de código con hasta 5 hashtags]`;
 
-// Exact replacements in prompt-1 and prompt-2 for vertical framing and 9:16 aspect ratio
+// Exact replacements in prompt-1 and prompt-2 for vertical framing and composition
 const VERTICAL_EXACT_REPLACEMENTS = [
   // Prompt-1 intro note insertion
   [PROMPT1_INTRO_TARGET, PROMPT1_INTRO_REPLACEMENT],
 
   // Prompt-1 vertical publication metadata (YouTube Shorts, TikTok, Instagram Reels)
   [PROMPT1_METADATA_TARGET, PROMPT1_METADATA_REPLACEMENT],
-
-  // Prompt-1 thumbnail format mention
-  [
-    '• Formato 16:9, contraste alto, punto focal claro y legible en tamaño pequeño.',
-    '• Formato vertical 9:16, contraste alto, punto focal claro y legible en tamaño pequeño.',
-  ],
-
-  // Prompt-2 general format specification
-  [
-    '* Relación de aspecto 16:9, 1920x1080 px.',
-    '* Relación de aspecto vertical 9:16, 1080x1920 px.',
-  ],
 
   // Prompt-2 Plantilla 1 shot options
   [
@@ -187,36 +175,18 @@ const VERTICAL_EXACT_REPLACEMENTS = [
 
   // Prompt-2 Plantilla 3 camera motion
   [
+    'slow gentle pan from\r\nleft to right',
+    'slow gentle vertical tilt from\r\ntop to bottom',
+  ],
+  [
     'slow gentle pan from left to right',
     'slow gentle vertical tilt from top to bottom',
   ],
 
   // Prompt-2 Plantilla 4 thumbnail header
   [
-    'YouTube thumbnail, wide 16:9, 1920x1080.',
-    'Vertical thumbnail, vertical 9:16, 1080x1920.',
-  ],
-
-  // Templates across stickman and styles (wide 16:9, 1920x1080 -> vertical 9:16, 1080x1920)
-  [
-    'wide 16:9, 1920x1080',
-    'vertical 9:16, 1080x1920',
-  ],
-  [
-    'Wide 16:9',
-    'Vertical 9:16',
-  ],
-  [
-    'wide 16:9',
-    'vertical 9:16',
-  ],
-  [
-    '1920x1080',
-    '1080x1920',
-  ],
-  [
-    '16:9',
-    '9:16',
+    'YouTube thumbnail.',
+    'Vertical thumbnail.',
   ],
 ];
 

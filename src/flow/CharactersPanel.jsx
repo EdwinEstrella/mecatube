@@ -31,7 +31,7 @@ export default function CharactersPanel({
   const [editedFrom, setEditedFrom] = useState(stored);
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const autoSavedRef = useRef(false);
+  const savingRef = useRef(false);
 
   // Follow the stored value (e.g. set automatically after a generation) unless the user is typing
   if (editedFrom !== stored) {
@@ -40,7 +40,9 @@ export default function CharactersPanel({
   }
 
   const changed = draft.trim() !== stored;
-  const allHaveSelected = characters.length > 0 && characters.every((c) => Boolean(c.selectedFile));
+  const approvedCharacters = characters.filter((c) => c.approved && Boolean(c.selectedFile));
+  const branchCharKeys = new Set((branch?.characters || []).map((c) => c.key));
+  const hasUnsavedApproved = approvedCharacters.length > 0 && approvedCharacters.some((c) => !branchCharKeys.has(c.key));
 
   const [savedVoices, setSavedVoices] = useState([]);
   useEffect(() => {
@@ -53,10 +55,6 @@ export default function CharactersPanel({
     ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
   ];
 
-  const characterVoiceOptions = [
-    { value: '', label: 'Sin voz (solo narración)' },
-    ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
-  ];
 
   const handleNarratorVoiceChange = async (val) => {
     if (!branch?.id || !window.electronAPI?.updateBranch) return;
@@ -66,19 +64,10 @@ export default function CharactersPanel({
     } catch {}
   };
 
-  const handleCharacterVoiceChange = async (charKey, val) => {
-    if (!branch?.id || !window.electronAPI?.updateBranch) return;
-    try {
-      const updated = branchCharacters.map((c) =>
-        c.key === charKey ? { ...c, voiceId: val || null } : c
-      );
-      await window.electronAPI.updateBranch(branch.id, { characters: updated });
-      onBranchUpdated?.();
-    } catch {}
-  };
 
   const handleSaveToBranch = async () => {
-    if (!branch?.id || !video?.id || !window.electronAPI) return;
+    if (!branch?.id || !video?.id || !window.electronAPI || savingRef.current) return;
+    savingRef.current = true;
     setIsSaving(true);
     try {
       await window.electronAPI.saveBranchCharactersFromVideo(branch.id, video.id);
@@ -87,22 +76,21 @@ export default function CharactersPanel({
     } catch (err) {
       setToastMessage(`Error: ${err.message || 'No se pudo guardar en la rama'}`);
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
 
   useEffect(() => {
     if (
-      !branchHasCharacters &&
-      allHaveSelected &&
-      !autoSavedRef.current &&
+      hasUnsavedApproved &&
+      !savingRef.current &&
       branch?.id &&
       branch?.characterMode === 'create'
     ) {
-      autoSavedRef.current = true;
       handleSaveToBranch();
     }
-  }, [allHaveSelected, branchHasCharacters, branch?.id, branch?.characterMode]);
+  }, [hasUnsavedApproved, branch?.id, branch?.characterMode]);
 
   if (branchHasCharacters) {
     return (
@@ -137,20 +125,22 @@ export default function CharactersPanel({
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Voz de narración:</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <CustomSelect
-              value={branch?.narratorVoiceId || ''}
-              options={narratorVoiceOptions}
-              placeholder="Predeterminada global"
-              ariaLabel="Voz de narración de la rama"
-              onChange={handleNarratorVoiceChange}
-              style={{ minWidth: '180px', fontSize: '0.8rem' }}
-            />
-            <VoicePreviewButton voiceId={branch?.narratorVoiceId} />
+        {branch?.voiceMode !== 'flow' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Voz de narración:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CustomSelect
+                value={branch?.narratorVoiceId || ''}
+                options={narratorVoiceOptions}
+                placeholder="Predeterminada global"
+                ariaLabel="Voz de narración de la rama"
+                onChange={handleNarratorVoiceChange}
+                style={{ minWidth: '180px', fontSize: '0.8rem' }}
+              />
+              <VoicePreviewButton voiceId={branch?.narratorVoiceId} />
+            </div>
           </div>
-        </div>
+        )}
 
         <ul className="char-panel__list">
           {branchCharacters.map((char) => (
@@ -173,17 +163,6 @@ export default function CharactersPanel({
               ) : (
                 <span className="char-panel__state">Rama</span>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', width: '100%' }}>
-                <CustomSelect
-                  value={char.voiceId || ''}
-                  options={characterVoiceOptions}
-                  placeholder="Sin voz (solo narración)"
-                  ariaLabel={`Voz para ${char.name}`}
-                  onChange={(val) => handleCharacterVoiceChange(char.key, val)}
-                  style={{ flex: 1, fontSize: '0.8rem' }}
-                />
-                <VoicePreviewButton voiceId={char.voiceId} />
-              </div>
             </li>
           ))}
         </ul>
@@ -248,7 +227,7 @@ export default function CharactersPanel({
             ))}
           </ul>
 
-          {allHaveSelected && branch?.id && (
+          {approvedCharacters.length > 0 && branch?.id && (
             <div className="char-panel__actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
               <button
                 type="button"

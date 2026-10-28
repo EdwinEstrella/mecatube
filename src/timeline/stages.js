@@ -4,12 +4,12 @@
 // case, accents and Markdown emphasis do not matter.
 import { parseIdeas } from '../chat/parseIdeas.js';
 import { chosenIdeaNumber } from '../chat/chosenIdea.js';
+import { usesCartesia } from '../voice/voiceMode.js';
 
 // `auto` stages can be detected from a chat; the others are only ever set by hand
 export const STAGES = [
   { key: 'idea', label: 'Idea', auto: true },
   { key: 'script', label: 'Guion', auto: true },
-  { key: 'metadata', label: 'Metadatos', auto: true },
   // Not chat-detected; it turns done by itself when a narration track exists (hasVoice)
   { key: 'voice', label: 'Voz en off', auto: false },
   { key: 'characters', label: 'Personajes', auto: true },
@@ -17,6 +17,7 @@ export const STAGES = [
   { key: 'animations', label: 'Animaciones', auto: true },
   { key: 'thumbnail', label: 'Miniatura', auto: true },
   { key: 'editing', label: 'Edición', auto: false },
+  { key: 'metadata', label: 'Metadatos', auto: true },
   { key: 'published', label: 'Publicado', auto: false },
 ];
 
@@ -171,8 +172,20 @@ export function deriveStages(
   return STAGES.map(({ key, label, auto: isAuto }) => {
     const overridden = typeof overrides[key] === 'boolean';
     const isCharactersSkipped = key === 'characters' && resolvedVideoType === 'list';
+    const isVoiceSkipped = key === 'voice' && !usesCartesia(video, resolvedBranch);
 
     if (isCharactersSkipped && !overridden) {
+      return {
+        key,
+        label,
+        status: 'not-needed',
+        notNeeded: true,
+        source: 'auto',
+        overridden: false,
+      };
+    }
+
+    if (isVoiceSkipped && !overridden) {
       return {
         key,
         label,

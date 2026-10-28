@@ -7,37 +7,15 @@ import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
 import SceneCards, { ThumbnailCard } from '../flow/SceneCards.jsx';
 import AnimationCards from '../flow/AnimationCards.jsx';
 import { nextStepPrompt } from './nextStep.js';
-import { collectImageScenes, parseImageScenes } from '../flow/parseImageScenes.js';
-import { animationSeconds } from '../flow/animationSeconds.js';
-import { parseThumbnail } from '../flow/parseThumbnail.js';
+import NextStepButtons from './NextStepButtons.jsx';
+import { parseIllustratorBlocks } from '../flow/illustratorBlocks.js';
+
 import { chosenIdeaNumber, hasUserMessageAfter } from './chosenIdea.js';
 import { isScriptMessage } from '../timeline/stages.js';
 import { extractNarration } from '../voice/narration.js';
 import ScriptVoiceControl from '../voice/ScriptVoiceControl.jsx';
 import CopyScriptButton from './CopyScriptButton.jsx';
 
-// The illustrator's closing question ("¿Paso al siguiente bloque?") as one button per option
-function NextStepButtons({ step, canSend, onSend }) {
-  if (!step) return null;
-  return (
-    <div className="next-step">
-      <p className="next-step__question">{step.question}</p>
-      <div className="next-step__options">
-        {step.options.map((option, index) => (
-          <button
-            key={option.value}
-            type="button"
-            className={`settings__button ${index === 0 ? 'settings__button--primary' : 'settings__button--ghost'}`}
-            disabled={!canSend}
-            onClick={() => onSend(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 const COLLAPSE_CHARS = 600;
 const COLLAPSE_LINES = 12;
@@ -103,40 +81,13 @@ export default function MessageList({
       ),
     [messages, parsed, flow?.available, flow?.branchHasCharacters],
   );
-  // Image-block deliveries (ETAPA 3) and animation-block deliveries (ETAPA 4)
-  const imageBlocks = useMemo(() => {
-    const rawBlocks = messages.map((message, index) =>
-      flow?.available && scenes?.available && message.role === 'assistant' && !parsed[index] && !sheets[index]
-        ? parseImageScenes(message.content)
-        : null,
-    );
-    const imageScenes = collectImageScenes(messages);
-    const anchorByNumber = new Map(imageScenes.map((scene) => [scene.number, scene.scriptAnchor]));
-    return rawBlocks.map((block) => {
-      if (!block || block.kind !== 'animations') return block;
-      return {
-        ...block,
-        scenes: block.scenes.map((scene) => {
-          const scriptAnchor = scene.scriptAnchor || anchorByNumber.get(scene.number) || '';
-          return {
-            ...scene,
-            scriptAnchor,
-            seconds: animationSeconds(scriptAnchor),
-          };
-        }),
-      };
-    });
-  }, [messages, parsed, sheets, flow?.available, scenes?.available]);
-  // Thumbnail delivery (ETAPA 5): one card with a "Generar miniatura en Flow" button
-  const thumbnails = useMemo(
-    () =>
-      messages.map((message, index) =>
-        flow?.available && scenes?.available && message.role === 'assistant' && !parsed[index] && !sheets[index] && !imageBlocks[index]
-          ? parseThumbnail(message.content)
-          : null,
-      ),
-    [messages, parsed, sheets, imageBlocks, flow?.available, scenes?.available],
-  );
+  // Image-block, animation-block and thumbnail deliveries
+  const { imageBlocks, thumbnails } = useMemo(() => {
+    if (!flow?.available || !scenes?.available) {
+      return { imageBlocks: [], thumbnails: [] };
+    }
+    return parseIllustratorBlocks(messages);
+  }, [messages, flow?.available, scenes?.available]);
   const latestSheetsIndex = sheets.reduce((latest, result, index) => (result ? index : latest), -1);
   // Narration length per finished script message; null for every other message
   const narrationLengths = useMemo(
@@ -242,6 +193,7 @@ export default function MessageList({
                   seconds={scriptVoice.seconds}
                   error={scriptVoice.error?.messageId === message.id ? scriptVoice.error.text : ''}
                   expandPlayer={scriptVoice.doneId === message.id}
+                  usesCartesia={scriptVoice.usesCartesia}
                   onRequest={() => scriptVoice.request(message.id)}
                   onConfirm={() => scriptVoice.confirm(message)}
                   onCancelConfirm={scriptVoice.cancelConfirm}

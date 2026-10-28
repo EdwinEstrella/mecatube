@@ -97,7 +97,7 @@ const illustrator = {
 test('STAGES has the ten stages in order', () => {
   assert.deepEqual(
     STAGES.map((stage) => stage.key),
-    ['idea', 'script', 'metadata', 'voice', 'characters', 'images', 'animations', 'thumbnail', 'editing', 'published'],
+    ['idea', 'script', 'voice', 'characters', 'images', 'animations', 'thumbnail', 'editing', 'metadata', 'published'],
   );
 });
 
@@ -106,7 +106,7 @@ test('no chats: first stage is current, nothing is done', () => {
   assert.equal(stages.length, 10);
   assert.equal(stages[0].status, 'current');
   assert.equal(countDone(stages), 0);
-  assert.deepEqual(stages.map((stage) => stage.source), ['auto', 'auto', 'auto', 'manual', 'auto', 'auto', 'auto', 'auto', 'manual', 'manual']);
+  assert.deepEqual(stages.map((stage) => stage.source), ['auto', 'auto', 'manual', 'auto', 'auto', 'auto', 'auto', 'manual', 'auto', 'manual']);
 });
 
 test('ideas listed but none chosen: idea still current', () => {
@@ -133,7 +133,7 @@ test('the duration question is not a script', () => {
 test('script delivered (flat text)', () => {
   const stages = deriveStages(video(), scriptChat.scripted(), null);
   assert.deepEqual(doneKeys(stages), ['idea', 'script']);
-  assert.equal(statusOf(stages).metadata, 'current');
+  assert.equal(statusOf(stages).voice, 'current');
 });
 
 test('script delivered (Markdown emphasis and headings)', () => {
@@ -325,7 +325,7 @@ test('override true wins over missing chats; non-boolean overrides mean auto', (
 
 test('current is the first not-done stage and later done stages stay done', () => {
   const stages = deriveStages(video({ published: true }), scriptChat.scripted(), null);
-  assert.equal(statusOf(stages).metadata, 'current');
+  assert.equal(statusOf(stages).voice, 'current');
   assert.equal(statusOf(stages).published, 'done');
   assert.equal(stages.filter((stage) => stage.status === 'current').length, 1);
 });
@@ -362,6 +362,32 @@ test('override false beats brief auto-done', () => {
   const stages = deriveStages(vidOverridden, null, null);
   assert.equal(statusOf(stages).idea, 'current');
   assert.equal(stages.find((s) => s.key === 'idea').overridden, true);
+});
+
+test('flow video: voice stage marked not-needed automatically', () => {
+  const vidFlow = { id: 'v1', title: 'Video Flow', voiceMode: 'flow', overrides: {} };
+  const stages = deriveStages(vidFlow, null, null);
+  const voiceStage = stages.find((s) => s.key === 'voice');
+  assert.equal(voiceStage.status, 'not-needed');
+  assert.equal(voiceStage.notNeeded, true);
+  assert.equal(voiceStage.overridden, false);
+});
+
+test('video inheriting flow voiceMode from branch: voice stage marked not-needed', () => {
+  const vidInherited = { id: 'v1', title: 'Video Default', voiceMode: null, overrides: {} };
+  const branch = { id: 'b1', name: 'Rama Flow', voiceMode: 'flow' };
+  const stages = deriveStages(vidInherited, null, null, { branch });
+  const voiceStage = stages.find((s) => s.key === 'voice');
+  assert.equal(voiceStage.status, 'not-needed');
+  assert.equal(voiceStage.notNeeded, true);
+});
+
+test('flow video: manual override beats not-needed', () => {
+  const vidOverridden = { id: 'v1', title: 'Video Flow', voiceMode: 'flow', overrides: { voice: true } };
+  const stages = deriveStages(vidOverridden, null, null);
+  const voiceStage = stages.find((s) => s.key === 'voice');
+  assert.equal(voiceStage.status, 'done');
+  assert.equal(voiceStage.overridden, true);
 });
 
 if (failures > 0) {

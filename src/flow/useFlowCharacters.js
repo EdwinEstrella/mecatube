@@ -11,7 +11,7 @@ const hasFlowApi = () => typeof window !== 'undefined' && Boolean(window.electro
 
 // Container logic for the character cards of an illustrator chat. One Flow job runs at a time
 // across the whole app; `job` is { videoId, characterKey, stage, percent, captcha } or null.
-export function useFlowCharacters(conversationId, conversationTitle, isConnected) {
+export function useFlowCharacters(conversationId, conversationTitle, isConnected, reloadKey = null) {
   const [videoId, setVideoId] = useState(null);
   const [projectUrl, setProjectUrl] = useState(null);
   // Stored records by character key
@@ -54,7 +54,7 @@ export function useFlowCharacters(conversationId, conversationTitle, isConnected
     const list = linked ? ((await api.getCharacters(linked.id)) ?? []) : [];
     if (conversationIdRef.current !== conversationId) return;
     setRecords(Object.fromEntries(list.map((item) => [item.key, item])));
-  }, [conversationId]);
+  }, [conversationId, reloadKey]);
 
   useEffect(() => {
     setErrors({});

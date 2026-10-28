@@ -1,12 +1,38 @@
 // Visual styles catalog and prompt transformation for workspace-level art style.
 // Preserves verbatim prompt-2.txt while substituting style wording at send time.
 
+import {
+  NEW_STYLE_SPECS,
+  buildStyleReplacements,
+  setDefaultFromStrings,
+} from './styleSpecs.js';
+
 export const DEFAULT_STYLE_ID = 'stickman';
+
+export const STYLE_CATEGORIES = [
+  'Básicos',
+  'Cinematográficos',
+  'Animación 3D',
+  'Artesanales',
+  'Arte pintado',
+  'Para explicar',
+];
+
+const styleImages =
+  typeof import.meta.glob === 'function'
+    ? import.meta.glob('../assets/styles/*.png', { eager: true, query: '?url', import: 'default' })
+    : {};
+
+function getNewStyleImage(id) {
+  const key = '../assets/styles/' + id + '.png';
+  return styleImages[key] || null;
+}
 
 export const STYLES = [
   {
     id: 'stickman',
     label: 'Stickman',
+    category: 'Básicos',
     description: 'Personajes de palito dibujados a mano con fondo detallado',
     image: new URL('../assets/styles/stickman.png', import.meta.url).href,
     englishDescription: 'Simple hand-drawn 2D stickman cartoon style for an educational explainer video: clean bold black linework, flat colors with minimal soft shading. True stickman characters with stick bodies and empty hands over detailed painted backgrounds.',
@@ -14,6 +40,7 @@ export const STYLES = [
   {
     id: 'cartoon',
     label: '2D',
+    category: 'Básicos',
     description: 'Personajes redondeados y expresivos con líneas gruesas y colores vivos',
     image: new URL('../assets/styles/cartoon.png', import.meta.url).href,
     englishDescription: 'Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background',
@@ -21,6 +48,7 @@ export const STYLES = [
   {
     id: 'anime',
     label: 'Anime',
+    category: 'Básicos',
     description: 'Estilo anime japonés con sombreado cel y fondos pictóricos',
     image: new URL('../assets/styles/anime.png', import.meta.url).href,
     englishDescription: 'Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background',
@@ -28,6 +56,7 @@ export const STYLES = [
   {
     id: '3d',
     label: '3D',
+    category: 'Básicos',
     description: 'Estilo animación 3D estilizada con iluminación suave y cinematográfica',
     image: new URL('../assets/styles/3d.png', import.meta.url).href,
     englishDescription: 'Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality',
@@ -35,6 +64,7 @@ export const STYLES = [
   {
     id: 'flat',
     label: 'Plano',
+    category: 'Básicos',
     description: 'Ilustración vectorial moderna, formas geométricas y paleta armónica',
     image: new URL('../assets/styles/flat.png', import.meta.url).href,
     englishDescription: 'Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look',
@@ -42,12 +72,21 @@ export const STYLES = [
   {
     id: 'realistic',
     label: 'Realista',
+    category: 'Básicos',
     description: 'Estilo cinematográfico fotorrealista con iluminación y texturas reales',
     image: new URL('../assets/styles/realistic.png', import.meta.url).href,
     englishDescription: 'Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality',
   },
+  ...NEW_STYLE_SPECS.map((spec) => ({
+    id: spec.id,
+    label: spec.label,
+    category: spec.category,
+    idealFor: spec.idealFor,
+    description: spec.description,
+    image: getNewStyleImage(spec.id),
+    englishDescription: spec.englishDescription,
+  })),
 ];
-
 export function getStyle(id) {
   return STYLES.find((s) => s.id === id) || STYLES[0];
 }
@@ -166,7 +205,7 @@ iluminado de forma dramática.`,
       '* `[IMAGEN_REFERENCIA]` — Opcional: imagen de referencia del estilo cartoon 2D.',
     ],
     [
-      `Professional 2D stickman character sheet, wide 16:9, 1920x1080. Simple hand-drawn
+      `Professional 2D stickman character sheet. Simple hand-drawn
 2D stickman cartoon style for an educational explainer video: clean bold black
 linework, flat colors with minimal soft shading. The character is a true stickman:
 large perfectly round white head, tiny black dot eyes, thin expressive black
@@ -178,7 +217,7 @@ Hair, the flat garment and accessories are drawn simply with flat color and ligh
 texture and make the character recognizable. Both hands are always empty: the
 character never holds, carries or uses any object in any view or pose. No trousers, no sleeves, no
 shoes, no gloves, no thick limbs, no body volume, no realistic hands or feet.`,
-      `Professional character sheet, wide 16:9, 1920x1080. Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background. Character design: rounded expressive facial features, large lively eyes, dynamic eyebrows, expressive mouth. Clear cartoon proportions with consistent clothing, hairstyle, colors and accessories that make the character recognizable. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
+      `Professional character sheet. Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background. Character design: rounded expressive facial features, large lively eyes, dynamic eyebrows, expressive mouth. Clear cartoon proportions with consistent clothing, hairstyle, colors and accessories that make the character recognizable. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
     ],
     [
       `Never realistic humans, no realistic anatomy, no detailed
@@ -186,7 +225,7 @@ cartoon bodies, no anime, no manga, no 3D, no photorealism. No text, no labels, 
       `No photorealism, no 3D, no simplistic line art. No text, no labels, no`,
     ],
     [
-      `Wide 16:9 illustration, 1920x1080. Hand-drawn 2D stickman cartoon style for an
+      `Illustration. Hand-drawn 2D stickman cartoon style for an
 educational explainer video. The characters are drawn with clean bold black
 linework and flat colors. The environment is a richly detailed hand-painted 2D
 illustration with depth, material textures, atmospheric lighting, soft shadows and
@@ -201,7 +240,7 @@ and light texture. Main characters keep both hands empty and never hold objects.
 body volume, no realistic hands or feet. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
-      `Wide 16:9 illustration, 1920x1080. Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background. Main characters keep both hands empty and never hold objects. Each main character must match its
+      `Illustration. Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background. Main characters keep both hands empty and never hold objects. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
     ],
@@ -216,10 +255,10 @@ characters\`.`,
 characters\`.`,
     ],
     [
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a simple hand-drawn 2D
+      `Educational explainer illustration, in a simple hand-drawn 2D
 stickman cartoon style: pure white background, clean bold black linework, flat
 colors with minimal soft shading.`,
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a classic 2D cartoon style: pure white background, clean bold outlines, bright saturated flat colors with simple shading.`,
+      `Educational explainer illustration, in a classic 2D cartoon style: pure white background, clean bold outlines, bright saturated flat colors with simple shading.`,
     ],
     [
       `Any character is a true stickman
@@ -260,7 +299,7 @@ stickman slowly turns his head toward the fire and blinks`,
 character slowly turns his head toward the fire and blinks`,
     ],
     [
-      `YouTube thumbnail, wide 16:9, 1920x1080. Hand-drawn 2D stickman cartoon style: the
+      `YouTube thumbnail. Hand-drawn 2D stickman cartoon style: the
 character has clean bold black linework and flat bright colors over a detailed,
 dramatically lit painted background with depth; bright high-contrast colors and a
 clear composition that reads well at small size. The character is a true stickman:
@@ -270,7 +309,7 @@ tiny circle hands, tiny line-end feet, only a small flat garment on the torso, n
 trousers, no sleeves, no shoes, no body volume, and must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
-      `YouTube thumbnail, wide 16:9, 1920x1080. Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background; bright high-contrast colors and a
+      `YouTube thumbnail. Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background; bright high-contrast colors and a
 clear composition that reads well at small size. The character must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
@@ -400,7 +439,7 @@ iluminado de forma dramática.`,
       '* `[IMAGEN_REFERENCIA]` — Opcional: imagen de referencia del estilo anime.',
     ],
     [
-      `Professional 2D stickman character sheet, wide 16:9, 1920x1080. Simple hand-drawn
+      `Professional 2D stickman character sheet. Simple hand-drawn
 2D stickman cartoon style for an educational explainer video: clean bold black
 linework, flat colors with minimal soft shading. The character is a true stickman:
 large perfectly round white head, tiny black dot eyes, thin expressive black
@@ -412,7 +451,7 @@ Hair, the flat garment and accessories are drawn simply with flat color and ligh
 texture and make the character recognizable. Both hands are always empty: the
 character never holds, carries or uses any object in any view or pose. No trousers, no sleeves, no
 shoes, no gloves, no thick limbs, no body volume, no realistic hands or feet.`,
-      `Professional character sheet, wide 16:9, 1920x1080. Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background. Character design: distinct anime facial features, large expressive eyes, detailed hair styling with highlights, refined clothing with clean folds and distinct accessories that make the character recognizable. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
+      `Professional character sheet. Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background. Character design: distinct anime facial features, large expressive eyes, detailed hair styling with highlights, refined clothing with clean folds and distinct accessories that make the character recognizable. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
     ],
     [
       `Never realistic humans, no realistic anatomy, no detailed
@@ -420,7 +459,7 @@ cartoon bodies, no anime, no manga, no 3D, no photorealism. No text, no labels, 
       `No western cartoon style, no 3D, no photorealism, no simplistic line art. No text, no labels, no`,
     ],
     [
-      `Wide 16:9 illustration, 1920x1080. Hand-drawn 2D stickman cartoon style for an
+      `Illustration. Hand-drawn 2D stickman cartoon style for an
 educational explainer video. The characters are drawn with clean bold black
 linework and flat colors. The environment is a richly detailed hand-painted 2D
 illustration with depth, material textures, atmospheric lighting, soft shadows and
@@ -435,7 +474,7 @@ and light texture. Main characters keep both hands empty and never hold objects.
 body volume, no realistic hands or feet. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
-      `Wide 16:9 illustration, 1920x1080. Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background. Main characters keep both hands empty and never hold objects. Each main character must match its
+      `Illustration. Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background. Main characters keep both hands empty and never hold objects. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
     ],
@@ -450,10 +489,10 @@ characters\`.`,
 characters\`.`,
     ],
     [
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a simple hand-drawn 2D
+      `Educational explainer illustration, in a simple hand-drawn 2D
 stickman cartoon style: pure white background, clean bold black linework, flat
 colors with minimal soft shading.`,
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a Japanese anime style: pure white background, clean linework, cel shading.`,
+      `Educational explainer illustration, in a Japanese anime style: pure white background, clean linework, cel shading.`,
     ],
     [
       `Any character is a true stickman
@@ -494,7 +533,7 @@ stickman slowly turns his head toward the fire and blinks`,
 character slowly turns his head toward the fire and blinks`,
     ],
     [
-      `YouTube thumbnail, wide 16:9, 1920x1080. Hand-drawn 2D stickman cartoon style: the
+      `YouTube thumbnail. Hand-drawn 2D stickman cartoon style: the
 character has clean bold black linework and flat bright colors over a detailed,
 dramatically lit painted background with depth; bright high-contrast colors and a
 clear composition that reads well at small size. The character is a true stickman:
@@ -504,7 +543,7 @@ tiny circle hands, tiny line-end feet, only a small flat garment on the torso, n
 trousers, no sleeves, no shoes, no body volume, and must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
-      `YouTube thumbnail, wide 16:9, 1920x1080. Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background; bright high-contrast colors and a
+      `YouTube thumbnail. Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background; bright high-contrast colors and a
 clear composition that reads well at small size. The character must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
@@ -634,7 +673,7 @@ iluminado de forma dramática.`,
       '* `[IMAGEN_REFERENCIA]` — Opcional: imagen de referencia del estilo 3D animado.',
     ],
     [
-      `Professional 2D stickman character sheet, wide 16:9, 1920x1080. Simple hand-drawn
+      `Professional 2D stickman character sheet. Simple hand-drawn
 2D stickman cartoon style for an educational explainer video: clean bold black
 linework, flat colors with minimal soft shading. The character is a true stickman:
 large perfectly round white head, tiny black dot eyes, thin expressive black
@@ -646,7 +685,7 @@ Hair, the flat garment and accessories are drawn simply with flat color and ligh
 texture and make the character recognizable. Both hands are always empty: the
 character never holds, carries or uses any object in any view or pose. No trousers, no sleeves, no
 shoes, no gloves, no thick limbs, no body volume, no realistic hands or feet.`,
-      `Professional character sheet, wide 16:9, 1920x1080. Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality. Character design: soft rounded stylized 3D features, expressive eyes, smooth stylized hair, detailed clothing textures, clean materials and recognizable accessories. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
+      `Professional character sheet. Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality. Character design: soft rounded stylized 3D features, expressive eyes, smooth stylized hair, detailed clothing textures, clean materials and recognizable accessories. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
     ],
     [
       `Never realistic humans, no realistic anatomy, no detailed
@@ -654,7 +693,7 @@ cartoon bodies, no anime, no manga, no 3D, no photorealism. No text, no labels, 
       `No 2D flat style, no live-action photorealism, no simplistic line art. No text, no labels, no`,
     ],
     [
-      `Wide 16:9 illustration, 1920x1080. Hand-drawn 2D stickman cartoon style for an
+      `Illustration. Hand-drawn 2D stickman cartoon style for an
 educational explainer video. The characters are drawn with clean bold black
 linework and flat colors. The environment is a richly detailed hand-painted 2D
 illustration with depth, material textures, atmospheric lighting, soft shadows and
@@ -669,7 +708,7 @@ and light texture. Main characters keep both hands empty and never hold objects.
 body volume, no realistic hands or feet. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
-      `Wide 16:9 illustration, 1920x1080. Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality. Main characters keep both hands empty and never hold objects. Each main character must match its
+      `Illustration. Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality. Main characters keep both hands empty and never hold objects. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
     ],
@@ -684,10 +723,10 @@ characters\`.`,
 characters\`.`,
     ],
     [
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a simple hand-drawn 2D
+      `Educational explainer illustration, in a simple hand-drawn 2D
 stickman cartoon style: pure white background, clean bold black linework, flat
 colors with minimal soft shading.`,
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a stylized 3D style: pure white background, soft rounded geometry, subtle shadows.`,
+      `Educational explainer illustration, in a stylized 3D style: pure white background, soft rounded geometry, subtle shadows.`,
     ],
     [
       `Any character is a true stickman
@@ -728,7 +767,7 @@ stickman slowly turns his head toward the fire and blinks`,
 character slowly turns his head toward the fire and blinks`,
     ],
     [
-      `YouTube thumbnail, wide 16:9, 1920x1080. Hand-drawn 2D stickman cartoon style: the
+      `YouTube thumbnail. Hand-drawn 2D stickman cartoon style: the
 character has clean bold black linework and flat bright colors over a detailed,
 dramatically lit painted background with depth; bright high-contrast colors and a
 clear composition that reads well at small size. The character is a true stickman:
@@ -738,7 +777,7 @@ tiny circle hands, tiny line-end feet, only a small flat garment on the torso, n
 trousers, no sleeves, no shoes, no body volume, and must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
-      `YouTube thumbnail, wide 16:9, 1920x1080. Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality; bright high-contrast colors and a
+      `YouTube thumbnail. Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality; bright high-contrast colors and a
 clear composition that reads well at small size. The character must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
@@ -868,7 +907,7 @@ iluminado de forma dramática.`,
       '* `[IMAGEN_REFERENCIA]` — Opcional: imagen de referencia del estilo de ilustración plana.',
     ],
     [
-      `Professional 2D stickman character sheet, wide 16:9, 1920x1080. Simple hand-drawn
+      `Professional 2D stickman character sheet. Simple hand-drawn
 2D stickman cartoon style for an educational explainer video: clean bold black
 linework, flat colors with minimal soft shading. The character is a true stickman:
 large perfectly round white head, tiny black dot eyes, thin expressive black
@@ -880,7 +919,7 @@ Hair, the flat garment and accessories are drawn simply with flat color and ligh
 texture and make the character recognizable. Both hands are always empty: the
 character never holds, carries or uses any object in any view or pose. No trousers, no sleeves, no
 shoes, no gloves, no thick limbs, no body volume, no realistic hands or feet.`,
-      `Professional character sheet, wide 16:9, 1920x1080. Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look. Character design: geometric stylized proportions, minimalist facial features, clean graphic hair and clothing shapes, limited cohesive palette making the character recognizable. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
+      `Professional character sheet. Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look. Character design: geometric stylized proportions, minimalist facial features, clean graphic hair and clothing shapes, limited cohesive palette making the character recognizable. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
     ],
     [
       `Never realistic humans, no realistic anatomy, no detailed
@@ -888,7 +927,7 @@ cartoon bodies, no anime, no manga, no 3D, no photorealism. No text, no labels, 
       `No 3D, no photorealism, no simplistic line art. No text, no labels, no`,
     ],
     [
-      `Wide 16:9 illustration, 1920x1080. Hand-drawn 2D stickman cartoon style for an
+      `Illustration. Hand-drawn 2D stickman cartoon style for an
 educational explainer video. The characters are drawn with clean bold black
 linework and flat colors. The environment is a richly detailed hand-painted 2D
 illustration with depth, material textures, atmospheric lighting, soft shadows and
@@ -903,7 +942,7 @@ and light texture. Main characters keep both hands empty and never hold objects.
 body volume, no realistic hands or feet. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
-      `Wide 16:9 illustration, 1920x1080. Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look. Main characters keep both hands empty and never hold objects. Each main character must match its
+      `Illustration. Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look. Main characters keep both hands empty and never hold objects. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
     ],
@@ -918,10 +957,10 @@ characters\`.`,
 characters\`.`,
     ],
     [
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a simple hand-drawn 2D
+      `Educational explainer illustration, in a simple hand-drawn 2D
 stickman cartoon style: pure white background, clean bold black linework, flat
 colors with minimal soft shading.`,
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a modern flat vector illustration style: pure white background, geometric shapes, limited harmonious palette.`,
+      `Educational explainer illustration, in a modern flat vector illustration style: pure white background, geometric shapes, limited harmonious palette.`,
     ],
     [
       `Any character is a true stickman
@@ -962,7 +1001,7 @@ stickman slowly turns his head toward the fire and blinks`,
 character slowly turns his head toward the fire and blinks`,
     ],
     [
-      `YouTube thumbnail, wide 16:9, 1920x1080. Hand-drawn 2D stickman cartoon style: the
+      `YouTube thumbnail. Hand-drawn 2D stickman cartoon style: the
 character has clean bold black linework and flat bright colors over a detailed,
 dramatically lit painted background with depth; bright high-contrast colors and a
 clear composition that reads well at small size. The character is a true stickman:
@@ -972,7 +1011,7 @@ tiny circle hands, tiny line-end feet, only a small flat garment on the torso, n
 trousers, no sleeves, no shoes, no body volume, and must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
-      `YouTube thumbnail, wide 16:9, 1920x1080. Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look; bright high-contrast colors and a
+      `YouTube thumbnail. Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look; bright high-contrast colors and a
 clear composition that reads well at small size. The character must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
@@ -1102,7 +1141,7 @@ iluminado de forma dramática.`,
       '* `[IMAGEN_REFERENCIA]` — Opcional: imagen de referencia del estilo realista.',
     ],
     [
-      `Professional 2D stickman character sheet, wide 16:9, 1920x1080. Simple hand-drawn
+      `Professional 2D stickman character sheet. Simple hand-drawn
 2D stickman cartoon style for an educational explainer video: clean bold black
 linework, flat colors with minimal soft shading. The character is a true stickman:
 large perfectly round white head, tiny black dot eyes, thin expressive black
@@ -1114,7 +1153,7 @@ Hair, the flat garment and accessories are drawn simply with flat color and ligh
 texture and make the character recognizable. Both hands are always empty: the
 character never holds, carries or uses any object in any view or pose. No trousers, no sleeves, no
 shoes, no gloves, no thick limbs, no body volume, no realistic hands or feet.`,
-      `Professional character sheet, wide 16:9, 1920x1080. Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality. Character design: natural human anatomy and proportions, lifelike facial features and skin texture, realistic hair, authentic clothing fabrics and textures with recognizable personal accessories. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
+      `Professional character sheet. Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality. Character design: natural human anatomy and proportions, lifelike facial features and skin texture, realistic hair, authentic clothing fabrics and textures with recognizable personal accessories. Both hands are always empty: the character never holds, carries or uses any object in any view or pose.`,
     ],
     [
       `Never realistic humans, no realistic anatomy, no detailed
@@ -1122,7 +1161,7 @@ cartoon bodies, no anime, no manga, no 3D, no photorealism. No text, no labels, 
       `No cartoon, no anime, no 3D animation, no simplistic line art. No text, no labels, no`,
     ],
     [
-      `Wide 16:9 illustration, 1920x1080. Hand-drawn 2D stickman cartoon style for an
+      `Illustration. Hand-drawn 2D stickman cartoon style for an
 educational explainer video. The characters are drawn with clean bold black
 linework and flat colors. The environment is a richly detailed hand-painted 2D
 illustration with depth, material textures, atmospheric lighting, soft shadows and
@@ -1137,7 +1176,7 @@ and light texture. Main characters keep both hands empty and never hold objects.
 body volume, no realistic hands or feet. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
-      `Wide 16:9 illustration, 1920x1080. Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality. Main characters keep both hands empty and never hold objects. Each main character must match its
+      `Illustration. Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality. Main characters keep both hands empty and never hold objects. Each main character must match its
 character sheet reference exactly: same head, face, proportions, hair, clothing,
 colors and accessories.`,
     ],
@@ -1152,10 +1191,10 @@ characters\`.`,
 characters\`.`,
     ],
     [
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a simple hand-drawn 2D
+      `Educational explainer illustration, in a simple hand-drawn 2D
 stickman cartoon style: pure white background, clean bold black linework, flat
 colors with minimal soft shading.`,
-      `Wide 16:9 educational explainer illustration, 1920x1080, in a photorealistic cinematic style: pure white studio background, realistic lighting and textures.`,
+      `Educational explainer illustration, in a photorealistic cinematic style: pure white studio background, realistic lighting and textures.`,
     ],
     [
       `Any character is a true stickman
@@ -1196,7 +1235,7 @@ stickman slowly turns his head toward the fire and blinks`,
 character slowly turns his head toward the fire and blinks`,
     ],
     [
-      `YouTube thumbnail, wide 16:9, 1920x1080. Hand-drawn 2D stickman cartoon style: the
+      `YouTube thumbnail. Hand-drawn 2D stickman cartoon style: the
 character has clean bold black linework and flat bright colors over a detailed,
 dramatically lit painted background with depth; bright high-contrast colors and a
 clear composition that reads well at small size. The character is a true stickman:
@@ -1206,7 +1245,7 @@ tiny circle hands, tiny line-end feet, only a small flat garment on the torso, n
 trousers, no sleeves, no shoes, no body volume, and must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
-      `YouTube thumbnail, wide 16:9, 1920x1080. Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality; bright high-contrast colors and a
+      `YouTube thumbnail. Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality; bright high-contrast colors and a
 clear composition that reads well at small size. The character must match its character sheet
 reference exactly: same head, face, proportions, hair, clothing, colors,
 accessories, with empty hands.`,
@@ -1224,6 +1263,13 @@ texturas realistas y vestuario auténtico. Nunca caricaturas, anime ni figuras e
     ],
   ],
 };
+
+const BASE_FROM_STRINGS = STYLE_REPLACEMENTS.cartoon.map(([from]) => from);
+setDefaultFromStrings(BASE_FROM_STRINGS);
+
+for (const spec of NEW_STYLE_SPECS) {
+  STYLE_REPLACEMENTS[spec.id] = buildStyleReplacements(spec, BASE_FROM_STRINGS);
+}
 
 function replaceSubstring(text, from, to) {
   if (typeof text !== 'string') return '';

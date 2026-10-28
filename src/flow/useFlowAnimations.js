@@ -15,7 +15,7 @@ const hasAnimationsApi = () => typeof window !== 'undefined' && Boolean(window.e
 // events and loads the stored videos. `scenes` is the useFlowScenes result: it owns the video and
 // the chosen scene images that serve as start frames. `statuses` is by number: { state, percent,
 // captcha, error }; `records` the stored animations.
-export function useFlowAnimations(conversationId, conversationTitle, isConnected, scenes) {
+export function useFlowAnimations(conversationId, conversationTitle, isConnected, scenes, reloadKey = null) {
   const videoId = scenes?.videoId ?? null;
   const [records, setRecords] = useState({});
   const [statuses, setStatuses] = useState({});
@@ -43,7 +43,7 @@ export function useFlowAnimations(conversationId, conversationTitle, isConnected
     return () => {
       cancelled = true;
     };
-  }, [videoId]);
+  }, [videoId, reloadKey]);
 
   useEffect(() => {
     if (!hasAnimationsApi()) return undefined;

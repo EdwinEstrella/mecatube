@@ -1,5 +1,5 @@
 import { CopyButton } from './SceneCards.jsx';
-import { isActive, sceneStatusLabel } from './sceneStatus.js';
+import { isActive, sceneImageUrl, sceneStatusLabel } from './sceneStatus.js';
 import { animationVideoUrl, hasSourceImage, hookCount, latestVideo, pendingAnimations } from './animationStatus.js';
 
 const KIND_LABELS = { scene: 'Escena', explanation: 'Explicación' };
@@ -10,11 +10,97 @@ function animationHeading(item) {
 }
 
 // Presentational: one card per animation prompt. The container owns the queue, records and sending.
-function AnimationCard({ item, record, status, videoId, hasSource, canStart, onAnimate }) {
+function AnimationCard({
+  item,
+  record,
+  status,
+  videoId,
+  hasSource,
+  sceneRecord,
+  canStart,
+  onAnimate,
+  layout = 'list',
+  orientation = 'horizontal',
+}) {
   const video = latestVideo(record);
   const label = sceneStatusLabel(status, record);
   const active = isActive(status);
   const number = String(item.number).padStart(2, '0');
+
+  if (layout === 'grid') {
+    return (
+      <li className="char-card scene-card scene-card--compact">
+        <div className="scene-card__compact-header">
+          <span className="scene-card__compact-title" title={item.title || ''}>
+            {`Animación ${number}`}
+          </span>
+          <div className="scene-card__compact-badges">
+            {item.hook && <span className="scene-card__badge scene-card__badge--hook">Gancho</span>}
+            {label.text && <span className={`scene-card__badge scene-card__badge--${label.tone}`}>{label.text}</span>}
+          </div>
+        </div>
+
+        <div className={`scene-card__media-box scene-card__media-box--${orientation}`}>
+          {video ? (
+            <video
+              className="animation-card__video scene-card__media-video"
+              controls
+              preload="metadata"
+              src={animationVideoUrl(videoId, item.number, video)}
+              aria-label={`Animación de la escena ${item.number}`}
+            />
+          ) : hasSource && sceneRecord?.selectedFile ? (
+            <img
+              src={sceneImageUrl(videoId, item.number, sceneRecord.selectedFile)}
+              alt=""
+              loading="lazy"
+              className="scene-card__media-img"
+            />
+          ) : (
+            <div className="scene-card__media-empty">
+              <span>{hasSource ? 'Sin video' : 'Sin imagen de inicio'}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="char-card__actions scene-card__actions--compact">
+          <button
+            type="button"
+            className="idea-card__choose scene-card__btn--compact"
+            disabled={!canStart || active || !hasSource}
+            onClick={() => onAnimate(item)}
+          >
+            {video ? 'Reanimar' : 'Animar en Flow'}
+          </button>
+        </div>
+        {!hasSource && (
+          <p className="char-card__hint scene-card__hint--compact">
+            Elige la imagen de la escena {number} para poder animarla.
+          </p>
+        )}
+
+        {status?.state === 'running' && status.captcha && (
+          <p className="char-card__captcha" role="alert">
+            Flow pide verificación: resuélvela en la pestaña de Flow del navegador.
+          </p>
+        )}
+        {status?.state === 'error' && status.error && <p className="char-card__error">{status.error}</p>}
+
+        <details className="char-card__prompt scene-card__prompt--compact">
+          <summary>
+            Prompt <span className="char-card__chars">({item.prompt.length.toLocaleString('es')} caracteres)</span>
+          </summary>
+          <div className="md-code">
+            <div className="md-code__header">
+              <span>prompt</span>
+              <CopyButton text={item.prompt} />
+            </div>
+            <pre className="scene-card__pre">{item.prompt}</pre>
+          </div>
+        </details>
+      </li>
+    );
+  }
 
   return (
     <li className="char-card scene-card">
@@ -66,7 +152,15 @@ function AnimationCard({ item, record, status, videoId, hasSource, canStart, onA
 
 // flow: the useFlowAnimations result; sceneRecords: stored scenes by number (their chosen image is the
 // start frame); characterBusy: a character-sheet job holds the single Flow slot
-export default function AnimationCards({ block, animations, flow, sceneRecords, characterBusy }) {
+export default function AnimationCards({
+  block,
+  animations,
+  flow,
+  sceneRecords,
+  characterBusy,
+  layout = 'list',
+  orientation = 'horizontal',
+}) {
   const canStart = flow.connected && !characterBusy;
   const hooks = hookCount(animations);
   const pendingHooks = pendingAnimations(animations, flow.statuses, flow.records, sceneRecords, { hookOnly: true });
@@ -108,7 +202,7 @@ export default function AnimationCards({ block, animations, flow, sceneRecords, 
       )}
       {flow.error && <p className="char-card__error">{flow.error}</p>}
 
-      <ol className="char-cards__list">
+      <ol className={`char-cards__list ${layout === 'grid' ? 'char-cards__list--grid' : ''}`}>
         {animations.map((item) => (
           <AnimationCard
             key={item.number}
@@ -117,8 +211,11 @@ export default function AnimationCards({ block, animations, flow, sceneRecords, 
             status={flow.statuses[item.number]}
             videoId={flow.videoId}
             hasSource={hasSourceImage(sceneRecords?.[item.number])}
+            sceneRecord={sceneRecords?.[item.number]}
             canStart={canStart}
             onAnimate={(chosen) => flow.generate([chosen])}
+            layout={layout}
+            orientation={orientation}
           />
         ))}
       </ol>

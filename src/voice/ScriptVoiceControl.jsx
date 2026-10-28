@@ -17,6 +17,7 @@ export default function ScriptVoiceControl({
   error,
   remaining,
   expandPlayer,
+  usesCartesia = true,
   onVoiceChange,
   onRequest,
   onConfirm,
@@ -30,6 +31,28 @@ export default function ScriptVoiceControl({
   useEffect(() => {
     if (expandPlayer) setIsPlayerOpen(true);
   }, [expandPlayer]);
+
+  if (!usesCartesia) {
+    return (
+      <div className="script-voice">
+        <p className="settings__card-text">
+          Este video usa la voz de los personajes en Flow; no lleva voz en off.
+        </p>
+        {track && videoId && (
+          <details className="script-voice__player" open={isPlayerOpen} onToggle={(event) => setIsPlayerOpen(event.currentTarget.open)}>
+            <summary>Voz en off de este video</summary>
+            {isPlayerOpen && (
+              <VoicePlayer videoId={videoId} voice={track} openLabel="Abrir carpeta" onOpenFolder={onOpenFolder}>
+                <button type="button" className="settings__button settings__button--ghost" onClick={onOpenTimeline}>
+                  Ver en la línea de tiempo
+                </button>
+              </VoicePlayer>
+            )}
+          </details>
+        )}
+      </div>
+    );
+  }
 
   const canGenerate = configured === true && !busyElsewhere && chars > 0;
 

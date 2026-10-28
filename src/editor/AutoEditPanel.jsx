@@ -4,7 +4,7 @@ import { Player } from '@remotion/player';
 import VideoComposition, { compositionSize } from './VideoComposition.jsx';
 import CaptionStyleEditor from './CaptionStyleEditor.jsx';
 import { useAutoEdit } from './useAutoEdit.js';
-import { buildPlan } from './plan.js';
+import { buildPlan, frameSize } from './plan.js';
 import { formatDuration, cleanIpcError } from '../voice/constants.js';
 import { exportVideo } from './exportVideo.js';
 

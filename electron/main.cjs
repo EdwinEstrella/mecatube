@@ -8,7 +8,7 @@ const { createConversationStore } = require('./conversations.cjs');
 const { createPromptStore } = require('./prompts.cjs');
 const { createIdeaStore } = require('./ideas.cjs');
 const { createVideoStore } = require('./videos.cjs');
-const { createBranchStore, migrateWorkspace, copyCharacterImages, getCharacterFilePath, copyVideoCharacterFiles } = require('./branches.cjs');
+const { createBranchStore, migrateWorkspace, copyCharacterImages, getCharacterFilePath, copyVideoCharacterFiles, mergeBranchCharacters } = require('./branches.cjs');
 const { createConversationPurger } = require('./purge.cjs');
 const { createSecretStore } = require('./secrets.cjs');
 const deepseek = require('./deepseek.cjs');
@@ -233,15 +233,16 @@ ipcMain.handle('branches:save-from-video', async (_event, payload) => {
   if (!videoId) throw new Error('ID de video no válido.');
   const video = videos.list().find((v) => v.id === videoId);
   if (!video) throw new Error('Video no encontrado.');
-  const videoCharacters = flowStore.list(videoId);
+  const branch = branches.get(branchId);
+  if (!branch) throw new Error('Rama no encontrada.');
+  const allCharacters = flowStore.list(videoId);
+  const videoCharacters = (allCharacters || []).filter((c) => c.approved && (c.selectedFile || c.file));
   if (!videoCharacters || videoCharacters.length === 0) {
-    throw new Error('El video no tiene personajes.');
-  }
-  for (const c of videoCharacters) {
-    if (!c.selectedFile) throw new Error(`El personaje "${c.name || c.key}" no tiene imagen seleccionada.`);
+    throw new Error('El video no tiene personajes aprobados.');
   }
   const copied = copyVideoCharacterFiles(activeWorkspacePath, branchId, videoId, videoCharacters);
-  return branches.setCharacters(branchId, copied, video.flowProjectUrl ?? null);
+  const merged = mergeBranchCharacters(branch.characters || [], copied);
+  return branches.setCharacters(branchId, merged, video.flowProjectUrl ?? null);
 });
 
 ipcMain.handle('branches:add-character-image', async (_event, payload) => {

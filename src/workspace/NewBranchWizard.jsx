@@ -34,6 +34,7 @@ export function useBranchForm(branch, isOpen) {
   const [characters, setCharacters] = useState([]);
   const [pendingCharacters, setPendingCharacters] = useState([]);
   const [narratorVoiceId, setNarratorVoiceId] = useState('');
+  const [voiceMode, setVoiceMode] = useState('voiceover');
   const [mode, setMode] = useState('free');
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
@@ -46,8 +47,9 @@ export function useBranchForm(branch, isOpen) {
       setVideoType(branch.videoType || 'explainer');
       setCharacterMode(branch.characterMode || 'create');
       setNarratorVoiceId(branch.narratorVoiceId || '');
+      setVoiceMode(branch.voiceMode || 'voiceover');
       const loadedChars = Array.isArray(branch.characters) && branch.characters.length > 0
-        ? branch.characters.map((c) => ({ ...c, voiceId: c.voiceId || null }))
+        ? branch.characters.map((c) => ({ ...c }))
         : Array.isArray(branch.characterImages) && branch.characterImages.length > 0
           ? branch.characterImages.map((file, idx) => ({
               key: `personaje-${idx + 1}`,
@@ -55,7 +57,6 @@ export function useBranchForm(branch, isOpen) {
               description: '',
               file,
               source: branch.characterMode === 'create' ? 'flow' : 'own',
-              voiceId: null,
             }))
           : [];
       setCharacters(loadedChars);
@@ -67,6 +68,7 @@ export function useBranchForm(branch, isOpen) {
       setCharacterMode('create');
       setCharacters([]);
       setNarratorVoiceId('');
+      setVoiceMode('voiceover');
       setMode('free');
     }
     setPendingCharacters([]);
@@ -89,6 +91,8 @@ export function useBranchForm(branch, isOpen) {
     setPendingCharacters,
     narratorVoiceId,
     setNarratorVoiceId,
+    voiceMode,
+    setVoiceMode,
     mode,
     setMode,
     isBusy,
@@ -137,6 +141,8 @@ export default function NewBranchWizard({
     setPendingCharacters,
     narratorVoiceId,
     setNarratorVoiceId,
+    voiceMode,
+    setVoiceMode,
     mode,
     setMode,
     isBusy,
@@ -156,10 +162,6 @@ export default function NewBranchWizard({
     ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
   ];
 
-  const characterVoiceOptions = [
-    { value: '', label: 'Sin voz (solo narración)' },
-    ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
-  ];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -194,7 +196,6 @@ export default function NewBranchWizard({
       fileName: file.name,
       path: file.path,
       previewUrl: URL.createObjectURL(file),
-      voiceId: null,
     }));
 
     setPendingCharacters((prev) => [...prev, ...allowed]);
@@ -262,6 +263,7 @@ export default function NewBranchWizard({
           characterImages: [],
           characters: [],
           narratorVoiceId: narratorVoiceId || null,
+          voiceMode,
           mode,
         });
         targetBranchId = created.id;
@@ -284,7 +286,6 @@ export default function NewBranchWizard({
         description: p.description.trim(),
         file: uploadedFileNames[idx],
         source: 'own',
-        voiceId: p.voiceId || null,
       }));
 
       const allChars = [
@@ -294,7 +295,6 @@ export default function NewBranchWizard({
           description: c.description ? c.description.trim() : '',
           file: c.file,
           source: c.source || 'own',
-          voiceId: c.voiceId || null,
         })),
         ...newCharsFromPending,
       ];
@@ -312,6 +312,7 @@ export default function NewBranchWizard({
           characterImages: finalImages,
           characters: finalCharacters,
           narratorVoiceId: narratorVoiceId || null,
+          voiceMode,
           mode,
         });
       } else {
@@ -320,6 +321,7 @@ export default function NewBranchWizard({
             characterImages: finalImages,
             characters: finalCharacters,
             narratorVoiceId: narratorVoiceId || null,
+            voiceMode,
           });
         } else {
           savedResult = {
@@ -331,6 +333,7 @@ export default function NewBranchWizard({
             characterImages: [],
             characters: [],
             narratorVoiceId: narratorVoiceId || null,
+            voiceMode,
             mode,
           };
         }
@@ -395,6 +398,10 @@ export default function NewBranchWizard({
     },
   ];
 
+  const voiceModeOptions = [
+    { value: 'voiceover', label: 'Voz en off (Cartesia)' },
+    { value: 'flow', label: 'Voz de los personajes (Flow)' },
+  ];
   const modeOptions = [
     {
       id: 'free',
@@ -570,18 +577,6 @@ export default function NewBranchWizard({
                           disabled={isBusy}
                           onChange={(e) => handleUpdateExistingCharacter(idx, 'description', e.target.value)}
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '4px' }}>
-                          <CustomSelect
-                            value={char.voiceId || ''}
-                            options={characterVoiceOptions}
-                            placeholder="Sin voz (solo narración)"
-                            ariaLabel={`Voz para ${char.name || 'personaje'}`}
-                            disabled={isBusy}
-                            onChange={(val) => handleUpdateExistingCharacter(idx, 'voiceId', val || null)}
-                            style={{ flex: 1, fontSize: '0.8rem' }}
-                          />
-                          <VoicePreviewButton voiceId={char.voiceId} />
-                        </div>
                       </div>
                     ))}
 
@@ -618,18 +613,6 @@ export default function NewBranchWizard({
                           disabled={isBusy}
                           onChange={(e) => handleUpdatePendingCharacter(idx, 'description', e.target.value)}
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginTop: '4px' }}>
-                          <CustomSelect
-                            value={file.voiceId || ''}
-                            options={characterVoiceOptions}
-                            placeholder="Sin voz (solo narración)"
-                            ariaLabel={`Voz para ${file.name || 'personaje'}`}
-                            disabled={isBusy}
-                            onChange={(val) => handleUpdatePendingCharacter(idx, 'voiceId', val || null)}
-                            style={{ flex: 1, fontSize: '0.8rem' }}
-                          />
-                          <VoicePreviewButton voiceId={file.voiceId} />
-                        </div>
                       </div>
                     ))}
                   </div>
@@ -651,25 +634,39 @@ export default function NewBranchWizard({
             />
           </div>
 
-          {/* Section 6: Voz de narración */}
+          {/* Section: Voz del video */}
           <div className="workspace-modal__field">
-            <label className="workspace-modal__label">Voz del narrador (opcional)</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CustomSelect
-                value={narratorVoiceId || ''}
-                options={narratorVoiceOptions}
-                placeholder="Predeterminada global"
-                ariaLabel="Voz del narrador de la rama"
-                disabled={isBusy}
-                onChange={(val) => setNarratorVoiceId(val || '')}
-                style={{ flex: 1 }}
-              />
-              <VoicePreviewButton voiceId={narratorVoiceId} />
-            </div>
-            <p className="branch-wizard__hint" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Se usará esta voz de Cartesia para las narraciones de los videos de esta rama.
-            </p>
+            <label className="workspace-modal__label">Voz del video</label>
+            <CustomSelect
+              value={voiceMode}
+              options={voiceModeOptions}
+              ariaLabel="Voz del video"
+              disabled={isBusy}
+              onChange={(val) => setVoiceMode(val || 'voiceover')}
+            />
           </div>
+
+          {/* Section 6: Voz de narración */}
+          {voiceMode !== 'flow' && (
+            <div className="workspace-modal__field">
+              <label className="workspace-modal__label">Voz del narrador (opcional)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CustomSelect
+                  value={narratorVoiceId || ''}
+                  options={narratorVoiceOptions}
+                  placeholder="Predeterminada global"
+                  ariaLabel="Voz del narrador de la rama"
+                  disabled={isBusy}
+                  onChange={(val) => setNarratorVoiceId(val || '')}
+                  style={{ flex: 1 }}
+                />
+                <VoicePreviewButton voiceId={narratorVoiceId} />
+              </div>
+              <p className="branch-wizard__hint" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Se usará esta voz de Cartesia para las narraciones de los videos de esta rama.
+              </p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="workspace-modal__actions">

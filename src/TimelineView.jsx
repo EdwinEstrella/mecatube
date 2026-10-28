@@ -6,6 +6,8 @@ import NewBranchWizard from './workspace/NewBranchWizard.jsx';
 import DeleteBranchModal from './timeline/DeleteBranchModal.jsx';
 import { countDone, deriveStages } from './timeline/stages.js';
 import { charactersDone } from './flow/characterStatus.js';
+import { buildPresetText } from './prompts/presetText.js';
+import { rememberStageKey } from './timeline/stageMemory.js';
 
 function cleanError(error) {
   return error.message ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : '';
@@ -40,6 +42,10 @@ export default function TimelineView({
   const [deletingBranch, setDeletingBranch] = useState(null);
   const [error, setError] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [awaitingIllustrator, setAwaitingIllustrator] = useState({});
+  const [stageNonce, setStageNonce] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isApiConfigured, setIsApiConfigured] = useState(false);
 
   const refresh = useCallback(async () => {
     const api = window.electronAPI;
@@ -104,13 +110,53 @@ export default function TimelineView({
     refresh().catch((refreshError) => setError(cleanError(refreshError)));
     const api = window.electronAPI;
     if (!api) return undefined;
-    const offChat = api.onChatDone(() => refresh().catch(() => {}));
-    const offVoice = api.onVoiceFinished(() => refresh().catch(() => {}));
-    const offFlow = api.onFlowResult(() => refresh().catch(() => {}));
+
+    api.getBridgeStatus?.().then((connected) => setIsConnected(Boolean(connected)));
+    api.getDeepSeekStatus?.().then(
+      (status) => setIsApiConfigured(status?.configured === true),
+      () => setIsApiConfigured(false),
+    );
+    const offBridge = api.onBridgeStatusChange?.(setIsConnected);
+
+    const offChat = api.onChatDone?.(({ conversationId } = {}) => {
+      setAwaitingIllustrator((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [vid, cid] of Object.entries(prev)) {
+          if (cid === conversationId) {
+            delete next[vid];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+      refresh().catch(() => {});
+    });
+
+    const offChatError = api.onChatError?.(({ conversationId, message } = {}) => {
+      setAwaitingIllustrator((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [vid, cid] of Object.entries(prev)) {
+          if (cid === conversationId) {
+            delete next[vid];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+      if (message) setError(message);
+      refresh().catch(() => {});
+    });
+
+    const offVoice = api.onVoiceFinished?.(() => refresh().catch(() => {}));
+    const offFlow = api.onFlowResult?.(() => refresh().catch(() => {}));
     return () => {
-      offChat();
-      offVoice();
-      offFlow();
+      offBridge?.();
+      offChat?.();
+      offChatError?.();
+      offVoice?.();
+      offFlow?.();
     };
   }, [refresh]);
 
@@ -217,13 +263,65 @@ export default function TimelineView({
     }
   };
 
-  const handleStartPrompt = (videoId, role) =>
-    onChatAction({
-      type: 'send-preset',
-      presetId: role === 'illustrator' ? 'prompt-2' : 'prompt-1',
-      videoId,
-      role,
-    });
+  const handleStartPrompt = async (videoId, role) => {
+    if (role === 'script') {
+      onChatAction({
+        type: 'send-preset',
+        presetId: 'prompt-1',
+        videoId,
+        role,
+      });
+      return;
+    }
+
+    if (role === 'illustrator') {
+      const api = window.electronAPI;
+      if (!api) return;
+      setError('');
+      try {
+        const [bridgeConnected, deepseekStatus] = await Promise.all([
+          api.getBridgeStatus?.() ?? Promise.resolve(false),
+          api.getDeepSeekStatus?.().catch(() => null) ?? Promise.resolve(null),
+        ]);
+        const canSend = Boolean(bridgeConnected || deepseekStatus?.configured === true);
+        if (!canSend) {
+          setError('Conecta la extensión del navegador o configura la API de DeepSeek para enviar el Prompt 2.');
+          return;
+        }
+
+        const targetVid = videos.find((v) => v.id === videoId) || video;
+        const { text } = await buildPresetText({
+          api,
+          presetId: 'prompt-2',
+          video: targetVid,
+        });
+
+        const result = await api.sendChatMessage({ conversationId: null, text });
+        const conversationId = result?.conversationId;
+        if (!conversationId) return;
+
+        await api.updateVideo(videoId, { illustratorConversationId: conversationId });
+        setAwaitingIllustrator((prev) => ({ ...prev, [videoId]: conversationId }));
+        rememberStageKey(videoId, 'characters');
+        setStageNonce((n) => n + 1);
+        await refresh();
+      } catch (startError) {
+        setError(cleanError(startError));
+      }
+    }
+  };
+
+  const handleSendIllustratorChat = async (text) => {
+    if (!video?.illustratorConversationId) return;
+    const conversationId = video.illustratorConversationId;
+    setAwaitingIllustrator((prev) => ({ ...prev, [video.id]: conversationId }));
+    try {
+      await window.electronAPI?.sendChatMessage?.({ conversationId, text });
+    } catch (chatError) {
+      setError(cleanError(chatError));
+    }
+    await refresh().catch(() => {});
+  };
 
   const handleToggleStage = (targetVideo, stage) => {
     const current = targetVideo.overrides?.[stage.key];
@@ -315,6 +413,12 @@ export default function TimelineView({
                 script: chatState(video.scriptConversationId, chats),
                 illustrator: chatState(video.illustratorConversationId, chats),
               }}
+              illustratorMessages={chats[video.illustratorConversationId]}
+              isAwaitingIllustrator={Boolean(awaitingIllustrator[video.id])}
+              isConnected={isConnected}
+              isApiConfigured={isApiConfigured}
+              stageNonce={stageNonce}
+              onSendIllustratorChat={handleSendIllustratorChat}
             />
           ) : isLoaded && currentBranch ? (
             <BranchPanel

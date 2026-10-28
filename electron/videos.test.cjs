@@ -28,6 +28,7 @@ test('create requires branchId and defaults title to DEFAULT_TITLE', () => {
   assert.equal(video.branchId, 'branch-1');
   assert.equal(video.title, DEFAULT_TITLE);
   assert.equal(video.titleEdited, false);
+  assert.equal(video.voiceMode, null);
   assert.equal(video.brief, null);
   assert.deepEqual(video.overrides, {});
   assert.ok(video.createdAt > 0);
@@ -256,6 +257,14 @@ test('validateFields validates brief and branchId', () => {
     /Brief de video no válido\./
   );
 
+
+  // voiceMode validation
+  assert.equal(validateFields({ voiceMode: 'voiceover' }).voiceMode, 'voiceover');
+  assert.equal(validateFields({ voiceMode: 'flow' }).voiceMode, 'flow');
+  assert.equal(validateFields({ voiceMode: null }).voiceMode, null);
+  assert.throws(() => validateFields({ voiceMode: 'invalid' }), /Modo de voz no válido\./);
+  assert.throws(() => validateFields({ voiceMode: 123 }), /Modo de voz no válido\./);
+
   // brief null is accepted
   const validNullBrief = validateFields({ brief: null });
   assert.equal(validNullBrief.brief, null);
@@ -265,4 +274,34 @@ test('validateFields validates brief and branchId', () => {
     () => validateFields({ branchId: 'bad id with spaces!' }),
     /ID de rama no válido\./
   );
+});
+
+test('voiceMode: defaults to null on create, supports explicit value and update roundtrip', () => {
+  const dir = makeTmpDir();
+  const store = createVideoStore(dir);
+
+  // Default is null
+  const v1 = store.create({ branchId: 'b-1' });
+  assert.equal(v1.voiceMode, null);
+
+  // Explicit value on create
+  const v2 = store.create({ branchId: 'b-1', voiceMode: 'flow' });
+  assert.equal(v2.voiceMode, 'flow');
+
+  // Update roundtrip
+  const updated1 = store.update(v1.id, { voiceMode: 'voiceover' });
+  assert.equal(updated1.voiceMode, 'voiceover');
+  assert.equal(store.get(v1.id).voiceMode, 'voiceover');
+
+  const updated2 = store.update(v1.id, { voiceMode: 'flow' });
+  assert.equal(updated2.voiceMode, 'flow');
+  assert.equal(store.get(v1.id).voiceMode, 'flow');
+
+  // Clear / set back to null
+  const updated3 = store.update(v1.id, { voiceMode: null });
+  assert.equal(updated3.voiceMode, null);
+  assert.equal(store.get(v1.id).voiceMode, null);
+
+  // Invalid value on update throws
+  assert.throws(() => store.update(v1.id, { voiceMode: 'invalid' }), /Modo de voz no válido\./);
 });

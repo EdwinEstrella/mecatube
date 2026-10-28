@@ -26,7 +26,7 @@ test('applyOrientation: horizontal returns text byte-identical', () => {
   assert.equal(applyOrientation(promptTwo, null), promptTwo);
 });
 
-test('applyOrientation: vertical eliminates 16:9 and 1920x1080 from prompt-1 and prompt-2', () => {
+test('applyOrientation: vertical eliminates redundant ratio/resolution literals and adapts composition in prompt-1 and prompt-2', () => {
   const v1 = applyOrientation(promptOne, 'vertical');
   const v2 = applyOrientation(promptTwo, 'vertical');
 
@@ -35,11 +35,16 @@ test('applyOrientation: vertical eliminates 16:9 and 1920x1080 from prompt-1 and
 
   assert.ok(!v2.includes('16:9'), 'prompt-2 vertical contains 16:9');
   assert.ok(!v2.includes('1920x1080'), 'prompt-2 vertical contains 1920x1080');
+  assert.ok(!v2.includes('1080x1920'), 'prompt-2 vertical contains redundant 1080x1920');
 
-  // Must contain vertical aspect equivalents
-  assert.ok(v1.includes('9:16'), 'prompt-1 vertical missing 9:16');
-  assert.ok(v2.includes('9:16'), 'prompt-2 vertical missing 9:16');
-  assert.ok(v2.includes('1080x1920'), 'prompt-2 vertical missing 1080x1920');
+  // Prompt-1 metadata includes vertical platform aspect requirement (formato 9:16)
+  assert.ok(v1.includes('9:16'), 'prompt-1 vertical missing 9:16 in metadata');
+
+  // Composition adaptations are preserved in prompt-2
+  assert.ok(v2.includes('Vertical thumbnail.'), 'prompt-2 vertical missing Vertical thumbnail header');
+  assert.ok(v2.includes('vertical framing, subject centered'), 'prompt-2 vertical missing vertical framing');
+  assert.ok(v2.includes('vertical sequence of [N] simple drawings'), 'prompt-2 vertical missing vertical sequence');
+  assert.ok(v2.includes('vertical tilt'), 'prompt-2 vertical missing vertical tilt');
 });
 
 test('applyOrientation: vertical preserves structure line counts for ETAPA, Bloque, PLANTILLA', () => {

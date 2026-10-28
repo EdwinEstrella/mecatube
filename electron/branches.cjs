@@ -18,6 +18,7 @@ const ORIENTATIONS = ['horizontal', 'vertical'];
 const MODES = ['series', 'titles', 'free'];
 const CHARACTER_MODES = ['own', 'create'];
 const VIDEO_TYPES = ['explainer', 'story', 'list', 'horror'];
+const VOICE_MODES = ['voiceover', 'flow'];
 
 const KNOWN_BRANCH_FIELDS = [
   'name',
@@ -28,6 +29,7 @@ const KNOWN_BRANCH_FIELDS = [
   'characters',
   'flowProjectUrl',
   'narratorVoiceId',
+  'voiceMode',
   'mode',
   'series',
   'titles',
@@ -105,22 +107,21 @@ function validCharacters(value) {
     if (typeof item.source !== 'string' || !CHARACTER_SOURCES.includes(item.source)) {
       throw new Error('Origen de personaje no válido.');
     }
-    let voiceId = null;
-    if (item.voiceId !== undefined && item.voiceId !== null && item.voiceId !== '') {
-      if (typeof item.voiceId !== 'string' || !VOICE_ID_PATTERN.test(item.voiceId)) {
-        throw new Error('ID de voz de personaje no válido.');
-      }
-      voiceId = item.voiceId;
-    }
     return {
       key: item.key,
       name,
       description,
       file: item.file,
       source: item.source,
-      voiceId,
     };
   });
+}
+
+function validVoiceMode(value) {
+  if (typeof value !== 'string' || !VOICE_MODES.includes(value)) {
+    throw new Error('Modo de voz no válido.');
+  }
+  return value;
 }
 
 function validNarratorVoiceId(value) {
@@ -258,6 +259,7 @@ function validateBranchPatch(patch) {
   if (patch.characters !== undefined) fields.characters = validCharacters(patch.characters);
   if (patch.flowProjectUrl !== undefined) fields.flowProjectUrl = validFlowProjectUrl(patch.flowProjectUrl);
   if (patch.narratorVoiceId !== undefined) fields.narratorVoiceId = validNarratorVoiceId(patch.narratorVoiceId);
+  if (patch.voiceMode !== undefined) fields.voiceMode = validVoiceMode(patch.voiceMode);
   if (patch.mode !== undefined) fields.mode = validMode(patch.mode);
   if (patch.series !== undefined) fields.series = validSeries(patch.series);
   if (patch.titles !== undefined) fields.titles = validTitles(patch.titles);
@@ -287,15 +289,7 @@ function createBranchStore(dir) {
               if (!mod.characters) mod = { ...mod, characters: [] };
               if (mod.flowProjectUrl === undefined) mod = { ...mod, flowProjectUrl: null };
               if (mod.narratorVoiceId === undefined) mod = { ...mod, narratorVoiceId: null };
-              if (Array.isArray(mod.characters)) {
-                mod = {
-                  ...mod,
-                  characters: mod.characters.map((c) => ({
-                    ...c,
-                    voiceId: c && typeof c === 'object' && c.voiceId ? c.voiceId : null,
-                  })),
-                };
-              }
+              if (mod.voiceMode === undefined) mod = { ...mod, voiceMode: 'voiceover' };
               return mod;
             }
             return b;
@@ -337,6 +331,7 @@ function createBranchStore(dir) {
     const characters = input.characters !== undefined ? validCharacters(input.characters) : [];
     const flowProjectUrl = input.flowProjectUrl !== undefined ? validFlowProjectUrl(input.flowProjectUrl) : null;
     const narratorVoiceId = input.narratorVoiceId !== undefined ? validNarratorVoiceId(input.narratorVoiceId) : null;
+    const voiceMode = input.voiceMode !== undefined ? validVoiceMode(input.voiceMode) : 'voiceover';
     const mode = input.mode !== undefined ? validMode(input.mode) : 'free';
     const series = input.series !== undefined ? validSeries(input.series) : null;
     const titles = input.titles !== undefined ? validTitles(input.titles) : [];
@@ -352,6 +347,7 @@ function createBranchStore(dir) {
       characters,
       flowProjectUrl,
       narratorVoiceId,
+      voiceMode,
       mode,
       series,
       titles,
@@ -449,6 +445,7 @@ function migrateWorkspace(dir) {
         characters: [],
         flowProjectUrl: null,
         narratorVoiceId: null,
+        voiceMode: 'voiceover',
         mode: 'free',
         series: null,
         titles: [],
@@ -473,6 +470,10 @@ function migrateWorkspace(dir) {
       }
       if (branch.narratorVoiceId === undefined) {
         branch.narratorVoiceId = null;
+        branchesModified = true;
+      }
+      if (branch.voiceMode === undefined) {
+        branch.voiceMode = 'voiceover';
         branchesModified = true;
       }
     }
@@ -639,6 +640,33 @@ function copyVideoCharacterFiles(workspaceDir, branchId, videoId, characters) {
   return copiedCharacters;
 }
 
+
+function mergeBranchCharacters(existingCharacters = [], incomingCharacters = []) {
+  const existing = Array.isArray(existingCharacters) ? existingCharacters : [];
+  const incoming = Array.isArray(incomingCharacters) ? incomingCharacters : [];
+  const incomingMap = new Map(incoming.map((item) => [item.key, item]));
+  const seen = new Set();
+  const merged = [];
+
+  for (const item of existing) {
+    if (incomingMap.has(item.key)) {
+      merged.push(incomingMap.get(item.key));
+    } else {
+      merged.push(item);
+    }
+    seen.add(item.key);
+  }
+
+  for (const item of incoming) {
+    if (!seen.has(item.key)) {
+      merged.push(item);
+      seen.add(item.key);
+    }
+  }
+
+  return merged;
+}
+
 module.exports = {
   createBranchStore,
   migrateWorkspace,
@@ -646,9 +674,11 @@ module.exports = {
   MODES,
   CHARACTER_MODES,
   VIDEO_TYPES,
+  VOICE_MODES,
   validName,
   validOrientation,
   validVideoType,
+  validVoiceMode,
   validCharacterMode,
   validCharacterImages,
   validCharacters,
@@ -663,4 +693,5 @@ module.exports = {
   getCharacterFilePath,
   copyVideoCharacterFiles,
   copyVideoCharacters: copyVideoCharacterFiles,
+  mergeBranchCharacters,
 };

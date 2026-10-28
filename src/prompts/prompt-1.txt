@@ -424,7 +424,7 @@ Instrucciones para cada prompt:
 • Indica que se use la imagen adjunta del personaje principal como referencia y se
 mantenga su apariencia y estilo.
 • Escribe el prompt en inglés para mejor resultado del generador de imágenes.
-• Formato 16:9, contraste alto, punto focal claro y legible en tamaño pequeño.
+• Contraste alto, punto focal claro y legible en tamaño pequeño.
 Si el video es FORMATO A (Narrativo):
 • Un solo personaje principal como protagonista, ocupando gran parte del encuadre.
 • Emoción exagerada y legible que refleje la pregunta del título (miedo, asombro,
