@@ -8,7 +8,7 @@ const { createConversationStore } = require('./conversations.cjs');
 const { createPromptStore } = require('./prompts.cjs');
 const { createIdeaStore } = require('./ideas.cjs');
 const { createVideoStore } = require('./videos.cjs');
-const { createBranchStore, migrateWorkspace } = require('./branches.cjs');
+const { createBranchStore, migrateWorkspace, copyCharacterImages, getCharacterFilePath } = require('./branches.cjs');
 const { createConversationPurger } = require('./purge.cjs');
 const { createSecretStore } = require('./secrets.cjs');
 const deepseek = require('./deepseek.cjs');
@@ -216,6 +216,24 @@ ipcMain.handle('branches:delete', (_event, payload) => {
     throw new Error('No se puede eliminar una rama que contiene videos.');
   }
   branches.delete(id);
+});
+
+ipcMain.handle('branches:add-character-image', async (_event, payload) => {
+  const branchId = typeof payload === 'object' && payload !== null ? payload.branchId : payload;
+  if (!branchId) throw new Error('ID de rama no válido.');
+  let filePaths = payload?.filePaths;
+  if (!filePaths || filePaths.length === 0) {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Seleccionar imágenes del personaje',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return [];
+    }
+    filePaths = result.filePaths;
+  }
+  return copyCharacterImages(activeWorkspacePath, branchId, filePaths);
 });
 
 ipcMain.handle('videos:list', (_event, payload) => {
@@ -489,6 +507,7 @@ app.whenReady().then(() => {
       characterFile: (videoId, key, file) => flowStoreProxy.filePath(videoId, key, file),
       sceneFile: (videoId, number, file) => flowStoreProxy.sceneFilePath(videoId, number, file),
       animationFile: (videoId, number, file) => flowStoreProxy.animationFilePath(videoId, number, file),
+      branchCharacterFile: (branchId, file) => getCharacterFilePath(activeWorkspacePath, branchId, file),
     }),
   );
   bridge.onMessage(handleBridgeMessage);

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import VideoDetail from './timeline/VideoDetail.jsx';
+import BranchTree from './timeline/BranchTree.jsx';
+import NewBranchWizard from './workspace/NewBranchWizard.jsx';
+import DeleteBranchModal from './timeline/DeleteBranchModal.jsx';
 import { countDone, deriveStages } from './timeline/stages.js';
 import { charactersDone } from './flow/characterStatus.js';
 
 function cleanError(error) {
-  return error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+  return error.message ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : '';
 }
 
 // 'ok' | 'deleted' | 'none' for a linked conversation id
@@ -13,39 +16,86 @@ function chatState(linkedId, chats) {
   return chats[linkedId] ? 'ok' : 'deleted';
 }
 
-// Container: 1 workspace = 1 video timeline project
-export default function TimelineView({ onOpenChat, onChatAction }) {
+// Container: workspace tree + active video timeline detail
+export default function TimelineView({
+  onOpenChat,
+  onChatAction,
+  initialVideoId = null,
+  onInitialConsumed,
+}) {
+  const [branches, setBranches] = useState([]);
   const [videos, setVideos] = useState([]);
   const [activeVideo, setActiveVideo] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [chats, setChats] = useState({});
   const [voices, setVoices] = useState({});
   const [characters, setCharacters] = useState({});
+  const [expandedBranchIds, setExpandedBranchIds] = useState(() => new Set());
+  const [isTreeCollapsed, setIsTreeCollapsed] = useState(false);
+  const [wizardBranch, setWizardBranch] = useState(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [deletingBranch, setDeletingBranch] = useState(null);
   const [error, setError] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     const api = window.electronAPI;
     if (!api) return;
-    const [active, videoList, conversationList] = await Promise.all([
+    const [active, branchList, videoList, conversationList] = await Promise.all([
       api.getActiveVideo(),
+      api.listBranches(),
       api.listVideos(),
       api.listConversations(),
     ]);
+
     const ids = new Set(
       videoList.flatMap((video) => [video.scriptConversationId, video.illustratorConversationId]).filter(Boolean),
     );
     const loaded = await Promise.all([...ids].map(async (id) => [id, (await api.getConversation(id))?.messages ?? null]));
     const voiceMetas = await Promise.all(videoList.map(async (video) => [video.id, (await api.getVoice(video.id)) ?? null]));
     const characterLists = await Promise.all(videoList.map(async (video) => [video.id, (await api.getCharacters(video.id)) ?? []]));
+
+    setBranches(branchList ?? []);
     setActiveVideo(active ?? null);
-    setVideos(videoList);
+    setVideos(videoList ?? []);
     setVoices(Object.fromEntries(voiceMetas));
     setCharacters(Object.fromEntries(characterLists));
     setConversations(conversationList ?? []);
     setChats(Object.fromEntries(loaded));
     setIsLoaded(true);
+
+    if (active?.branchId) {
+      setExpandedBranchIds((prev) => {
+        if (prev.has(active.branchId)) return prev;
+        const next = new Set(prev);
+        next.add(active.branchId);
+        return next;
+      });
+    }
   }, []);
+
+  // Dead handoff fix: consume initialVideoId
+  useEffect(() => {
+    if (initialVideoId && window.electronAPI) {
+      window.electronAPI
+        .setActiveVideo(initialVideoId)
+        .then(() => {
+          window.dispatchEvent(new CustomEvent('mecatube:active-video-changed', { detail: { videoId: initialVideoId } }));
+          return refresh();
+        })
+        .then(() => onInitialConsumed?.())
+        .catch((initialError) => setError(cleanError(initialError)));
+    }
+  }, [initialVideoId, onInitialConsumed, refresh]);
+
+  // Listen to active video changes
+  useEffect(() => {
+    const handleActiveChanged = () => {
+      refresh().catch(() => {});
+    };
+    window.addEventListener('mecatube:active-video-changed', handleActiveChanged);
+    return () => window.removeEventListener('mecatube:active-video-changed', handleActiveChanged);
+  }, [refresh]);
 
   useEffect(() => {
     refresh().catch((refreshError) => setError(cleanError(refreshError)));
@@ -73,6 +123,21 @@ export default function TimelineView({ onOpenChat, onChatAction }) {
 
   const doneCount = countDone(stages);
 
+  const videoStagesMap = useMemo(() => {
+    const map = {};
+    for (const vid of videos) {
+      const vidStages = deriveStages(vid, chats[vid.scriptConversationId], chats[vid.illustratorConversationId], {
+        hasVoice: Boolean(voices[vid.id]),
+        charactersApproved: charactersDone(characters[vid.id]),
+      });
+      map[vid.id] = {
+        doneCount: countDone(vidStages),
+        total: vidStages.length,
+      };
+    }
+    return map;
+  }, [videos, chats, voices, characters]);
+
   const run = async (action) => {
     setError('');
     try {
@@ -81,6 +146,37 @@ export default function TimelineView({ onOpenChat, onChatAction }) {
       setError(cleanError(actionError));
     }
     await refresh().catch(() => {});
+  };
+
+  const handleSelectVideo = async (videoId) => {
+    setError('');
+    try {
+      await window.electronAPI.setActiveVideo(videoId);
+      window.dispatchEvent(new CustomEvent('mecatube:active-video-changed', { detail: { videoId } }));
+      await refresh();
+    } catch (selectError) {
+      setError(cleanError(selectError));
+    }
+  };
+
+  const handleCreateVideoInBranch = async (branchId) => {
+    setError('');
+    try {
+      const created = await window.electronAPI.createVideo({ newVideo: true, branchId });
+      window.dispatchEvent(new CustomEvent('mecatube:active-video-changed', { detail: { videoId: created.id } }));
+      await refresh();
+    } catch (createError) {
+      setError(cleanError(createError));
+    }
+  };
+
+  const handleToggleBranch = (branchId) => {
+    setExpandedBranchIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(branchId)) next.delete(branchId);
+      else next.add(branchId);
+      return next;
+    });
   };
 
   const handleSendPrompt1 = async () => {
@@ -126,25 +222,74 @@ export default function TimelineView({ onOpenChat, onChatAction }) {
   };
 
   return (
-    <div className="settings timeline">
+    <div className="settings timeline timeline--split">
       {error && <p className="chat-messages__error">{error}</p>}
 
-      {isLoaded && video && (
-        <VideoDetail
-          video={video}
-          stages={stages}
-          doneCount={doneCount}
-          onSendPrompt1={handleSendPrompt1}
-          {...detail}
-          scriptMessages={chats[video.scriptConversationId]}
-          voice={voices[video.id]}
-          characters={characters[video.id] ?? []}
-          chatStates={{
-            script: chatState(video.scriptConversationId, chats),
-            illustrator: chatState(video.illustratorConversationId, chats),
+      <div className="timeline__container">
+        <BranchTree
+          branches={branches}
+          videos={videos}
+          activeVideoId={video?.id}
+          expandedBranchIds={expandedBranchIds}
+          onToggleBranch={handleToggleBranch}
+          onSelectVideo={handleSelectVideo}
+          onCreateVideo={handleCreateVideoInBranch}
+          onNewBranch={() => {
+            setWizardBranch(null);
+            setIsWizardOpen(true);
           }}
+          onEditBranch={(branchToEdit) => {
+            setWizardBranch(branchToEdit);
+            setIsWizardOpen(true);
+          }}
+          onDeleteBranch={(branchToDelete) => {
+            setDeletingBranch(branchToDelete);
+          }}
+          isCollapsed={isTreeCollapsed}
+          onToggleCollapse={() => setIsTreeCollapsed((prev) => !prev)}
+          videoStagesMap={videoStagesMap}
         />
-      )}
+
+        <div className="timeline__detail-pane">
+          {isLoaded && video ? (
+            <VideoDetail
+              video={video}
+              stages={stages}
+              doneCount={doneCount}
+              onSendPrompt1={handleSendPrompt1}
+              {...detail}
+              scriptMessages={chats[video.scriptConversationId]}
+              voice={voices[video.id]}
+              characters={characters[video.id] ?? []}
+              chatStates={{
+                script: chatState(video.scriptConversationId, chats),
+                illustrator: chatState(video.illustratorConversationId, chats),
+              }}
+            />
+          ) : isLoaded ? (
+            <div className="timeline__empty">
+              <p className="timeline__empty-text">Selecciona o crea un video para ver su línea de tiempo.</p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <NewBranchWizard
+        isOpen={isWizardOpen}
+        branch={wizardBranch}
+        onClose={() => {
+          setIsWizardOpen(false);
+          setWizardBranch(null);
+        }}
+        onSaved={() => refresh()}
+      />
+
+      <DeleteBranchModal
+        isOpen={Boolean(deletingBranch)}
+        branch={deletingBranch}
+        onClose={() => setDeletingBranch(null)}
+        onDeleted={() => refresh()}
+      />
     </div>
   );
 }

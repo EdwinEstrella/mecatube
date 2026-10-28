@@ -10,6 +10,10 @@ const {
   ORIENTATIONS,
   MODES,
   CHARACTER_MODES,
+  VIDEO_TYPES,
+  validVideoType,
+  copyCharacterImages,
+  getCharacterFilePath,
 } = require('./branches.cjs');
 
 function makeTmpDir() {
@@ -257,4 +261,101 @@ test('migration is strictly idempotent: running twice changes nothing', () => {
 
   assert.equal(branchesBefore, branchesAfter);
   assert.equal(videosBefore, videosAfter);
+});
+
+test('videoType: validation, defaults, update, and backward compatibility', () => {
+  assert.deepEqual(VIDEO_TYPES, ['explainer', 'story', 'list', 'horror']);
+  assert.equal(validVideoType('explainer'), 'explainer');
+  assert.equal(validVideoType('story'), 'story');
+  assert.equal(validVideoType('list'), 'list');
+  assert.equal(validVideoType('horror'), 'horror');
+  assert.throws(() => validVideoType('unknown'), /Tipo de video no válido\./);
+  assert.throws(() => validVideoType(123), /Tipo de video no válido\./);
+
+  const dir = makeTmpDir();
+  const store = createBranchStore(dir);
+
+  // Default is 'explainer'
+  const b1 = store.create({ name: 'Rama Default' });
+  assert.equal(b1.videoType, 'explainer');
+
+  // Explicit type
+  const b2 = store.create({ name: 'Rama Terror', videoType: 'horror' });
+  assert.equal(b2.videoType, 'horror');
+
+  // Update
+  const updated = store.update(b1.id, { videoType: 'story' });
+  assert.equal(updated.videoType, 'story');
+
+  // Branches missing videoType on disk are read as 'explainer'
+  const rawBranchesFile = path.join(dir, 'branches.json');
+  const onDisk = JSON.parse(fs.readFileSync(rawBranchesFile, 'utf8'));
+  delete onDisk[0].videoType;
+  fs.writeFileSync(rawBranchesFile, JSON.stringify(onDisk));
+
+  const reloaded = store.list();
+  assert.equal(reloaded[0].videoType, 'explainer');
+});
+
+test('migration populates videoType explainer on existing branches missing it', () => {
+  const dir = makeTmpDir();
+  const branchesFile = path.join(dir, 'branches.json');
+  const legacyBranch = {
+    id: 'legacy-branch-1',
+    name: 'Rama Vieja',
+    orientation: 'horizontal',
+    characterMode: 'create',
+    characterImages: [],
+    mode: 'free',
+    series: null,
+    titles: [],
+    createdAt: 1000,
+    updatedAt: 1000,
+  };
+  fs.writeFileSync(branchesFile, JSON.stringify([legacyBranch]));
+
+  const result = migrateWorkspace(dir);
+  assert.equal(result.branches.length, 1);
+  assert.equal(result.branches[0].videoType, 'explainer');
+
+  const onDisk = JSON.parse(fs.readFileSync(branchesFile, 'utf8'));
+  assert.equal(onDisk[0].videoType, 'explainer');
+});
+
+test('copyCharacterImages and getCharacterFilePath: copy, sanitization, and traversal rejection', () => {
+  const dir = makeTmpDir();
+  const branchId = 'test-branch-123';
+
+  // Create temporary source image files
+  const tmpSrc = makeTmpDir();
+  const file1 = path.join(tmpSrc, 'my character @ hero!.png');
+  const file2 = path.join(tmpSrc, 'side view.jpg');
+  const invalidExt = path.join(tmpSrc, 'script.txt');
+  fs.writeFileSync(file1, 'fake-png-bytes');
+  fs.writeFileSync(file2, 'fake-jpg-bytes');
+  fs.writeFileSync(invalidExt, 'not-an-image');
+
+  // Valid copy
+  const storedNames = copyCharacterImages(dir, branchId, [file1, file2]);
+  assert.equal(storedNames.length, 2);
+  assert.ok(/^[\w.-]{1,120}$/.test(storedNames[0]));
+  assert.ok(/^[\w.-]{1,120}$/.test(storedNames[1]));
+  assert.ok(storedNames[0].endsWith('.png'));
+  assert.ok(storedNames[1].endsWith('.jpg'));
+
+  // Files exist on disk
+  const resolvedPath1 = getCharacterFilePath(dir, branchId, storedNames[0]);
+  assert.ok(fs.existsSync(resolvedPath1));
+  assert.equal(fs.readFileSync(resolvedPath1, 'utf8'), 'fake-png-bytes');
+
+  // Invalid extension rejected
+  assert.throws(() => copyCharacterImages(dir, branchId, [invalidExt]), /Formato de imagen no permitido\./);
+
+  // Invalid branchId rejected
+  assert.throws(() => copyCharacterImages(dir, '../bad-id', [file1]), /ID de rama no válido\./);
+  assert.throws(() => getCharacterFilePath(dir, '../bad-id', storedNames[0]), /ID de rama no válido\./);
+
+  // Path traversal in filename rejected
+  assert.throws(() => getCharacterFilePath(dir, branchId, '../secret.png'), /Nombre de imagen de personaje no válido\./);
+  assert.throws(() => getCharacterFilePath(dir, branchId, 'non-existent.png'), /Imagen no encontrada\./);
 });

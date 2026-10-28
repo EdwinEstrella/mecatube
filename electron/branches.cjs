@@ -12,10 +12,12 @@ const TITLE_MAX = 200;
 const ORIENTATIONS = ['horizontal', 'vertical'];
 const MODES = ['series', 'titles', 'free'];
 const CHARACTER_MODES = ['own', 'create'];
+const VIDEO_TYPES = ['explainer', 'story', 'list', 'horror'];
 
 const KNOWN_BRANCH_FIELDS = [
   'name',
   'orientation',
+  'videoType',
   'characterMode',
   'characterImages',
   'mode',
@@ -37,6 +39,13 @@ function validName(value) {
 function validOrientation(value) {
   if (typeof value !== 'string' || !ORIENTATIONS.includes(value)) {
     throw new Error('Orientación de rama no válida.');
+  }
+  return value;
+}
+
+function validVideoType(value) {
+  if (typeof value !== 'string' || !VIDEO_TYPES.includes(value)) {
+    throw new Error('Tipo de video no válido.');
   }
   return value;
 }
@@ -172,6 +181,7 @@ function validateBranchPatch(patch) {
   const fields = {};
   if (patch.name !== undefined) fields.name = validName(patch.name);
   if (patch.orientation !== undefined) fields.orientation = validOrientation(patch.orientation);
+  if (patch.videoType !== undefined) fields.videoType = validVideoType(patch.videoType);
   if (patch.characterMode !== undefined) fields.characterMode = validCharacterMode(patch.characterMode);
   if (patch.characterImages !== undefined) fields.characterImages = validCharacterImages(patch.characterImages);
   if (patch.mode !== undefined) fields.mode = validMode(patch.mode);
@@ -195,7 +205,14 @@ function createBranchStore(dir) {
       if (fs.existsSync(file)) {
         const raw = fs.readFileSync(file, 'utf8');
         const data = JSON.parse(raw);
-        if (Array.isArray(data)) return data;
+        if (Array.isArray(data)) {
+          return data.map((b) => {
+            if (b && typeof b === 'object' && !b.videoType) {
+              return { ...b, videoType: 'explainer' };
+            }
+            return b;
+          });
+        }
       }
     } catch {}
     return [];
@@ -226,6 +243,7 @@ function createBranchStore(dir) {
 
     const name = validName(input.name);
     const orientation = input.orientation !== undefined ? validOrientation(input.orientation) : 'horizontal';
+    const videoType = input.videoType !== undefined ? validVideoType(input.videoType) : 'explainer';
     const characterMode = input.characterMode !== undefined ? validCharacterMode(input.characterMode) : 'create';
     const characterImages = input.characterImages !== undefined ? validCharacterImages(input.characterImages) : [];
     const mode = input.mode !== undefined ? validMode(input.mode) : 'free';
@@ -237,6 +255,7 @@ function createBranchStore(dir) {
       id: crypto.randomUUID(),
       name,
       orientation,
+      videoType,
       characterMode,
       characterImages,
       mode,
@@ -313,6 +332,7 @@ function migrateWorkspace(dir) {
         id: crypto.randomUUID(),
         name: 'Principal',
         orientation: 'horizontal',
+        videoType: 'explainer',
         characterMode: 'create',
         characterImages: [],
         mode: 'free',
@@ -323,6 +343,13 @@ function migrateWorkspace(dir) {
       },
     ];
     branchesModified = true;
+  } else {
+    for (const branch of branches) {
+      if (!branch.videoType) {
+        branch.videoType = 'explainer';
+        branchesModified = true;
+      }
+    }
   }
 
   if (branchesModified) {
@@ -369,18 +396,78 @@ function migrateWorkspace(dir) {
   return { branches, videos };
 }
 
+const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
+
+function copyCharacterImages(workspaceDir, branchId, sourceFilePaths) {
+  if (typeof branchId !== 'string' || !ID_PATTERN.test(branchId)) {
+    throw new Error('ID de rama no válido.');
+  }
+  if (!Array.isArray(sourceFilePaths)) {
+    throw new Error('Lista de imágenes no válida.');
+  }
+
+  const targetDir = path.join(workspaceDir, 'branches', branchId, 'characters');
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  const storedNames = [];
+  for (const srcPath of sourceFilePaths) {
+    if (typeof srcPath !== 'string' || !srcPath.trim()) continue;
+    if (!fs.existsSync(srcPath) || !fs.statSync(srcPath).isFile()) {
+      throw new Error(`Archivo no encontrado: ${srcPath}`);
+    }
+    const ext = path.extname(srcPath).toLowerCase();
+    if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+      throw new Error('Formato de imagen no permitido.');
+    }
+    const rawBase = path.basename(srcPath, ext).replace(/[^\w.-]/g, '_').slice(0, 50);
+    const safeName = `${rawBase ? rawBase + '_' : ''}${Date.now()}_${crypto.randomBytes(3).toString('hex')}${ext}`;
+    if (!CHARACTER_IMAGE_PATTERN.test(safeName)) {
+      throw new Error('Nombre de imagen de personaje no válido.');
+    }
+    const destPath = path.resolve(targetDir, safeName);
+    if (!destPath.startsWith(targetDir + path.sep)) {
+      throw new Error('Ruta de imagen no válida.');
+    }
+    fs.copyFileSync(srcPath, destPath);
+    storedNames.push(safeName);
+  }
+  return storedNames;
+}
+
+function getCharacterFilePath(workspaceDir, branchId, fileName) {
+  if (typeof branchId !== 'string' || !ID_PATTERN.test(branchId)) {
+    throw new Error('ID de rama no válido.');
+  }
+  if (typeof fileName !== 'string' || !CHARACTER_IMAGE_PATTERN.test(fileName)) {
+    throw new Error('Nombre de imagen de personaje no válido.');
+  }
+  const base = path.join(workspaceDir, 'branches', branchId, 'characters');
+  const full = path.resolve(base, fileName);
+  if (path.dirname(full) !== base) {
+    throw new Error('Ruta de imagen no válida.');
+  }
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+    throw new Error('Imagen no encontrada.');
+  }
+  return full;
+}
+
 module.exports = {
   createBranchStore,
   migrateWorkspace,
   ORIENTATIONS,
   MODES,
   CHARACTER_MODES,
+  VIDEO_TYPES,
   validName,
   validOrientation,
+  validVideoType,
   validCharacterMode,
   validCharacterImages,
   validMode,
   validSeries,
   validTitles,
   validateBranchPatch,
+  copyCharacterImages,
+  getCharacterFilePath,
 };
