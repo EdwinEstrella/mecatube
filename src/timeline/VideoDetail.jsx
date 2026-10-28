@@ -6,6 +6,10 @@ import CharactersPanel from '../flow/CharactersPanel.jsx';
 import AutoEditPanel from '../editor/AutoEditPanel.jsx';
 import PublishKit from './PublishKit.jsx';
 import { getRememberedStageKey, rememberStageKey } from './stageMemory.js';
+import IdeaStagePanel from './IdeaStagePanel.jsx';
+import ScriptStagePanel from './ScriptStagePanel.jsx';
+import { latestIdeas, latestScript } from './stageContent.js';
+import { syncChosenIdea } from './syncChosenIdea.js';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
@@ -100,6 +104,17 @@ export default function VideoDetail({
     }
   }
 
+  const handleSendIdea = async (idea) => {
+    await window.electronAPI.sendChatMessage({
+      conversationId: video.scriptConversationId,
+      text: String(idea.number),
+    });
+    await syncChosenIdea(window.electronAPI, video.scriptConversationId, idea);
+    setSelectedKey('script');
+    rememberStageKey(video.id, 'script');
+    onEdited?.();
+  };
+
   return (
     <div className="video-detail">
       <div className="video-detail__header-bar">
@@ -148,6 +163,22 @@ export default function VideoDetail({
               onStart={() => onStartPrompt(video.id, 'script')}
               openLabel="Abrir chat del guion"
               startLabel="Enviar Prompt 1"
+            />
+          )}
+
+          {selectedStage.key === 'idea' && (
+            <IdeaStagePanel
+              key={video.id}
+              hasLinkedChat={Boolean(video.scriptConversationId)}
+              ideasData={latestIdeas(scriptMessages)}
+              onSendIdea={handleSendIdea}
+            />
+          )}
+
+          {selectedStage.key === 'script' && (
+            <ScriptStagePanel
+              scriptText={latestScript(scriptMessages)}
+              hasChosenIdea={Boolean(video.ideaNumber || latestIdeas(scriptMessages)?.chosenNumber != null)}
             />
           )}
 

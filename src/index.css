@@ -1512,6 +1512,50 @@ body {
   color: #ffffff;
 }
 
+.video-detail__idea-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.video-detail__idea-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.video-detail__error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #f87171;
+}
+
+.video-detail__script-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.video-detail__script-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.video-detail__script-actions .chat-copy-script {
+  margin-top: 0;
+}
+
+.video-detail__script-scroll {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
 /* Voice-over */
 
 .cartesia-key {
