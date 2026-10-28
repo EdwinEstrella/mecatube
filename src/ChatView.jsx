@@ -15,6 +15,7 @@ import { latestCharacterKeys } from './flow/currentCharacters.js';
 import { withImageBudget } from './flow/imageBudget.js';
 import { DEFAULT_STYLE_ID } from './prompts/styles.js';
 import { composePrompt } from './prompts/compose.js';
+import { latestScript } from './timeline/stageContent.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -306,6 +307,15 @@ export default function ChatView({
             } catch {}
           }
         }
+        let videoScript = null;
+        if (preset.id === 'prompt-2' && targetVid?.scriptConversationId) {
+          try {
+            const conv = await window.electronAPI?.getConversation?.(targetVid.scriptConversationId);
+            if (conv?.messages) {
+              videoScript = latestScript(conv.messages);
+            }
+          } catch {}
+        }
         let promptText = composePrompt(effectiveText(preset, await loadOverrides()), {
           presetId: preset.id,
           style: workspaceStyle,
@@ -314,6 +324,7 @@ export default function ChatView({
           branchCharacters: activeBranchCharacters,
           brief: videoBrief,
           voiceMode: selectedVoiceMode,
+          script: videoScript,
         });
         const conversationId = await handlePreset(promptText);
         if (!conversationId || !action.videoId) return;

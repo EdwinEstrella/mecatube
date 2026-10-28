@@ -10,6 +10,7 @@ import {
 import { composeConnectorsMessage } from '../prompts/connectors.js';
 import { DEFAULT_STYLE_ID } from '../prompts/styles.js';
 import { composePrompt } from '../prompts/compose.js';
+import { latestScript } from '../timeline/stageContent.js';
 
 // The first two buttons start a new chat; the connectors button writes into the open conversation
 export default function PromptPresets({ disabled, hasActiveConversation, onSend, onSendConnectors }) {
@@ -124,6 +125,18 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
                 } catch {}
               }
             }
+            let script = null;
+            if (preset.id === 'prompt-2') {
+              try {
+                const activeVideo = await window.electronAPI?.getActiveVideo?.();
+                if (activeVideo?.scriptConversationId) {
+                  const conv = await window.electronAPI?.getConversation?.(activeVideo.scriptConversationId);
+                  if (conv?.messages) {
+                    script = latestScript(conv.messages);
+                  }
+                }
+              } catch {}
+            }
             const text = composePrompt(rawText, {
               presetId: preset.id,
               style: currentStyle,
@@ -132,6 +145,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
               branchCharacters: currentBranchCharacters,
               brief: currentBrief,
               voiceMode: selectedVoiceMode,
+              script,
             });
             onSend(text);
           }}

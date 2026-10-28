@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { composePrompt } from './compose.js';
+import { imageCountFor } from '../flow/imageBudget.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -173,3 +174,108 @@ test('composePrompt: prompt-2 ignores brief and remains byte-identical', () => {
   assert.equal(composed, promptTwo);
 });
 
+test('composePrompt: prompt-2 with script appends GUION DEL VIDEO block and CANTIDAD_IMAGENES line', () => {
+  const scriptText = [
+    'Título: La fascinante historia del café',
+    'Formato: Narrativo',
+    'Duración: 3 minutos',
+    'GANCHO',
+    'Cada mañana millones de personas despiertan con una taza de café sin conocer su misterioso origen.',
+    'DESARROLLO',
+    'Todo comenzó en las altas montañas de Etiopía cuando un pastor notó que sus cabras no dormían tras comer unos frutos rojos.',
+  ].join('\n');
+
+  const composed = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    script: scriptText,
+  });
+
+  const expectedImageCount = imageCountFor(scriptText);
+  const expectedBlock = [
+    '=== GUION DEL VIDEO ===',
+    'Ya tienes el guion completo a continuación: omite la ETAPA 1 (no pidas el guion) y empieza directamente por la ETAPA 2.',
+    '',
+    scriptText,
+    '',
+    `[CANTIDAD_IMAGENES]: ${expectedImageCount}`,
+  ].join('\n');
+
+  assert.ok(composed.endsWith(`\n\n${expectedBlock}\n`));
+  assert.ok(composed.includes(`[CANTIDAD_IMAGENES]: ${expectedImageCount}`));
+});
+
+test('composePrompt: prompt-1 ignores script and remains byte-identical', () => {
+  const scriptText = 'Título: Un guion que no debe añadirse al prompt 1';
+  const composed = composePrompt(promptOne, {
+    presetId: 'prompt-1',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    script: scriptText,
+  });
+  assert.equal(composed, promptOne);
+});
+
+test('composePrompt: prompt-2 with empty or null script adds nothing', () => {
+  const empty = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    script: '',
+  });
+  assert.equal(empty, promptTwo);
+
+  const spaces = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    script: '   \n  ',
+  });
+  assert.equal(spaces, promptTwo);
+
+  const nullScript = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    script: null,
+  });
+  assert.equal(nullScript, promptTwo);
+
+  const omitted = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+  });
+  assert.equal(omitted, promptTwo);
+});
+
+test('composePrompt: flow voiceMode and script still works on prompt-2', () => {
+  const scriptText = [
+    'GANCHO',
+    'Leo: «¡Mira esto!»',
+    'DESARROLLO',
+    'Bot: «Increíble hallazgo.»',
+  ].join('\n');
+
+  const composed = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    voiceMode: 'flow',
+    script: scriptText,
+  });
+
+  assert.ok(composed.includes('Modo Flow'));
+  assert.ok(composed.includes('natural lip-sync'));
+  assert.ok(composed.includes('=== GUION DEL VIDEO ==='));
+  assert.ok(composed.includes(scriptText));
+  assert.ok(composed.includes(`[CANTIDAD_IMAGENES]: ${imageCountFor(scriptText)}`));
+});
