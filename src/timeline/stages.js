@@ -144,13 +144,32 @@ export function detectAuto(scriptMessages, illustratorMessages, hasVoice = false
 // video.overrides[key] = true | false wins over detection; anything else means "auto".
 // 'current' is the first stage that is not done. hasVoice marks the voice stage done when a
 // narration track exists for the video.
-export function deriveStages(video, scriptMessages, illustratorMessages, { hasVoice = false, charactersApproved = false } = {}) {
+export function deriveStages(
+  video,
+  scriptMessages,
+  illustratorMessages,
+  { hasVoice = false, charactersApproved = false, videoType = null, branch = null } = {}
+) {
+  const resolvedVideoType = videoType ?? branch?.videoType ?? video?.videoType ?? 'explainer';
   const auto = detectAuto(scriptMessages, illustratorMessages, hasVoice, charactersApproved);
   const overrides = video?.overrides && typeof video.overrides === 'object' ? video.overrides : {};
 
   let currentAssigned = false;
   return STAGES.map(({ key, label, auto: isAuto }) => {
     const overridden = typeof overrides[key] === 'boolean';
+    const isCharactersSkipped = key === 'characters' && resolvedVideoType === 'list';
+
+    if (isCharactersSkipped && !overridden) {
+      return {
+        key,
+        label,
+        status: 'not-needed',
+        notNeeded: true,
+        source: 'auto',
+        overridden: false,
+      };
+    }
+
     const done = overridden ? overrides[key] : auto[key] === true;
     let status = 'pending';
     if (done) {
@@ -160,12 +179,19 @@ export function deriveStages(video, scriptMessages, illustratorMessages, { hasVo
       currentAssigned = true;
     }
     const detected = !overridden && auto[key] === true;
-    return { key, label, status, source: overridden || (!isAuto && !detected) ? 'manual' : 'auto', overridden };
+    return {
+      key,
+      label,
+      status,
+      source: overridden || (!isAuto && !detected) ? 'manual' : 'auto',
+      overridden,
+      notNeeded: false,
+    };
   });
 }
 
 export function countDone(stages) {
-  return stages.filter((stage) => stage.status === 'done').length;
+  return stages.filter((stage) => stage.status === 'done' || stage.status === 'not-needed').length;
 }
 
 export function isPublished(stages) {

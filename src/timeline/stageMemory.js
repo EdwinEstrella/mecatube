@@ -5,7 +5,7 @@ export function getStageStorageKey(videoId) {
 }
 
 export function getInitialStageKey(stageList = []) {
-  const notDone = stageList.find((stage) => stage.status !== 'done');
+  const notDone = stageList.find((stage) => stage.status !== 'done' && stage.status !== 'not-needed');
   return notDone?.key ?? stageList[stageList.length - 1]?.key ?? null;
 }
 

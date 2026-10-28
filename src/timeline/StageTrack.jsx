@@ -1,16 +1,21 @@
-export const STATUS_LABELS = { done: 'completada', current: 'en curso', pending: 'pendiente' };
+export const STATUS_LABELS = {
+  done: 'completada',
+  current: 'en curso',
+  pending: 'pendiente',
+  'not-needed': 'no requerida',
+};
 
 // Presentational: the stage dots joined by a line. Passing onSelect makes each dot/label a button.
 export default function StageTrack({ stages, selectedKey, onSelect }) {
   return (
     <ol className="stage-track">
       {stages.map((stage, index) => {
-        const isLinked = index > 0 && stages[index - 1].status === 'done';
+        const isLinked = index > 0 && (stages[index - 1].status === 'done' || stages[index - 1].status === 'not-needed');
         const isSelected = stage.key === selectedKey;
         const hint = `${stage.label}: ${STATUS_LABELS[stage.status] ?? stage.status}${stage.overridden ? ' (manual)' : ''}`;
         const dot = (
           <span className="stage-track__dot" aria-hidden="true">
-            {stage.status === 'done' ? '✓' : ''}
+            {stage.status === 'done' ? '✓' : stage.status === 'not-needed' ? '—' : ''}
           </span>
         );
         const content = (

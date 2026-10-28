@@ -115,20 +115,24 @@ export default function TimelineView({
 
   const stages = useMemo(() => {
     if (!video) return [];
+    const currentBranch = branches.find((b) => b.id === video.branchId);
     return deriveStages(video, chats[video.scriptConversationId], chats[video.illustratorConversationId], {
       hasVoice: Boolean(voices[video.id]),
       charactersApproved: charactersDone(characters[video.id]),
+      videoType: currentBranch?.videoType,
     });
-  }, [video, chats, voices, characters]);
+  }, [video, branches, chats, voices, characters]);
 
   const doneCount = countDone(stages);
 
   const videoStagesMap = useMemo(() => {
     const map = {};
     for (const vid of videos) {
+      const vidBranch = branches.find((b) => b.id === vid.branchId);
       const vidStages = deriveStages(vid, chats[vid.scriptConversationId], chats[vid.illustratorConversationId], {
         hasVoice: Boolean(voices[vid.id]),
         charactersApproved: charactersDone(characters[vid.id]),
+        videoType: vidBranch?.videoType,
       });
       map[vid.id] = {
         doneCount: countDone(vidStages),
@@ -136,7 +140,7 @@ export default function TimelineView({
       };
     }
     return map;
-  }, [videos, chats, voices, characters]);
+  }, [videos, branches, chats, voices, characters]);
 
   const run = async (action) => {
     setError('');

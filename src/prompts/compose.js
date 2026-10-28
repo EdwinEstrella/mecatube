@@ -1,13 +1,9 @@
 // Pure composition pipeline for system prompts.
-// Chains: applyStyle (prompt-2 only) -> applyOrientation -> applyVideoType (placeholder for T10)
+// Chains: applyStyle (prompt-2 only) -> applyOrientation -> applyVideoType
 
 import { applyStyle } from './styles.js';
 import { applyOrientation } from './orientation.js';
-
-function applyVideoType(text /*, videoType, opts */) {
-  // Placeholder hook for T10: video type prompt adaptation
-  return text;
-}
+import { applyVideoType } from './videoTypes.js';
 
 export function composePrompt(
   text,
@@ -25,8 +21,8 @@ export function composePrompt(
   // 2. Aspect ratio / orientation adaptation (horizontal vs vertical)
   result = applyOrientation(result, orientation);
 
-  // 3. Video type adaptation (placeholder hook for T10)
-  result = applyVideoType(result, videoType, { presetId, style, orientation });
+  // 3. Video type adaptation
+  result = applyVideoType(result, presetId, videoType);
 
   return result;
 }

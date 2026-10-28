@@ -147,12 +147,18 @@ export default function VideoDetail({
           )}
 
           {selectedStage.key === 'characters' && (
-            <CharactersPanel
-              video={video}
-              characters={characters}
-              onSetProject={onSetFlowProject}
-              onOpenProject={onOpenFlowProject}
-            />
+            selectedStage.status === 'not-needed' ? (
+              <p className="video-detail__stage-hint">
+                Esta etapa no es requerida para videos de tipo lista (sin personajes principales).
+              </p>
+            ) : (
+              <CharactersPanel
+                video={video}
+                characters={characters}
+                onSetProject={onSetFlowProject}
+                onOpenProject={onOpenFlowProject}
+              />
+            )
           )}
 
           {(selectedStage.key === 'images' || selectedStage.key === 'animations' || selectedStage.key === 'thumbnail') && (
