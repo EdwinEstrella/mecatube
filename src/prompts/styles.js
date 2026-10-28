@@ -1,12 +1,38 @@
 // Visual styles catalog and prompt transformation for workspace-level art style.
 // Preserves verbatim prompt-2.txt while substituting style wording at send time.
 
+import {
+  NEW_STYLE_SPECS,
+  buildStyleReplacements,
+  setDefaultFromStrings,
+} from './styleSpecs.js';
+
 export const DEFAULT_STYLE_ID = 'stickman';
+
+export const STYLE_CATEGORIES = [
+  'Básicos',
+  'Cinematográficos',
+  'Animación 3D',
+  'Artesanales',
+  'Arte pintado',
+  'Para explicar',
+];
+
+const styleImages =
+  typeof import.meta.glob === 'function'
+    ? import.meta.glob('../assets/styles/*.png', { eager: true, query: '?url', import: 'default' })
+    : {};
+
+function getNewStyleImage(id) {
+  const key = '../assets/styles/' + id + '.png';
+  return styleImages[key] || null;
+}
 
 export const STYLES = [
   {
     id: 'stickman',
     label: 'Stickman',
+    category: 'Básicos',
     description: 'Personajes de palito dibujados a mano con fondo detallado',
     image: new URL('../assets/styles/stickman.png', import.meta.url).href,
     englishDescription: 'Simple hand-drawn 2D stickman cartoon style for an educational explainer video: clean bold black linework, flat colors with minimal soft shading. True stickman characters with stick bodies and empty hands over detailed painted backgrounds.',
@@ -14,6 +40,7 @@ export const STYLES = [
   {
     id: 'cartoon',
     label: '2D',
+    category: 'Básicos',
     description: 'Personajes redondeados y expresivos con líneas gruesas y colores vivos',
     image: new URL('../assets/styles/cartoon.png', import.meta.url).href,
     englishDescription: 'Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background',
@@ -21,6 +48,7 @@ export const STYLES = [
   {
     id: 'anime',
     label: 'Anime',
+    category: 'Básicos',
     description: 'Estilo anime japonés con sombreado cel y fondos pictóricos',
     image: new URL('../assets/styles/anime.png', import.meta.url).href,
     englishDescription: 'Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background',
@@ -28,6 +56,7 @@ export const STYLES = [
   {
     id: '3d',
     label: '3D',
+    category: 'Básicos',
     description: 'Estilo animación 3D estilizada con iluminación suave y cinematográfica',
     image: new URL('../assets/styles/3d.png', import.meta.url).href,
     englishDescription: 'Stylized 3D animated movie look: soft rounded 3D characters, soft global illumination, cinematic depth of field, family animation film quality',
@@ -35,6 +64,7 @@ export const STYLES = [
   {
     id: 'flat',
     label: 'Plano',
+    category: 'Básicos',
     description: 'Ilustración vectorial moderna, formas geométricas y paleta armónica',
     image: new URL('../assets/styles/flat.png', import.meta.url).href,
     englishDescription: 'Modern flat vector illustration: geometric shapes, thin or no outlines, limited harmonious palette, subtle grain texture, minimal shading, editorial infographic look',
@@ -42,12 +72,21 @@ export const STYLES = [
   {
     id: 'realistic',
     label: 'Realista',
+    category: 'Básicos',
     description: 'Estilo cinematográfico fotorrealista con iluminación y texturas reales',
     image: new URL('../assets/styles/realistic.png', import.meta.url).href,
     englishDescription: 'Photorealistic cinematic style: real people and places, realistic lighting, shallow depth of field, subtle film grain, documentary quality',
   },
+  ...NEW_STYLE_SPECS.map((spec) => ({
+    id: spec.id,
+    label: spec.label,
+    category: spec.category,
+    idealFor: spec.idealFor,
+    description: spec.description,
+    image: getNewStyleImage(spec.id),
+    englishDescription: spec.englishDescription,
+  })),
 ];
-
 export function getStyle(id) {
   return STYLES.find((s) => s.id === id) || STYLES[0];
 }
@@ -1224,6 +1263,13 @@ texturas realistas y vestuario auténtico. Nunca caricaturas, anime ni figuras e
     ],
   ],
 };
+
+const BASE_FROM_STRINGS = STYLE_REPLACEMENTS.cartoon.map(([from]) => from);
+setDefaultFromStrings(BASE_FROM_STRINGS);
+
+for (const spec of NEW_STYLE_SPECS) {
+  STYLE_REPLACEMENTS[spec.id] = buildStyleReplacements(spec, BASE_FROM_STRINGS);
+}
 
 function replaceSubstring(text, from, to) {
   if (typeof text !== 'string') return '';

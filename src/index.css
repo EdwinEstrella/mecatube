@@ -3947,8 +3947,29 @@ body {
   gap: 12px;
 }
 
-/* Visual style picker: small square cards in an aligned grid */
+/* Visual style picker: category groups with small square cards in an aligned grid */
 .style-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.style-picker__category {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.style-picker__category-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.style-picker__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 10px;
@@ -4027,6 +4048,55 @@ body {
   border-radius: 50%;
   background: var(--accent);
   color: #ffffff;
+}
+
+/* Placeholder tile when preview image is null */
+.style-picker__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.style-picker__placeholder-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  word-break: break-word;
+}
+
+.style-picker__placeholder--basicos {
+  background: linear-gradient(135deg, #1e293b, #334155);
+}
+
+.style-picker__placeholder--cinematograficos {
+  background: linear-gradient(135deg, #0f172a, #1e1b4b);
+}
+
+.style-picker__placeholder--animacion-3d {
+  background: linear-gradient(135deg, #312e81, #4f46e5);
+}
+
+.style-picker__placeholder--artesanales {
+  background: linear-gradient(135deg, #78350f, #d97706);
+}
+
+.style-picker__placeholder--arte-pintado {
+  background: linear-gradient(135deg, #064e3b, #059669);
+}
+
+.style-picker__placeholder--para-explicar {
+  background: linear-gradient(135deg, #164e63, #0284c7);
+}
+
+.style-picker__placeholder--default {
+  background: linear-gradient(135deg, #374151, #4b5563);
 }
 
 

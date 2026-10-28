@@ -10,6 +10,10 @@ import {
   getStyle,
   applyStyle,
 } from './styles.js';
+import {
+  NEW_STYLE_SPECS,
+  buildStyleReplacements,
+} from './styleSpecs.js';
 import electronStyles from '../../electron/styles.cjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,22 +21,27 @@ const __dirname = path.dirname(__filename);
 const promptTwoPath = path.resolve(__dirname, 'prompt-2.txt');
 const promptTwo = fs.readFileSync(promptTwoPath, 'utf8');
 
-test('catalog contains all 6 styles in order with stickman as default', () => {
+test('catalog contains all 26 styles in order with stickman as default', () => {
   const ids = STYLES.map((s) => s.id);
-  assert.deepEqual(ids, ['stickman', 'cartoon', 'anime', '3d', 'flat', 'realistic']);
+  assert.deepEqual(ids, electronStyles.STYLE_IDS);
+  assert.equal(ids.length, 26);
   assert.equal(DEFAULT_STYLE_ID, 'stickman');
 
   // Verify alignment with electron/styles.cjs
-  assert.deepEqual(electronStyles.STYLE_IDS, ids);
   assert.equal(electronStyles.DEFAULT_STYLE_ID, 'stickman');
 
-  // Verify Spanish labels and descriptions
+  const originalSix = ['stickman', 'cartoon', 'anime', '3d', 'flat', 'realistic'];
+
+  // Verify Spanish labels, categories, and descriptions
   for (const style of STYLES) {
     assert.ok(style.id);
     assert.ok(style.label);
     assert.ok(style.description);
-    assert.ok(style.image);
+    assert.ok(style.category);
     assert.ok(style.englishDescription);
+    if (originalSix.includes(style.id)) {
+      assert.ok(style.image);
+    }
   }
 });
 
@@ -42,6 +51,8 @@ test('getStyle resolves known ids and falls back to stickman on unknown', () => 
   assert.equal(getStyle('3d').id, '3d');
   assert.equal(getStyle('flat').id, 'flat');
   assert.equal(getStyle('realistic').id, 'realistic');
+  assert.equal(getStyle('cine-realista').id, 'cine-realista');
+  assert.equal(getStyle('pixel-art').id, 'pixel-art');
   assert.equal(getStyle('unknown-style').id, 'stickman');
   assert.equal(getStyle(null).id, 'stickman');
   assert.equal(getStyle(undefined).id, 'stickman');
@@ -53,7 +64,8 @@ test('applyStyle for stickman returns the text byte-identical', () => {
 });
 
 test('applyStyle for each non-stickman style removes all stickman wording and preserves workflow/headings/placeholders', () => {
-  const nonStickmanStyles = ['cartoon', 'anime', '3d', 'flat', 'realistic'];
+  const nonStickmanStyles = STYLES.filter((s) => s.id !== 'stickman').map((s) => s.id);
+  assert.equal(nonStickmanStyles.length, 25);
 
   const requiredHeadings = [
     'ETAPA 1 — SOLICITAR GUION',
@@ -124,6 +136,30 @@ test('applyStyle for each non-stickman style removes all stickman wording and pr
     assert.ok(
       styled.includes(styleObj.englishDescription),
       `Style ${styleId} missing required english description: ${styleObj.englishDescription}`
+    );
+  }
+});
+
+test('for every new style, every replacement from actually occurs in prompt-2.txt and styled prompt contains englishDescription', () => {
+  for (const spec of NEW_STYLE_SPECS) {
+    const replacements = buildStyleReplacements(spec);
+    assert.ok(Array.isArray(replacements) && replacements.length > 0);
+
+    for (const [from, to] of replacements) {
+      const occursExact = promptTwo.includes(from);
+      const occursNormalized =
+        promptTwo.includes(from.replaceAll('\r\n', '\n')) ||
+        promptTwo.includes(from.replaceAll(/(?<!\r)\n/g, '\r\n'));
+      assert.ok(
+        occursExact || occursNormalized,
+        `Style ${spec.id} replacement "from" string not found in prompt-2.txt: "${from.slice(0, 40)}..."`
+      );
+    }
+
+    const styled = applyStyle(promptTwo, spec.id);
+    assert.ok(
+      styled.includes(spec.englishDescription),
+      `Style ${spec.id} missing englishDescription in styled prompt`
     );
   }
 });
