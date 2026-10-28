@@ -4,36 +4,36 @@ import CreateWorkspaceModal from './workspace/CreateWorkspaceModal.jsx';
 import UpdateButton from './updates/UpdateButton.jsx';
 import logoUrl from './assets/logo.png';
 
-// Caption glyphs drawn on a 10x10 grid with 1px strokes, matching the Windows caption style used by Chromium-based browsers
+// Crisp 12px caption glyphs matching the user's Electron reference frame
 function MinimizeIcon() {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" shapeRendering="crispEdges" aria-hidden="true">
-      <rect x="0" y="4.5" width="10" height="1" fill="currentColor" />
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <rect x="1" y="5" width="10" height="1" fill="currentColor" />
     </svg>
   );
 }
 
 function MaximizeIcon() {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" shapeRendering="crispEdges" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1" />
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1" />
     </svg>
   );
 }
 
 function RestoreIcon() {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" shapeRendering="crispEdges" aria-hidden="true">
-      <rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
-      <path d="M2.5 2.5V0.5h7v7h-2" fill="none" stroke="currentColor" strokeWidth="1" />
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <rect x="1" y="3" width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1" />
+      <polyline points="3 3 3 1 11 1 11 9" fill="none" stroke="currentColor" strokeWidth="1" />
     </svg>
   );
 }
 
 function CloseIcon() {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" strokeWidth="1" />
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="1" />
     </svg>
   );
 }
@@ -142,10 +142,10 @@ export default function TitleBar() {
                             }
                           }}
                         >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span className="title-bar__dropdown-text">
                             {ws.name}
                           </span>
-                          {isActive && <span style={{ color: '#4d6bfe', marginLeft: '8px' }}>✓</span>}
+                          {isActive && <span className="title-bar__dropdown-check">✓</span>}
                         </button>
                       );
                     })}

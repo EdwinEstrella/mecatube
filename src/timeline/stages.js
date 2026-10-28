@@ -78,9 +78,10 @@ export function isScriptMessage(content) {
 }
 
 // ETAPA 4 output format (prompt-1.txt L456-467): "METADATOS DE PUBLICACION", or the
-// "1. TITULOS" and "4. ETIQUETAS" section headings together
+// "1. TITULOS" and "4. ETIQUETAS" section headings together, or platform blocks (Shorts/TikTok/Reels)
 export function isMetadata(lines) {
   if (test(lines, /^(?:\d+[.)] ?)?metadatos de publicacion:?$/)) return true;
+  if (test(lines, /youtube shorts/i) && (test(lines, /tiktok/i) || test(lines, /instagram reels/i))) return true;
   return (
     test(lines, /^(?:\d+[.)] ?)?titulos:?(?: \(.*\))?$/) && test(lines, /^(?:\d+[.)] ?)?etiquetas:?(?: \(.*\))?$/)
   );
@@ -144,14 +145,48 @@ export function detectAuto(scriptMessages, illustratorMessages, hasVoice = false
 // video.overrides[key] = true | false wins over detection; anything else means "auto".
 // 'current' is the first stage that is not done. hasVoice marks the voice stage done when a
 // narration track exists for the video.
-export function deriveStages(video, scriptMessages, illustratorMessages, { hasVoice = false, charactersApproved = false } = {}) {
+export function branchHasCharacters(branch) {
+  if (!branch) return false;
+  if (Array.isArray(branch.characters) && branch.characters.length > 0) return true;
+  if (branch.characterMode === 'own' && Array.isArray(branch.characterImages) && branch.characterImages.length > 0) {
+    return true;
+  }
+  return false;
+}
+
+export function deriveStages(
+  video,
+  scriptMessages,
+  illustratorMessages,
+  { hasVoice = false, charactersApproved = false, videoType = null, branch = null } = {}
+) {
+  const resolvedBranch = branch ?? video?.branch ?? null;
+  const resolvedVideoType = videoType ?? resolvedBranch?.videoType ?? video?.videoType ?? 'explainer';
   const auto = detectAuto(scriptMessages, illustratorMessages, hasVoice, charactersApproved);
   const overrides = video?.overrides && typeof video.overrides === 'object' ? video.overrides : {};
+  const hasBranchChars = branchHasCharacters(resolvedBranch);
+  const hasBrief = Boolean(video?.brief && typeof video.brief === 'string' && video.brief.trim());
 
   let currentAssigned = false;
   return STAGES.map(({ key, label, auto: isAuto }) => {
     const overridden = typeof overrides[key] === 'boolean';
-    const done = overridden ? overrides[key] : auto[key] === true;
+    const isCharactersSkipped = key === 'characters' && resolvedVideoType === 'list';
+
+    if (isCharactersSkipped && !overridden) {
+      return {
+        key,
+        label,
+        status: 'not-needed',
+        notNeeded: true,
+        source: 'auto',
+        overridden: false,
+      };
+    }
+
+    const isBranchCharactersDone = key === 'characters' && hasBranchChars;
+    const isBriefDone = key === 'idea' && hasBrief;
+    const isAutoDone = auto[key] === true || isBranchCharactersDone || isBriefDone;
+    const done = overridden ? overrides[key] : isAutoDone;
     let status = 'pending';
     if (done) {
       status = 'done';
@@ -159,13 +194,20 @@ export function deriveStages(video, scriptMessages, illustratorMessages, { hasVo
       status = 'current';
       currentAssigned = true;
     }
-    const detected = !overridden && auto[key] === true;
-    return { key, label, status, source: overridden || (!isAuto && !detected) ? 'manual' : 'auto', overridden };
+    const detected = !overridden && isAutoDone;
+    return {
+      key,
+      label,
+      status,
+      source: overridden || (!isAuto && !detected) ? 'manual' : 'auto',
+      overridden,
+      notNeeded: false,
+    };
   });
 }
 
 export function countDone(stages) {
-  return stages.filter((stage) => stage.status === 'done').length;
+  return stages.filter((stage) => stage.status === 'done' || stage.status === 'not-needed').length;
 }
 
 export function isPublished(stages) {

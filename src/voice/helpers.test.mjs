@@ -26,11 +26,12 @@ const block = (n, title) =>
   ].join('\n');
 const IDEAS = `10 IDEAS DE VIDEO\n${[1, 2, 3].map((n) => block(n, `Tema ${n}`)).join('\n')}\nSelecciona una idea escribiendo su número (1–10).`;
 
-function fakeApi(videos = []) {
+function fakeApi(videos = [], active = null) {
   const created = [];
   return {
     created,
     listVideos: async () => videos,
+    getActiveVideo: async () => active,
     createVideo: async (input) => {
       created.push(input);
       return { id: 'new', ...input };
@@ -76,6 +77,57 @@ await test('ensureScriptVideo: title and number come from the chosen idea', asyn
 
 await test('ensureScriptVideo: refuses without a conversation', async () => {
   await assert.rejects(ensureScriptVideo(fakeApi(), null, []), /conversación guardada/);
+});
+
+await test('ensureScriptVideo: empty slot links without calling chooseTarget', async () => {
+  const active = { id: 'v1', branchId: 'b-1', scriptConversationId: null };
+  const api = fakeApi([], active);
+  let calledChoose = false;
+  const video = await ensureScriptVideo(api, 'c1', [], () => {
+    calledChoose = true;
+    return 'new';
+  });
+  assert.equal(calledChoose, false);
+  assert.deepEqual(api.created, [{ scriptConversationId: 'c1' }]);
+  assert.equal(video.id, 'new');
+});
+
+await test('ensureScriptVideo: occupied slot + new calls createVideo with newVideo true and active branchId', async () => {
+  const active = { id: 'v1', branchId: 'b-1', scriptConversationId: 'c-old' };
+  const api = fakeApi([], active);
+  let slotSeen = null;
+  const video = await ensureScriptVideo(api, 'c1', [], async ({ slot, video: v }) => {
+    slotSeen = slot;
+    assert.equal(v.id, 'v1');
+    return 'new';
+  });
+  assert.equal(slotSeen, 'script');
+  assert.deepEqual(api.created, [{ scriptConversationId: 'c1', newVideo: true, branchId: 'b-1' }]);
+  assert.equal(video.id, 'new');
+});
+
+await test('ensureScriptVideo: occupied slot + current calls createVideo without newVideo', async () => {
+  const active = { id: 'v1', branchId: 'b-1', scriptConversationId: 'c-old' };
+  const api = fakeApi([], active);
+  const video = await ensureScriptVideo(api, 'c1', [], async () => 'current');
+  assert.deepEqual(api.created, [{ scriptConversationId: 'c1' }]);
+  assert.equal(video.id, 'new');
+});
+
+await test('ensureScriptVideo: occupied slot + null returns null and createVideo not called', async () => {
+  const active = { id: 'v1', branchId: 'b-1', scriptConversationId: 'c-old' };
+  const api = fakeApi([], active);
+  const video = await ensureScriptVideo(api, 'c1', [], async () => null);
+  assert.equal(video, null);
+  assert.equal(api.created.length, 0);
+});
+
+await test('ensureScriptVideo: occupied slot + no chooseTarget behaves as new', async () => {
+  const active = { id: 'v1', branchId: 'b-1', scriptConversationId: 'c-old' };
+  const api = fakeApi([], active);
+  const video = await ensureScriptVideo(api, 'c1', []);
+  assert.deepEqual(api.created, [{ scriptConversationId: 'c1', newVideo: true, branchId: 'b-1' }]);
+  assert.equal(video.id, 'new');
 });
 
 await test('voiceDetail: tagline and creation date, tolerant of missing data', () => {

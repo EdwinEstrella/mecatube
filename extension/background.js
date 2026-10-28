@@ -138,7 +138,7 @@ async function ensureContentScript(tabId, file = 'content.js', label = 'DeepSeek
 // The DeepSeek tab serves one job at a time: a prompt in flight or a history read
 let deepseekBusy = false;
 
-async function handlePrompt({ requestId, text, deepseekUrl }) {
+async function handlePrompt({ requestId, text, deepseekUrl, webSearch }) {
   if (deepseekBusy) {
     send({ type: 'error', requestId, message: 'DeepSeek está ocupado con otra tarea. Inténtalo de nuevo en unos segundos.' });
     return;
@@ -152,6 +152,10 @@ async function handlePrompt({ requestId, text, deepseekUrl }) {
     const port = chrome.tabs.connect(tabId, { name: 'mecatube-prompt' });
     let finished = false;
     port.onMessage.addListener((message) => {
+      if (message?.type === 'warning') {
+        console.warn('[Mecatube background]', message.message);
+        return;
+      }
       send({ ...message, requestId });
       if (message.type === 'done' || message.type === 'error') {
         finished = true;
@@ -165,7 +169,7 @@ async function handlePrompt({ requestId, text, deepseekUrl }) {
       deepseekBusy = false;
       send({ type: 'error', requestId, message: 'La página de DeepSeek se cerró o se recargó antes de terminar la respuesta.' });
     });
-    port.postMessage({ type: 'prompt', text });
+    port.postMessage({ type: 'prompt', text, webSearch: webSearch !== false });
   } catch (error) {
     deepseekBusy = false;
     send({ type: 'error', requestId, message: error.message });
@@ -432,7 +436,7 @@ function runTabStep(tabId, command, { portName = 'mecatube-flow', label = 'Flow'
 
 // model / outputs / references (and, for kind 'animate', sourceAssetId / video) travel to the Flow tab
 // untouched; flow.js decides what to do with them
-async function handleFlowGenerate({ requestId, prompt, projectUrl, model, outputs, references, kind, sourceAssetId, video }) {
+async function handleFlowGenerate({ requestId, prompt, projectUrl, model, outputs, references, kind, sourceAssetId, video, aspect, orientation }) {
   if (flowBusy) {
     send({ type: 'flow-error', requestId, message: 'Ya hay otro trabajo de Flow en curso.' });
     return;
@@ -472,7 +476,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
 
     const result = await runTabStep(
       tabId,
-      { type: 'generate', prompt, model, outputs, references, kind, sourceAssetId, video },
+      { type: 'generate', prompt, model, outputs, references, kind, sourceAssetId, video, aspect, orientation },
       {
         settleOn: 'result',
         timeoutMs: kind === 'animate' ? FLOW_ANIMATE_TIMEOUT_MS : FLOW_JOB_TIMEOUT_MS,

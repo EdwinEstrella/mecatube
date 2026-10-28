@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cleanIpcError } from '../voice/constants.js';
+import CustomCheckbox from '../ui/CustomCheckbox.jsx';
 
 const MASKED_KEY = '••••••••••••••••••••••••••••••••';
 
@@ -9,11 +10,19 @@ export default function DeepSeekSettings() {
   const [isEditing, setIsEditing] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState({ kind: '', text: '' });
+  const [webSearch, setWebSearch] = useState(true);
 
   const configured = status?.configured === true;
 
   useEffect(() => {
     window.electronAPI?.getDeepSeekStatus().then(setStatus, () => setStatus({ configured: false }));
+    window.electronAPI?.getDeepSeekPrefs?.()
+      .then((prefs) => {
+        if (typeof prefs?.webSearch === 'boolean') {
+          setWebSearch(prefs.webSearch);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const run = async (action) => {
@@ -51,6 +60,13 @@ export default function DeepSeekSettings() {
       setIsEditing(false);
       setMessage({ kind: 'ok', text: 'API Key eliminada.' });
     });
+
+  const handleToggleWebSearch = async (checked) => {
+    setWebSearch(checked);
+    try {
+      await window.electronAPI?.saveDeepSeekPrefs?.({ webSearch: checked });
+    } catch {}
+  };
 
   const displayValue = isEditing ? key : configured ? MASKED_KEY : key;
 
@@ -116,6 +132,23 @@ export default function DeepSeekSettings() {
       {message.text && (
         <p className={message.kind === 'error' ? 'prompt-editor__error' : 'settings__card-text'}>{message.text}</p>
       )}
+
+      {/* Web search toggle and note */}
+      <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+        <CustomCheckbox
+          checked={webSearch}
+          onChange={handleToggleWebSearch}
+          label="Buscar en internet (DeepSeek)"
+        />
+        {configured && (
+          <p
+            className="settings__card-text"
+            style={{ marginTop: '8px', fontSize: '13px', opacity: 0.85, color: 'var(--text-muted)' }}
+          >
+            Con la clave API, DeepSeek no busca en internet; usa la extensión para datos actualizados.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

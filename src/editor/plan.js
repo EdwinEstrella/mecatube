@@ -14,6 +14,18 @@ export const compositionSize = {
   fps: FPS,
 };
 
+export function frameSize(orientation) {
+  if (orientation === 'vertical') {
+    return { width: 1080, height: 1920 };
+  }
+  return { width: 1920, height: 1080 };
+}
+
+export function getCompositionDimensions(orientation, fps = FPS) {
+  const { width, height } = frameSize(orientation);
+  return { width, height, fps };
+}
+
 function round3(num) {
   const rounded = Math.round((num + Number.EPSILON) * 1000) / 1000;
   return rounded === 0 ? 0 : rounded;

@@ -24,7 +24,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listIdeas: () => ipcRenderer.invoke('ideas:list'),
   saveIdea: (idea) => ipcRenderer.invoke('ideas:save', idea),
   deleteIdea: (id) => ipcRenderer.invoke('ideas:delete', { id }),
-  listVideos: () => ipcRenderer.invoke('videos:list'),
+  listBranches: () => ipcRenderer.invoke('branches:list'),
+  createBranch: (input) => ipcRenderer.invoke('branches:create', input),
+  updateBranch: (id, patch) => ipcRenderer.invoke('branches:update', { ...patch, id }),
+  deleteBranch: (id) => ipcRenderer.invoke('branches:delete', { id }),
+  setBranchCharacters: (branchId, characters, flowProjectUrl) => {
+    if (typeof branchId === 'object' && branchId !== null) {
+      return ipcRenderer.invoke('branches:set-characters', branchId);
+    }
+    return ipcRenderer.invoke('branches:set-characters', { branchId, characters, flowProjectUrl });
+  },
+  saveBranchCharactersFromVideo: (branchId, videoId) =>
+    ipcRenderer.invoke('branches:save-from-video', { branchId, videoId }),
+  addBranchCharacterImage: (payload) =>
+    ipcRenderer.invoke('branches:add-character-image', typeof payload === 'object' && payload !== null ? payload : { branchId: payload }),
+  generateSeriesOutline: (payload) =>
+    ipcRenderer.invoke('branches:generate-series-outline', typeof payload === 'object' && payload !== null ? payload : { prompt: payload }),
+  listVideos: (branchId) => ipcRenderer.invoke('videos:list', branchId),
+  getActiveVideo: () => ipcRenderer.invoke('videos:get-active'),
+  setActiveVideo: (id) => ipcRenderer.invoke('videos:set-active', { id }),
   createVideo: (input) => ipcRenderer.invoke('videos:create', input),
   updateVideo: (id, patch) => ipcRenderer.invoke('videos:update', { ...patch, id }),
   setVideoStage: (id, key, value) => ipcRenderer.invoke('videos:set-stage', { id, key, value }),
@@ -33,6 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveCartesiaKey: (key) => ipcRenderer.invoke('secrets:cartesia-save', { key }),
   clearCartesiaKey: () => ipcRenderer.invoke('secrets:cartesia-clear'),
   testCartesiaKey: () => ipcRenderer.invoke('secrets:cartesia-test'),
+  getDeepSeekPrefs: () => ipcRenderer.invoke('deepseek:prefs-get'),
+  saveDeepSeekPrefs: (prefs) => ipcRenderer.invoke('deepseek:prefs-set', prefs),
   getDeepSeekStatus: () => ipcRenderer.invoke('secrets:deepseek-status'),
   saveDeepSeekKey: (key) => ipcRenderer.invoke('secrets:deepseek-save', { key }),
   clearDeepSeekKey: () => ipcRenderer.invoke('secrets:deepseek-clear'),
@@ -146,4 +166,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createWorkspace: (payload) => ipcRenderer.invoke('workspace:create', payload),
   switchWorkspace: (id) => ipcRenderer.invoke('workspace:switch', { id }),
   revealWorkspace: () => ipcRenderer.invoke('workspace:reveal'),
+  setWorkspaceStyle: (style) => ipcRenderer.invoke('workspace:set-style', typeof style === 'string' ? { style } : style),
 });

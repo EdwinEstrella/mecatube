@@ -10,7 +10,7 @@ import { slide } from '@remotion/transitions/slide';
 import { buildPlan, activeSubtitle, PUNCH_FRAMES } from './plan.js';
 import KaraokeCaptions from './KaraokeCaptions.jsx';
 
-export { compositionSize } from './plan.js';
+export { compositionSize, frameSize, getCompositionDimensions } from './plan.js';
 
 function Shot({ item, src }) {
   const frame = useCurrentFrame();
@@ -102,7 +102,8 @@ function Shot({ item, src }) {
 
 function Subtitles({ subtitles }) {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const isVertical = height > width;
 
   const active = activeSubtitle(subtitles, frame / fps);
   if (!active || !active.text) {
@@ -113,7 +114,7 @@ function Subtitles({ subtitles }) {
     <div
       style={{
         position: 'absolute',
-        bottom: 80,
+        bottom: isVertical ? 260 : 80,
         left: 0,
         right: 0,
         display: 'flex',
@@ -124,10 +125,10 @@ function Subtitles({ subtitles }) {
     >
       <div
         style={{
-          maxWidth: '80%',
+          maxWidth: isVertical ? '88%' : '80%',
           color: '#ffffff',
           fontWeight: 'bold',
-          fontSize: 56,
+          fontSize: isVertical ? 64 : 56,
           fontFamily: 'Inter, Arial, sans-serif',
           textAlign: 'center',
           textShadow: '0 2px 6px #000000, 0 0 12px #000000',

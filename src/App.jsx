@@ -7,6 +7,7 @@ import TimelineView from './TimelineView.jsx';
 import SettingsView from './SettingsView.jsx';
 import VoiceOverView from './VoiceOverView.jsx';
 import ErrorBoundary from './ui/ErrorBoundary.jsx';
+import VideoTargetDialog from './ui/VideoTargetDialog.jsx';
 
 export default function App() {
   const [activeView, setActiveView] = useState('chat');
@@ -68,6 +69,7 @@ export default function App() {
           </ErrorBoundary>
         </main>
       </div>
+      <VideoTargetDialog />
     </div>
   );
 }

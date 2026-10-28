@@ -157,16 +157,16 @@ function createBridge({ port = BRIDGE_PORT, host = BRIDGE_HOST } = {}) {
     server = null;
   }
 
-  function sendPrompt({ requestId, text, deepseekUrl }) {
+  function sendPrompt({ requestId, text, deepseekUrl, webSearch = true }) {
     if (!client || client.readyState !== client.OPEN) {
       throw new Error('La extensión de DeepSeek no está conectada.');
     }
-    client.send(JSON.stringify({ type: 'prompt', requestId, text, deepseekUrl: deepseekUrl ?? null }));
+    client.send(JSON.stringify({ type: 'prompt', requestId, text, deepseekUrl: deepseekUrl ?? null, webSearch: webSearch !== false }));
   }
 
   // model / outputs / references (see flow.cjs) are applied by the extension inside the Flow page
   // Image jobs send model/outputs/references; animate jobs (kind 'animate') add sourceAssetId and video
-  function sendFlowJob({ requestId, prompt, projectUrl, model, outputs, references, kind, sourceAssetId, video }) {
+  function sendFlowJob({ requestId, prompt, projectUrl, model, outputs, references, kind, sourceAssetId, video, aspect, orientation }) {
     if (!client || client.readyState !== client.OPEN) {
       throw new Error('La extensión del navegador no está conectada.');
     }
@@ -179,6 +179,8 @@ function createBridge({ port = BRIDGE_PORT, host = BRIDGE_HOST } = {}) {
         model: model ?? null,
         outputs: outputs ?? null,
         references: references ?? [],
+        ...(aspect ? { aspect } : {}),
+        ...(orientation ? { orientation } : {}),
         ...(kind ? { kind } : {}),
         ...(sourceAssetId ? { sourceAssetId } : {}),
         ...(video ? { video } : {}),

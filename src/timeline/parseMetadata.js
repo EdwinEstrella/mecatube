@@ -1,5 +1,7 @@
-// Pure parser for YouTube publication metadata delivered in the script chat (Prompt 1, ETAPA 4).
-// Tolerant to heading formatting (Markdown #/**, accents, casing, numbering) and optional code fences.
+// Pure parser for publication metadata delivered in the script chat (Prompt 1, ETAPA 4).
+// Supports single YouTube metadata (horizontal format) and multi-platform metadata (vertical format:
+// YouTube Shorts, TikTok, Instagram Reels). Tolerant to headings (Markdown #/**, accents, casing, numbering, emoji)
+// and optional code fences.
 import { normalizeLine, isMetadata } from './stages.js';
 
 const FENCE_REGEX = /^\s*(`{3,}|~{3,})\s*[\w+#.-]*\s*$/;
@@ -116,6 +118,140 @@ function parseTags(lines) {
     .filter((tag) => tag.length > 0);
 }
 
+function cleanPlatformHeading(line) {
+  if (typeof line !== 'string') return '';
+  return line
+    .replace(/^[\s#*`~_>\-–—\d.)•🎬📱📸🎥✨]+/u, '')
+    .replace(/[:\s*`~_#]+$/u, '')
+    .trim();
+}
+
+function parseHashtags(text) {
+  if (typeof text !== 'string') return [];
+  const matches = text.match(/#[\w\u00C0-\u024F\u1E00-\u1EFF]+/g);
+  if (matches && matches.length > 0) {
+    return Array.from(new Set(matches.map((h) => (h.startsWith('#') ? h : `#${h}`))));
+  }
+  return text
+    .split(/[\s,]+/)
+    .map((s) => stripWrapping(s.trim()))
+    .filter(Boolean)
+    .map((s) => (s.startsWith('#') ? s : `#${s}`));
+}
+
+function parseShortsBlock(lines) {
+  const norm = lines.map(normalizeLine);
+  const titleIdx = norm.findIndex((l) => /^(?:\d+[.)] ?)?t[ií]tulos?\b/.test(l));
+  const descIdx = norm.findIndex((l) => /^(?:\d+[.)] ?)?descripci[oó]n\b/.test(l));
+  const tagsIdx = norm.findIndex((l) => /^(?:\d+[.)] ?)?etiquetas\b/.test(l));
+
+  if (titleIdx !== -1 || descIdx !== -1 || tagsIdx !== -1) {
+    const titleEnd = descIdx !== -1 ? descIdx : (tagsIdx !== -1 ? tagsIdx : lines.length);
+    const descEnd = tagsIdx !== -1 ? tagsIdx : lines.length;
+
+    const titleLines = titleIdx !== -1 ? lines.slice(titleIdx + 1, titleEnd) : [];
+    const descLines = descIdx !== -1 ? lines.slice(descIdx + 1, descEnd) : [];
+    const tagsLines = tagsIdx !== -1 ? lines.slice(tagsIdx + 1) : [];
+
+    const parsedTitles = parseTitles(titleLines);
+    const title = parsedTitles[0] || (extractFencedOrRaw(titleLines).text.split('\n')[0] ?? '').trim();
+    const description = parseDescription(descLines);
+    const tags = parseTags(tagsLines);
+
+    return {
+      title,
+      titles: parsedTitles.length ? parsedTitles : (title ? [title] : []),
+      description,
+      tags,
+    };
+  }
+
+  const extracted = extractFencedOrRaw(lines);
+  if (extracted.blocks.length >= 3) {
+    const titles = parseTitles([extracted.blocks[0]]);
+    const title = titles[0] || stripWrapping(extracted.blocks[0]);
+    return {
+      title,
+      titles: titles.length ? titles : (title ? [title] : []),
+      description: stripWrapping(extracted.blocks[1]),
+      tags: parseTags([extracted.blocks[2]]),
+    };
+  }
+  if (extracted.blocks.length === 2) {
+    const titles = parseTitles([extracted.blocks[0]]);
+    const title = titles[0] || stripWrapping(extracted.blocks[0]);
+    return {
+      title,
+      titles: titles.length ? titles : (title ? [title] : []),
+      description: stripWrapping(extracted.blocks[1]),
+      tags: [],
+    };
+  }
+  return { title: '', titles: [], description: extracted.text, tags: [] };
+}
+
+function parseTikTokBlock(lines) {
+  const norm = lines.map(normalizeLine);
+  const descIdx = norm.findIndex((l) => /^(?:\d+[.)] ?)?(?:descripci[oó]n|caption|texto)\b/.test(l));
+  const tagsIdx = norm.findIndex((l) => /^(?:\d+[.)] ?)?(?:hashtags?|etiquetas)\b/.test(l));
+
+  if (descIdx !== -1 || tagsIdx !== -1) {
+    const descEnd = tagsIdx !== -1 ? tagsIdx : lines.length;
+    const descLines = descIdx !== -1 ? lines.slice(descIdx + 1, descEnd) : lines.slice(0, tagsIdx);
+    const tagsLines = tagsIdx !== -1 ? lines.slice(tagsIdx + 1) : [];
+
+    const caption = parseDescription(descLines);
+    let hashtags = parseHashtags(extractFencedOrRaw(tagsLines).text);
+    if (hashtags.length === 0 && caption) {
+      hashtags = parseHashtags(caption);
+    }
+    return { caption, hashtags };
+  }
+
+  const extracted = extractFencedOrRaw(lines);
+  if (extracted.blocks.length >= 2) {
+    const caption = stripWrapping(extracted.blocks[0]);
+    let hashtags = parseHashtags(extracted.blocks[1]);
+    if (hashtags.length === 0) hashtags = parseHashtags(caption);
+    return { caption, hashtags };
+  }
+  return {
+    caption: extracted.text,
+    hashtags: parseHashtags(extracted.text),
+  };
+}
+
+function parseReelsBlock(lines) {
+  const norm = lines.map(normalizeLine);
+  const descIdx = norm.findIndex((l) => /^(?:\d+[.)] ?)?(?:descripci[oó]n|caption|texto)\b/.test(l));
+  const tagsIdx = norm.findIndex((l) => /^(?:\d+[.)] ?)?(?:hashtags?|etiquetas)\b/.test(l));
+
+  if (descIdx !== -1 || tagsIdx !== -1) {
+    const descEnd = tagsIdx !== -1 ? tagsIdx : lines.length;
+    const descLines = descIdx !== -1 ? lines.slice(descIdx + 1, descEnd) : lines.slice(0, tagsIdx);
+    const tagsLines = tagsIdx !== -1 ? lines.slice(tagsIdx + 1) : [];
+
+    const caption = parseDescription(descLines);
+    let hashtags = parseHashtags(extractFencedOrRaw(tagsLines).text);
+    if (hashtags.length === 0 && caption) {
+      hashtags = parseHashtags(caption);
+    }
+    return { caption, hashtags };
+  }
+
+  const extracted = extractFencedOrRaw(lines);
+  if (extracted.blocks.length >= 2) {
+    const caption = stripWrapping(extracted.blocks[0]);
+    let hashtags = parseHashtags(extracted.blocks[1]);
+    if (hashtags.length === 0) hashtags = parseHashtags(caption);
+    return { caption, hashtags };
+  }
+  return {
+    caption: extracted.text,
+    hashtags: parseHashtags(extracted.text),
+  };
+}
+
 export function parseMetadataFromContent(content) {
   if (typeof content !== 'string' || !content.trim()) return null;
 
@@ -126,6 +262,61 @@ export function parseMetadataFromContent(content) {
     return null;
   }
 
+  // Check for multi-platform headings (vertical branch: YouTube Shorts / TikTok / Instagram Reels)
+  const platformMatches = [];
+  rawLines.forEach((line, i) => {
+    const clean = cleanPlatformHeading(line);
+    if (/^youtube(?:\s+shorts)?$/i.test(clean)) {
+      platformMatches.push({ platform: 'youtubeShorts', idx: i });
+    } else if (/^tiktok$/i.test(clean)) {
+      platformMatches.push({ platform: 'tiktok', idx: i });
+    } else if (/^(?:instagram(?:\s+reels)?|reels)$/i.test(clean)) {
+      platformMatches.push({ platform: 'instagramReels', idx: i });
+    }
+  });
+
+  if (platformMatches.length > 0) {
+    platformMatches.sort((a, b) => a.idx - b.idx);
+    let youtubeShorts = null;
+    let tiktok = null;
+    let instagramReels = null;
+
+    for (let m = 0; m < platformMatches.length; m++) {
+      const current = platformMatches[m];
+      const nextIdx = platformMatches[m + 1] ? platformMatches[m + 1].idx : rawLines.length;
+      const sectionLines = rawLines.slice(current.idx + 1, nextIdx);
+
+      if (current.platform === 'youtubeShorts') {
+        youtubeShorts = parseShortsBlock(sectionLines);
+      } else if (current.platform === 'tiktok') {
+        tiktok = parseTikTokBlock(sectionLines);
+      } else if (current.platform === 'instagramReels') {
+        instagramReels = parseReelsBlock(sectionLines);
+      }
+    }
+
+    let thumbnailText = parseThumbnailText(content);
+
+    const titles = youtubeShorts?.titles?.length
+      ? youtubeShorts.titles
+      : (youtubeShorts?.title ? [youtubeShorts.title] : []);
+    const description = youtubeShorts?.description || '';
+    const tags = youtubeShorts?.tags || [];
+
+    return {
+      titles,
+      description,
+      tags,
+      thumbnailText,
+      platforms: {
+        youtubeShorts: youtubeShorts || { title: '', titles: [], description: '', tags: [] },
+        tiktok: tiktok || { caption: '', hashtags: [] },
+        instagramReels: instagramReels || { caption: '', hashtags: [] },
+      },
+    };
+  }
+
+  // Single YouTube metadata parse (horizontal branch backwards-compatible)
   const titlesIdx = normLines.findIndex((l) => /^(?:\d+[.)] ?)?titulos\b/.test(l));
   const thumbIdx = normLines.findIndex((l) => /^(?:\d+[.)] ?)?(?:prompts? de )?miniaturas?\b/.test(l));
   const descIdx = normLines.findIndex((l) => /^(?:\d+[.)] ?)?descripcion\b/.test(l));

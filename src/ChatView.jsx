@@ -6,12 +6,15 @@ import Composer from './chat/Composer.jsx';
 import PromptPresets from './chat/PromptPresets.jsx';
 import { PRESETS, effectiveText, loadOverrides } from './prompts/presets.js';
 import { syncChosenIdea } from './timeline/syncChosenIdea.js';
+import { chooseVideoTarget } from './ui/videoTargetDialog.js';
 import { useScriptVoice } from './voice/useScriptVoice.js';
 import { useFlowCharacters } from './flow/useFlowCharacters.js';
 import { useFlowScenes } from './flow/useFlowScenes.js';
 import { useFlowAnimations } from './flow/useFlowAnimations.js';
 import { latestCharacterKeys } from './flow/currentCharacters.js';
 import { withImageBudget } from './flow/imageBudget.js';
+import { DEFAULT_STYLE_ID } from './prompts/styles.js';
+import { composePrompt } from './prompts/compose.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -38,6 +41,102 @@ export default function ChatView({
   // True once the first bridge status reply arrived, so a queued action does not run on the initial "false"
   const [bridgeChecked, setBridgeChecked] = useState(false);
   const [savedIdeas, setSavedIdeas] = useState([]);
+  const [workspaceStyle, setWorkspaceStyle] = useState(DEFAULT_STYLE_ID);
+  const [activeOrientation, setActiveOrientation] = useState('horizontal');
+  const [activeVideoType, setActiveVideoType] = useState('explainer');
+  const [activeBranchCharacters, setActiveBranchCharacters] = useState(null);
+  const [activeBrief, setActiveBrief] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const fetchBranchContext = async () => {
+      try {
+        const api = window.electronAPI;
+        if (!api) return;
+        const [activeVideo, branches] = await Promise.all([
+          api.getActiveVideo?.(),
+          api.listBranches?.(),
+        ]);
+        if (!active) return;
+        if (activeVideo?.brief) {
+          setActiveBrief(activeVideo.brief);
+        } else {
+          setActiveBrief(null);
+        }
+        if (activeVideo?.branchId && Array.isArray(branches)) {
+          const branch = branches.find((b) => b.id === activeVideo.branchId);
+          if (branch?.orientation) {
+            setActiveOrientation(branch.orientation);
+          }
+          if (branch?.videoType) {
+            setActiveVideoType(branch.videoType);
+          }
+          if (Array.isArray(branch?.characters) && branch.characters.length > 0) {
+            setActiveBranchCharacters(branch.characters);
+          } else if (
+            branch?.characterMode === 'own' &&
+            Array.isArray(branch?.characterImages) &&
+            branch.characterImages.length > 0
+          ) {
+            setActiveBranchCharacters(
+              branch.characterImages.map((file, idx) => ({
+                key: `personaje-${idx + 1}`,
+                name: `Personaje ${idx + 1}`,
+                description: '',
+                file,
+                source: 'own',
+              }))
+            );
+          } else {
+            setActiveBranchCharacters(null);
+          }
+        } else {
+          setActiveBranchCharacters(null);
+        }
+      } catch {}
+    };
+
+    fetchBranchContext();
+
+    const handleActiveChanged = () => {
+      fetchBranchContext();
+    };
+
+    window.addEventListener('mecatube:active-video-changed', handleActiveChanged);
+    window.addEventListener('mecatube:workspace-style-changed', handleActiveChanged);
+
+    return () => {
+      active = false;
+      window.removeEventListener('mecatube:active-video-changed', handleActiveChanged);
+      window.removeEventListener('mecatube:workspace-style-changed', handleActiveChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const fetchStyle = async () => {
+      try {
+        const ws = await window.electronAPI?.getCurrentWorkspace?.();
+        if (active && ws?.style) {
+          setWorkspaceStyle(ws.style);
+        }
+      } catch {}
+    };
+    fetchStyle();
+
+    const onStyleChanged = (e) => {
+      if (e.detail?.style) {
+        setWorkspaceStyle(e.detail.style);
+      } else {
+        fetchStyle();
+      }
+    };
+    window.addEventListener('mecatube:workspace-style-changed', onStyleChanged);
+    return () => {
+      active = false;
+      window.removeEventListener('mecatube:workspace-style-changed', onStyleChanged);
+    };
+  }, []);
   // DeepSeek chat URL of the active conversation (needed to resync it) and the resync state
   const [activeUrl, setActiveUrl] = useState(null);
   const [resync, setResync] = useState({ busy: false, message: '' });
@@ -184,7 +283,23 @@ export default function ChatView({
         }
         const preset = PRESETS.find((item) => item.id === action.presetId);
         if (!preset) return;
-        const conversationId = await handlePreset(effectiveText(preset, await loadOverrides()));
+        let videoBrief = activeBrief;
+        if (action.videoId) {
+          try {
+            const vList = await window.electronAPI?.listVideos?.();
+            const targetVid = vList?.find((v) => v.id === action.videoId);
+            if (targetVid?.brief) videoBrief = targetVid.brief;
+          } catch {}
+        }
+        let promptText = composePrompt(effectiveText(preset, await loadOverrides()), {
+          presetId: preset.id,
+          style: workspaceStyle,
+          orientation: activeOrientation,
+          videoType: activeVideoType,
+          branchCharacters: activeBranchCharacters,
+          brief: videoBrief,
+        });
+        const conversationId = await handlePreset(promptText);
         if (!conversationId || !action.videoId) return;
         const field = action.role === 'illustrator' ? 'illustratorConversationId' : 'scriptConversationId';
         await window.electronAPI.updateVideo(action.videoId, { [field]: conversationId });
@@ -201,7 +316,7 @@ export default function ChatView({
     const conversationId = await handleSend(String(idea.number));
     if (!conversationId) return;
     try {
-      await syncChosenIdea(window.electronAPI, conversationId, idea);
+      await syncChosenIdea(window.electronAPI, conversationId, idea, chooseVideoTarget);
     } catch (syncError) {
       setError(cleanError(syncError));
     }

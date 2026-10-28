@@ -351,6 +351,104 @@ function toMarkdown(container) {
   return joinBlocks(blocksOf(container), false).replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// --- DeepSeek Web Search Toggle -----------------------------------------------------------------
+
+function cleanToggleText(text) {
+  if (typeof text !== 'string') return '';
+  return text.trim().replace(/\s+/g, ' ');
+}
+
+function findSearchToggle(doc = (typeof document !== 'undefined' ? document : null)) {
+  if (!doc || !doc.querySelectorAll) return null;
+
+  // 1. Direct candidates (buttons / divs with toggle classes or role)
+  const candidates = Array.from(
+    doc.querySelectorAll('.ds-toggle-button, [role="button"], div[tabindex="0"], button')
+  );
+
+  const searchPattern = /^(?:b[uú]squeda(?: inteligente)?|buscar(?: en internet)?|search|web search|smart search)$/i;
+  const deepThinkPattern = /deepthink|pensamiento/i;
+
+  for (const el of candidates) {
+    const text = cleanToggleText(el.innerText || el.textContent);
+    const aria = cleanToggleText(el.getAttribute?.('aria-label'));
+    if ((searchPattern.test(text) || searchPattern.test(aria)) && !deepThinkPattern.test(text) && !deepThinkPattern.test(aria)) {
+      return el;
+    }
+  }
+
+  // 2. Deep search inside span/text elements to find closest button/toggle ancestor
+  const textNodes = Array.from(doc.querySelectorAll('span, p, div'));
+  for (const node of textNodes) {
+    const text = cleanToggleText(node.textContent);
+    if (searchPattern.test(text) && !deepThinkPattern.test(text)) {
+      let cur = node;
+      while (cur && cur !== doc.body && cur.parentElement) {
+        if (
+          cur.tagName === 'BUTTON' ||
+          cur.getAttribute?.('role') === 'button' ||
+          cur.classList?.contains('ds-toggle-button') ||
+          (cur.getAttribute?.('tabindex') === '0' && cur.hasAttribute?.('aria-pressed'))
+        ) {
+          return cur;
+        }
+        cur = cur.parentElement;
+      }
+      return node;
+    }
+  }
+
+  return null;
+}
+
+function isSearchToggleOn(el) {
+  if (!el) return false;
+  const ariaPressed = el.getAttribute?.('aria-pressed');
+  if (ariaPressed === 'true') return true;
+  if (ariaPressed === 'false') return false;
+
+  const ariaChecked = el.getAttribute?.('aria-checked');
+  if (ariaChecked === 'true') return true;
+  if (ariaChecked === 'false') return false;
+
+  const className = el.className || '';
+  if (typeof className === 'string') {
+    if (className.includes('ds-toggle-button--selected')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function ensureSearchToggle(doc = (typeof document !== 'undefined' ? document : null), shouldBeOn = true, onWarning = null) {
+  try {
+    const toggle = findSearchToggle(doc);
+    if (!toggle) {
+      if (typeof onWarning === 'function') {
+        onWarning('No se encontró el botón de búsqueda web de DeepSeek.');
+      }
+      return { found: false, clicked: false, on: false };
+    }
+
+    const isOn = isSearchToggleOn(toggle);
+    let clicked = false;
+    if (shouldBeOn && !isOn) {
+      if (typeof toggle.click === 'function') toggle.click();
+      clicked = true;
+    } else if (!shouldBeOn && isOn) {
+      if (typeof toggle.click === 'function') toggle.click();
+      clicked = true;
+    }
+
+    return { found: true, clicked, on: shouldBeOn };
+  } catch (err) {
+    if (typeof onWarning === 'function') {
+      onWarning(`Aviso al configurar la búsqueda web de DeepSeek: ${err.message}`);
+    }
+    return { found: false, clicked: false, on: false, error: err.message };
+  }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     HISTORY_API,
@@ -361,6 +459,9 @@ if (typeof module !== 'undefined' && module.exports) {
     extractFinalText,
     extractHistoryMessages,
     toMarkdown,
+    findSearchToggle,
+    isSearchToggleOn,
+    ensureSearchToggle,
   };
 }
 
@@ -468,12 +569,24 @@ if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__
     }
   }
 
-  async function runPrompt(text, port) {
+  async function runPrompt(text, port, webSearch) {
     const input = await waitFor(findInput, 15000, 'No se encontró el cuadro de entrada de DeepSeek.');
     const countBefore = assistantContainers().length;
     // Messages already in the chat: the final reply must come after them. If the baseline cannot be
     // read, each earlier assistant message is assumed to have a user message before it.
     const historyBefore = (await historyCount(sessionIdFromUrl(location.href))) ?? countBefore * 2;
+
+    try {
+      const toggle = ensureSearchToggle(document, webSearch !== false, (msg) => {
+        console.warn('[Mecatube]', msg);
+        try {
+          port.postMessage({ type: 'warning', message: msg });
+        } catch {}
+      });
+      if (toggle?.clicked) {
+        await sleep(300);
+      }
+    } catch {}
 
     setInputValue(input, text);
     await sleep(150);
@@ -605,7 +718,7 @@ if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && !window.__
     };
     port.onMessage.addListener((message) => {
       if (port.name === 'mecatube-prompt' && message.type === 'prompt') {
-        runPrompt(message.text, port).catch(reportError);
+        runPrompt(message.text, port, message.webSearch).catch(reportError);
       } else if (port.name === 'mecatube-history' && message.type === 'history') {
         runHistory(message.deepseekUrl, port).catch(reportError);
       }

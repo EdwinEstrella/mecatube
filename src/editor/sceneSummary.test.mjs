@@ -123,6 +123,42 @@ test('handles missing or non-string prompt in scene item', () => {
   assert.equal(summaries[2].summary, '');
 });
 
+test('strips character sheet and style descriptions for other styles (cartoon, anime, 3d, realistic)', () => {
+  const cartoonPrompt = [
+    'Wide 16:9 illustration, 1920x1080.',
+    'Classic 2D cartoon style: rounded expressive characters with big eyes, thick clean outlines, bright saturated flat colors, simple cel shading, over a detailed painted background.',
+    'Scene: Ana discovers a hidden laboratory under the old house.',
+    'The character from character sheet 2, a woman of about 25 with curly red hair, gasping in shock.',
+    'Setting: A dark subterranean laboratory with glowing test tubes and monitors.',
+    'Composition: medium shot, main character centered.',
+  ].join(' ');
+
+  const animePrompt = [
+    'Wide 16:9 illustration, 1920x1080.',
+    'Japanese anime style: expressive characters with large eyes, clean cel shading, soft light glow, painterly anime film background.',
+    'Scene: Kenji faces the dragon above the clouds.',
+    'The character from character sheet 1, an anime man of about 20 with spiked black hair, drawing his sword.',
+    'Setting: Open sky with swirling storm clouds and lightning.',
+    'Composition: wide shot, main character on the left third.',
+  ].join(' ');
+
+  const summaries = sceneSummaries([
+    { number: 1, title: 'Escena 1', prompt: cartoonPrompt },
+    { number: 2, title: 'Escena 2', prompt: animePrompt },
+  ]);
+
+  assert.equal(summaries.length, 2);
+  assert.ok(!summaries[0].summary.includes('Classic 2D cartoon style'));
+  assert.ok(!summaries[0].summary.includes('woman of about 25'));
+  assert.ok(summaries[0].summary.includes('Ana discovers a hidden laboratory'));
+  assert.ok(summaries[0].summary.includes('dark subterranean laboratory'));
+
+  assert.ok(!summaries[1].summary.includes('Japanese anime style'));
+  assert.ok(!summaries[1].summary.includes('man of about 20'));
+  assert.ok(summaries[1].summary.includes('Kenji faces the dragon'));
+  assert.ok(summaries[1].summary.includes('Open sky with swirling storm clouds'));
+});
+
 if (failures > 0) {
   console.log(`\n${failures} test(s) failed`);
   process.exit(1);

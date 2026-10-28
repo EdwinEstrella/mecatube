@@ -8,12 +8,14 @@ const { createConversationStore } = require('./conversations.cjs');
 const { createPromptStore } = require('./prompts.cjs');
 const { createIdeaStore } = require('./ideas.cjs');
 const { createVideoStore } = require('./videos.cjs');
+const { createBranchStore, migrateWorkspace, copyCharacterImages, getCharacterFilePath, copyVideoCharacterFiles } = require('./branches.cjs');
 const { createConversationPurger } = require('./purge.cjs');
 const { createSecretStore } = require('./secrets.cjs');
 const deepseek = require('./deepseek.cjs');
 const { createVoiceService } = require('./cartesia.cjs');
 const { MEDIA_SCHEME, registerMediaScheme, createMediaHandler, registerVoiceIpc } = require('./voice-ipc.cjs');
 const { createVoicePrefsStore } = require('./voice-prefs.cjs');
+const { createDeepSeekPrefsStore } = require('./deepseek-prefs.cjs');
 const { createCreditStore } = require('./credits.cjs');
 const { createSavedVoiceStore } = require('./saved-voices.cjs');
 const { createUpdater } = require('./updates.cjs');
@@ -108,7 +110,7 @@ function createWindow() {
     fullscreen: false,
     frame: false,
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    backgroundColor: '#0b0b0f',
+    backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -201,13 +203,103 @@ ipcMain.handle('ideas:list', () => ideas.list());
 ipcMain.handle('ideas:save', (_event, idea) => ideas.save(idea));
 ipcMain.handle('ideas:delete', (_event, payload) => ideas.delete(payload?.id));
 
-ipcMain.handle('videos:list', () => videos.list());
+ipcMain.handle('branches:list', () => branches.list());
+ipcMain.handle('branches:create', (_event, input) => branches.create(input));
+ipcMain.handle('branches:update', (_event, { id, ...patch } = {}) => branches.update(id, patch));
+ipcMain.handle('branches:delete', (_event, payload) => {
+  const id = typeof payload === 'object' && payload !== null ? payload.id : payload;
+  if (!id) throw new Error('ID de rama no válido.');
+  if (branches.list().length <= 1) {
+    throw new Error('No se puede eliminar la única rama del espacio de trabajo.');
+  }
+  const branchVideos = videos.list(id);
+  if (branchVideos.length > 0) {
+    throw new Error('No se puede eliminar una rama que contiene videos.');
+  }
+  branches.delete(id);
+});
+
+ipcMain.handle('branches:set-characters', (_event, payload) => {
+  const branchId = payload?.branchId || payload?.id;
+  const characters = payload?.characters;
+  const flowProjectUrl = payload?.flowProjectUrl;
+  return branches.setCharacters(branchId, characters, flowProjectUrl);
+});
+
+ipcMain.handle('branches:save-from-video', async (_event, payload) => {
+  const branchId = payload?.branchId;
+  const videoId = payload?.videoId;
+  if (!branchId) throw new Error('ID de rama no válido.');
+  if (!videoId) throw new Error('ID de video no válido.');
+  const video = videos.list().find((v) => v.id === videoId);
+  if (!video) throw new Error('Video no encontrado.');
+  const videoCharacters = flowStore.list(videoId);
+  if (!videoCharacters || videoCharacters.length === 0) {
+    throw new Error('El video no tiene personajes.');
+  }
+  for (const c of videoCharacters) {
+    if (!c.selectedFile) throw new Error(`El personaje "${c.name || c.key}" no tiene imagen seleccionada.`);
+  }
+  const copied = copyVideoCharacterFiles(activeWorkspacePath, branchId, videoId, videoCharacters);
+  return branches.setCharacters(branchId, copied, video.flowProjectUrl ?? null);
+});
+
+ipcMain.handle('branches:add-character-image', async (_event, payload) => {
+  const branchId = typeof payload === 'object' && payload !== null ? payload.branchId : payload;
+  if (!branchId) throw new Error('ID de rama no válido.');
+  let filePaths = payload?.filePaths;
+  if (!filePaths || filePaths.length === 0) {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Seleccionar imágenes del personaje',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return [];
+    }
+    filePaths = result.filePaths;
+  }
+  return copyCharacterImages(activeWorkspacePath, branchId, filePaths);
+});
+
+ipcMain.handle('branches:generate-series-outline', async (_event, payload) => {
+  const prompt = typeof payload === 'string' ? payload : payload?.prompt;
+  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+    throw new Error('El prompt para la IA está vacío.');
+  }
+  const apiKey = secrets.getDeepSeekKey();
+  if (!apiKey) {
+    throw new Error('Configura tu API Key de DeepSeek en Configuración para generar capítulos con IA.');
+  }
+  const raw = await deepseek.streamChat({
+    apiKey,
+    messages: [{ role: 'user', content: prompt }],
+    model: 'deepseek-chat',
+  });
+  return { raw };
+});
+
+ipcMain.handle('videos:list', (_event, payload) => {
+  const branchId = typeof payload === 'object' && payload !== null ? payload.branchId : payload;
+  return videos.list(branchId);
+});
+ipcMain.handle('videos:get-active', () => videos.getActive());
+ipcMain.handle('videos:set-active', (_event, payload) => {
+  const id = typeof payload === 'object' && payload !== null ? payload.id : payload;
+  return videos.setActive(id);
+});
 // A different illustrator chat taking over the workspace video starts with clean illustration data
-ipcMain.handle('videos:create', (_event, input) => conversationPurger().linkIllustrator(input ?? {}));
+ipcMain.handle('videos:create', (_event, input) => {
+  const payload = { ...(input ?? {}) };
+  if (!payload.branchId) {
+    payload.branchId = branches.list()[0]?.id;
+  }
+  return conversationPurger().linkIllustrator(payload);
+});
 ipcMain.handle('videos:update', (_event, { id, ...patch } = {}) => videos.update(id, patch));
 ipcMain.handle('videos:set-stage', (_event, { id, key, value } = {}) => videos.setStage(id, key, value));
 ipcMain.handle('videos:delete', (_event, payload) => {
-  const id = payload?.id;
+  const id = typeof payload === 'object' && payload !== null ? payload.id : payload;
   videos.delete(id);
   // Generated narration lives next to the video record; id was validated by the store
   fs.rmSync(path.join(activeWorkspacePath, 'videos', id), { recursive: true, force: true });
@@ -274,7 +366,8 @@ ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
   const requestId = crypto.randomUUID();
   inFlight = { requestId, conversationId: conversation.id };
   try {
-    bridge.sendPrompt({ requestId, text: content, deepseekUrl: conversation.deepseekUrl });
+    const dsPrefs = deepseekPrefs ? deepseekPrefs.get() : { webSearch: true };
+    bridge.sendPrompt({ requestId, text: content, deepseekUrl: conversation.deepseekUrl, webSearch: dsPrefs.webSearch });
   } catch (error) {
     inFlight = null;
     throw error;
@@ -308,12 +401,15 @@ ipcMain.handle('bridge:status', () => bridge.isConnected());
 
 let workspaceStore;
 let activeWorkspacePath;
+let branches;
 let prefs;
+let deepseekPrefs;
 let credits;
 let savedVoices;
 let flowStore;
 let flowService;
 
+const branchesProxy = new Proxy({}, { get: (_t, p) => branches?.[p] });
 const voiceProxy = new Proxy({}, { get: (_t, p) => voice?.[p] });
 const videosProxy = new Proxy({}, { get: (_t, p) => videos?.[p] });
 const flowStoreProxy = new Proxy({}, { get: (_t, p) => flowStore?.[p] });
@@ -328,6 +424,8 @@ function setupWorkspace(workspacePath) {
   fs.mkdirSync(path.join(workspacePath, 'voiceovers'), { recursive: true });
   fs.mkdirSync(path.join(workspacePath, 'conversations'), { recursive: true });
 
+  migrateWorkspace(workspacePath);
+  branches = createBranchStore(workspacePath);
   conversations = createConversationStore(path.join(workspacePath, 'conversations'));
   prompts = createPromptStore(path.join(workspacePath, 'prompts'));
   ideas = createIdeaStore(workspacePath);
@@ -339,11 +437,12 @@ function setupWorkspace(workspacePath) {
     onProgress: (progress) => pushToWindow('voice:progress', progress),
   });
   prefs = createVoicePrefsStore(workspacePath);
+  deepseekPrefs = createDeepSeekPrefsStore(workspacePath);
   credits = createCreditStore(workspacePath);
   savedVoices = createSavedVoiceStore(workspacePath);
   flowStore = createFlowStore(workspacePath);
   if (bridge) {
-    flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, pushToWindow });
+    flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, branches: branchesProxy, pushToWindow });
   }
 }
 
@@ -353,6 +452,8 @@ app.whenReady().then(() => {
   secrets = createSecretStore(app.getPath('userData'), safeStorage);
   bridge = createBridge();
 
+  ipcMain.handle('deepseek:prefs-get', () => (deepseekPrefs ? deepseekPrefs.get() : { webSearch: true }));
+  ipcMain.handle('deepseek:prefs-set', (_event, input) => (deepseekPrefs ? deepseekPrefs.set(input) : { webSearch: true }));
   ipcMain.handle('secrets:deepseek-status', () => secrets.deepSeekStatus());
   ipcMain.handle('secrets:deepseek-save', (_event, { key } = {}) => {
     secrets.saveDeepSeekKey(key);
@@ -381,7 +482,7 @@ app.whenReady().then(() => {
     getVideoTitle: (id) => videosProxy.list().find((v) => v.id === id)?.title ?? '',
   });
 
-  flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, pushToWindow });
+  flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, branches: branchesProxy, pushToWindow });
   registerFlowIpc({
     ipcMain,
     shell,
@@ -422,11 +523,18 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
 
-  ipcMain.handle('workspace:create', async (_event, { name, path: targetPath }) => {
-    const newWs = workspaceStore.createWorkspace({ name, targetPath });
+  ipcMain.handle('workspace:create', async (_event, { name, path: targetPath, style }) => {
+    const newWs = workspaceStore.createWorkspace({ name, targetPath, style });
     setupWorkspace(newWs.path);
     BrowserWindow.getAllWindows().forEach((win) => win.reload());
     return newWs;
+  });
+
+  ipcMain.handle('workspace:set-style', async (_event, payload) => {
+    const style = typeof payload === 'string' ? payload : payload?.style;
+    const active = workspaceStore.getActive();
+    if (!active) throw new Error('No hay espacio de trabajo activo.');
+    return workspaceStore.updateStyle(active.id, style);
   });
 
   ipcMain.handle('workspace:switch', async (_event, { id }) => {
@@ -447,6 +555,7 @@ app.whenReady().then(() => {
       characterFile: (videoId, key, file) => flowStoreProxy.filePath(videoId, key, file),
       sceneFile: (videoId, number, file) => flowStoreProxy.sceneFilePath(videoId, number, file),
       animationFile: (videoId, number, file) => flowStoreProxy.animationFilePath(videoId, number, file),
+      branchCharacterFile: (branchId, file) => getCharacterFilePath(activeWorkspacePath, branchId, file),
     }),
   );
   bridge.onMessage(handleBridgeMessage);

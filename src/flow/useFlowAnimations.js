@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureIllustratorVideo } from './illustratorVideo.js';
+import { chooseVideoTarget } from '../ui/videoTargetDialog.js';
 import { isActive } from './sceneStatus.js';
 import { animationSeconds } from './animationSeconds.js';
 
@@ -68,7 +69,8 @@ export function useFlowAnimations(conversationId, conversationTitle, isConnected
       const api = window.electronAPI;
       setError('');
       try {
-        const video = await ensureIllustratorVideo(api, conversationId, conversationTitle);
+        const video = await ensureIllustratorVideo(api, conversationId, conversationTitle, chooseVideoTarget);
+        if (!video) return;
         await api.generateAnimations({
           videoId: video.id,
           animations: list.map(({ number, title, prompt, hook, seconds, scriptAnchor }) => ({

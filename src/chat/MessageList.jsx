@@ -97,9 +97,11 @@ export default function MessageList({
   const sheets = useMemo(
     () =>
       messages.map((message, index) =>
-        flow?.available && message.role === 'assistant' && !parsed[index] ? parseCharacterSheets(message.content) : null,
+        flow?.available && !flow?.branchHasCharacters && message.role === 'assistant' && !parsed[index]
+          ? parseCharacterSheets(message.content)
+          : null,
       ),
-    [messages, parsed, flow?.available],
+    [messages, parsed, flow?.available, flow?.branchHasCharacters],
   );
   // Image-block deliveries (ETAPA 3) and animation-block deliveries (ETAPA 4)
   const imageBlocks = useMemo(() => {

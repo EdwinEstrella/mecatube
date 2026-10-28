@@ -82,14 +82,17 @@ export default function CaptionPreview({
   backgroundType = 'video',
   style,
   words,
+  orientation = 'horizontal',
 }) {
   const effectiveWords = useMemo(() => buildSampleWords(words), [words]);
   const lastWord = effectiveWords[effectiveWords.length - 1];
   const durationSeconds = (lastWord?.e ?? 4.15) + 1;
   const durationInFrames = Math.max(1, Math.round(durationSeconds * 30));
+  const isVertical = orientation === 'vertical';
+  const { width, height } = frameSize(orientation);
 
   return (
-    <div className="auto-edit__caption-preview-player">
+    <div className={`auto-edit__caption-preview-player${isVertical ? ' auto-edit__caption-preview-player--vertical' : ''}`}>
       <Player
         component={CaptionPreviewComposition}
         inputProps={{
@@ -99,15 +102,17 @@ export default function CaptionPreview({
           words: effectiveWords,
         }}
         durationInFrames={durationInFrames}
-        compositionWidth={1920}
-        compositionHeight={1080}
+        compositionWidth={width}
+        compositionHeight={height}
         fps={30}
         loop
         autoPlay
         controls
         style={{
           width: '100%',
-          aspectRatio: '16 / 9',
+          maxWidth: isVertical ? '340px' : '100%',
+          margin: isVertical ? '0 auto' : undefined,
+          aspectRatio: isVertical ? '9 / 16' : '16 / 9',
           borderRadius: '8px',
           overflow: 'hidden',
         }}

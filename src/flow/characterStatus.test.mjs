@@ -1,6 +1,6 @@
 // Run with: node src/flow/characterStatus.test.mjs
 import assert from 'node:assert/strict';
-import { allSelected, charactersDone, characterImageUrl } from './characterStatus.js';
+import { allSelected, charactersDone, characterImageUrl, branchCharacterImageUrl } from './characterStatus.js';
 
 assert.equal(allSelected({ a: { selectedFile: 'x.webp' }, b: { selectedFile: 'y.webp' } }, ['a', 'b']), true);
 assert.equal(allSelected({ a: { selectedFile: 'x.webp' }, b: { selectedFile: null } }, ['a', 'b']), false);
@@ -12,4 +12,5 @@ assert.equal(charactersDone([{ approved: true, selectedFile: null }]), false);
 assert.equal(charactersDone([]), false);
 assert.equal(charactersDone(undefined), false);
 assert.equal(characterImageUrl('v-1', 'ana', '1700000000000-1.webp'), 'mecatube-media://character/v-1/ana/1700000000000-1.webp');
+assert.equal(branchCharacterImageUrl('b-1', 'char_1.png'), 'mecatube-media://branch-character/b-1/char_1.png');
 console.log('all passed');

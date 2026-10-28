@@ -5,17 +5,13 @@ import CustomSelect from '../ui/CustomSelect.jsx';
 import CharactersPanel from '../flow/CharactersPanel.jsx';
 import AutoEditPanel from '../editor/AutoEditPanel.jsx';
 import PublishKit from './PublishKit.jsx';
+import { getRememberedStageKey, rememberStageKey } from './stageMemory.js';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
   animations: 'Las animaciones se generan desde el chat del ilustrador.',
   thumbnail: 'La miniatura se genera desde el chat del ilustrador.',
 };
-
-function getInitialStageKey(stageList) {
-  const notDone = stageList.find((stage) => stage.status !== 'done');
-  return notDone?.key ?? stageList[stageList.length - 1]?.key ?? null;
-}
 
 // state: 'ok' | 'deleted' | 'none' for one linked chat
 function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onStart, openLabel, startLabel }) {
@@ -50,6 +46,7 @@ function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onS
 // Presentational: 1 single timeline for the workspace
 export default function VideoDetail({
   video,
+  branch = null,
   stages = [],
   doneCount = 0,
   chatStates,
@@ -68,15 +65,19 @@ export default function VideoDetail({
   onToggleStage,
   onDelete,
   onEdited,
+  onEditBranch,
+  onBranchUpdated,
+  onOpenBranchPanel,
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
 
   const [prevVideoId, setPrevVideoId] = useState(video.id);
-  const [selectedKey, setSelectedKey] = useState(() => getInitialStageKey(stages));
+  const [selectedKey, setSelectedKey] = useState(() => getRememberedStageKey(video.id, stages));
+  const orientation = propOrientation ?? branch?.orientation ?? 'horizontal';
 
   if (video.id !== prevVideoId) {
     setPrevVideoId(video.id);
-    setSelectedKey(getInitialStageKey(stages));
+    setSelectedKey(getRememberedStageKey(video.id, stages));
   }
 
   const selectedStage = stages.find((stage) => stage.key === selectedKey) ?? stages[0] ?? null;
@@ -102,6 +103,16 @@ export default function VideoDetail({
   return (
     <div className="video-detail">
       <div className="video-detail__header-bar">
+        {branch && onOpenBranchPanel && (
+          <button
+            type="button"
+            className="settings__button settings__button--ghost video-detail__branch-btn"
+            onClick={() => onOpenBranchPanel(branch.id)}
+            title="Ver panel de la rama"
+          >
+            ← Rama: {branch.name}
+          </button>
+        )}
         <span className="video-detail__completed-counter">
           {doneCount}/{stages.length} etapas completadas
         </span>
@@ -111,7 +122,10 @@ export default function VideoDetail({
         <StageTrack
           stages={stages}
           selectedKey={selectedStage?.key}
-          onSelect={(stage) => setSelectedKey(stage.key)}
+          onSelect={(stage) => {
+            setSelectedKey(stage.key);
+            rememberStageKey(video.id, stage.key);
+          }}
         />
       </div>
 
@@ -147,12 +161,21 @@ export default function VideoDetail({
           )}
 
           {selectedStage.key === 'characters' && (
-            <CharactersPanel
-              video={video}
-              characters={characters}
-              onSetProject={onSetFlowProject}
-              onOpenProject={onOpenFlowProject}
-            />
+            selectedStage.status === 'not-needed' ? (
+              <p className="video-detail__stage-hint">
+                Esta etapa no es requerida para videos de tipo lista (sin personajes principales).
+              </p>
+            ) : (
+              <CharactersPanel
+                video={video}
+                branch={branch}
+                characters={characters}
+                onSetProject={onSetFlowProject}
+                onOpenProject={onOpenFlowProject}
+                onEditBranch={onEditBranch}
+                onBranchUpdated={onBranchUpdated}
+              />
+            )
           )}
 
           {(selectedStage.key === 'images' || selectedStage.key === 'animations' || selectedStage.key === 'thumbnail') && (
@@ -177,7 +200,11 @@ export default function VideoDetail({
           )}
 
           {selectedStage.key === 'published' && (
-            <PublishKit video={video} scriptMessages={scriptMessages} />
+            <PublishKit
+              video={video}
+              scriptMessages={scriptMessages}
+              orientation={branch?.orientation ?? video?.orientation ?? 'horizontal'}
+            />
           )}
 
           <div className="video-detail__status-control">
@@ -195,7 +222,7 @@ export default function VideoDetail({
         </section>
       )}
 
-      <div className="saved-idea__actions" style={{ marginTop: '16px' }}>
+      <div className="saved-idea__actions video-detail__reset-actions">
         {isConfirming ? (
           <>
             <button type="button" className="settings__button settings__button--danger" onClick={() => onDelete(video.id)}>

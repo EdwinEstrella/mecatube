@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureIllustratorVideo } from './illustratorVideo.js';
+import { chooseVideoTarget } from '../ui/videoTargetDialog.js';
 import { allSelected } from './characterStatus.js';
 
 function cleanError(error) {
@@ -15,6 +16,7 @@ export function useFlowCharacters(conversationId, conversationTitle, isConnected
   const [projectUrl, setProjectUrl] = useState(null);
   // Stored records by character key
   const [records, setRecords] = useState({});
+  const [hasBranchCharacters, setHasBranchCharacters] = useState(false);
   const [job, setJob] = useState(null);
   // Per-character errors by key; `_` holds errors that belong to no card
   const [errors, setErrors] = useState({});
@@ -31,14 +33,24 @@ export function useFlowCharacters(conversationId, conversationTitle, isConnected
       setVideoId(null);
       setProjectUrl(null);
       setRecords({});
+      setHasBranchCharacters(false);
       return;
     }
-    const videos = (await api.listVideos()) ?? [];
+    const [videos, branches] = await Promise.all([
+      api.listVideos() ?? [],
+      api.listBranches ? api.listBranches() : [],
+    ]);
     const linked = videos.find((video) => video.illustratorConversationId === conversationId);
     if (conversationIdRef.current !== conversationId) return;
     videoIdRef.current = linked?.id ?? null;
     setVideoId(linked?.id ?? null);
     setProjectUrl(linked?.flowProjectUrl ?? null);
+    const branch = linked?.branchId ? branches.find((b) => b.id === linked.branchId) : null;
+    const branchHasChars =
+      branch &&
+      ((Array.isArray(branch.characters) && branch.characters.length > 0) ||
+        (branch.characterMode === 'own' && Array.isArray(branch.characterImages) && branch.characterImages.length > 0));
+    setHasBranchCharacters(Boolean(branchHasChars));
     const list = linked ? ((await api.getCharacters(linked.id)) ?? []) : [];
     if (conversationIdRef.current !== conversationId) return;
     setRecords(Object.fromEntries(list.map((item) => [item.key, item])));
@@ -90,7 +102,11 @@ export function useFlowCharacters(conversationId, conversationTitle, isConnected
     setErrors((current) => ({ ...current, [card.key]: '' }));
     setJob({ videoId: null, characterKey: card.key, stage: 'starting', percent: null, captcha: false });
     try {
-      const video = await ensureIllustratorVideo(api, conversationId, conversationTitle);
+      const video = await ensureIllustratorVideo(api, conversationId, conversationTitle, chooseVideoTarget);
+      if (!video) {
+        setJob(null);
+        return;
+      }
       videoIdRef.current = video.id;
       setVideoId(video.id);
       setProjectUrl(video.flowProjectUrl ?? null);
@@ -150,6 +166,7 @@ export function useFlowCharacters(conversationId, conversationTitle, isConnected
 
   return {
     available: hasFlowApi(),
+    branchHasCharacters: hasBranchCharacters,
     videoId,
     projectUrl,
     records,

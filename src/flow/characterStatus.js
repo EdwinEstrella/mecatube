@@ -4,6 +4,10 @@ export function characterImageUrl(videoId, key, file) {
   return `mecatube-media://character/${encodeURIComponent(videoId)}/${encodeURIComponent(key)}/${encodeURIComponent(file)}`;
 }
 
+export function branchCharacterImageUrl(branchId, file) {
+  return `mecatube-media://branch-character/${encodeURIComponent(branchId)}/${encodeURIComponent(file)}`;
+}
+
 // True when every key has a record with a selected image (and there is at least one key)
 export function allSelected(records, keys) {
   return keys.length > 0 && keys.every((key) => Boolean(records?.[key]?.selectedFile));

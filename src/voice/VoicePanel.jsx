@@ -4,6 +4,7 @@ import VoicePlayer from './VoicePlayer.jsx';
 import { DEFAULT_MODEL, DEFAULT_VOICE, cleanIpcError } from './constants.js';
 import { narrationFromChat } from './narration.js';
 import { useVoicePrefs } from './useVoicePrefs.js';
+import { parseCharacterLines, planVoiceSegments } from './characterLines.js';
 
 const SAVE_DELAY_MS = 700;
 
@@ -57,6 +58,18 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
   }, [prefs]);
 
   useEffect(() => {
+    if (voice?.voiceId) return;
+    if (!api || !video?.branchId) return;
+    api.listBranches?.().then((branches) => {
+      const branch = (branches || []).find((b) => b.id === video.branchId);
+      if (branch?.narratorVoiceId) {
+        setVoiceId(branch.narratorVoiceId);
+        setVoiceName('Narrador de rama');
+      }
+    }).catch(() => {});
+  }, [api, video?.branchId, voice?.voiceId]);
+
+  useEffect(() => {
     if (!api) return undefined;
     api.getCartesiaStatus().then((status) => setConfigured(status.configured), () => setConfigured(false));
     api.getActiveVoice().then((activeId) => setIsGenerating(activeId === video.id), () => {});
@@ -91,7 +104,36 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
     setIsGenerating(true);
     flush();
     try {
-      await api.generateVoice({ videoId: video.id, text, voiceId, voiceName: voiceName || voiceId, model });
+      const branches = (await api?.listBranches?.()) ?? [];
+      const branch = branches.find((b) => b.id === video.branchId) ?? null;
+      const parsedSegments = parseCharacterLines(text, branch?.characters);
+      const planned = planVoiceSegments(parsedSegments, {
+        characters: branch?.characters,
+        narratorVoiceId: branch?.narratorVoiceId,
+        defaultVoiceId: voiceId,
+      });
+
+      const finalVoiceId = planned.narratorVoiceId || voiceId;
+      const finalVoiceName = voiceName || finalVoiceId;
+
+      if (planned.isMultiVoice) {
+        await api.generateVoice({
+          videoId: video.id,
+          text,
+          voiceId: finalVoiceId,
+          voiceName: finalVoiceName,
+          model,
+          segments: planned.segments,
+        });
+      } else {
+        await api.generateVoice({
+          videoId: video.id,
+          text,
+          voiceId: finalVoiceId,
+          voiceName: finalVoiceName,
+          model,
+        });
+      }
     } catch (generateError) {
       setError(cleanIpcError(generateError));
     } finally {

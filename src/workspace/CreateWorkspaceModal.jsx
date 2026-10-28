@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import StylePicker from './StylePicker.jsx';
+import { DEFAULT_STYLE_ID } from '../prompts/styles.js';
 
 export default function CreateWorkspaceModal({ isOpen, onClose }) {
   const [name, setName] = useState('');
   const [targetPath, setTargetPath] = useState('');
+  const [style, setStyle] = useState(DEFAULT_STYLE_ID);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,6 +40,7 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
       await window.electronAPI?.createWorkspace({
         name: name.trim(),
         path: targetPath.trim(),
+        style,
       });
       onClose();
     } catch (err) {
@@ -47,75 +51,35 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: '20px',
-        userSelect: 'none',
-      }}
+      className="workspace-modal"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isBusy) onClose();
       }}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          background: '#15151c',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}
-      >
-        <div>
-          <h2 style={{ margin: '0 0 6px', fontSize: '1.2rem', fontWeight: 600, color: '#fff' }}>
+      <div className="workspace-modal__card">
+        <div className="workspace-modal__header">
+          <h2 className="workspace-modal__title">
             Nuevo Espacio de Trabajo
           </h2>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.6)', lineHeight: 1.4 }}>
+          <p className="workspace-modal__description">
             Configura una carpeta donde se guardarán todos tus videos, audios de voz en off, ideas y proyectos.
           </p>
         </div>
 
         {error && (
-          <div
-            style={{
-              padding: '10px 12px',
-              borderRadius: '6px',
-              background: 'rgba(248, 113, 113, 0.1)',
-              border: '1px solid rgba(248, 113, 113, 0.3)',
-              color: '#f87171',
-              fontSize: '0.85rem',
-            }}
-          >
+          <div className="workspace-modal__error">
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                color: 'rgba(255, 255, 255, 0.7)',
-                marginBottom: '6px',
-              }}
-            >
+        <div className="workspace-modal__form">
+          <div className="workspace-modal__field">
+            <label className="workspace-modal__label">
               Nombre del espacio de trabajo
             </label>
             <input
               type="text"
-              className="chat-list__rename"
-              style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px' }}
+              className="workspace-modal__input"
               placeholder="Ej: Canal Stickman, Misterios, etc."
               value={name}
               disabled={isBusy}
@@ -124,30 +88,14 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
             />
           </div>
 
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                color: 'rgba(255, 255, 255, 0.7)',
-                marginBottom: '6px',
-              }}
-            >
+          <div className="workspace-modal__field">
+            <label className="workspace-modal__label">
               Carpeta de destino
             </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="workspace-modal__folder-row">
               <input
                 type="text"
-                className="chat-list__rename"
-                style={{
-                  flex: 1,
-                  boxSizing: 'border-box',
-                  padding: '9px 12px',
-                  fontFamily: 'monospace',
-                  fontSize: '0.8rem',
-                  opacity: targetPath ? 1 : 0.6,
-                }}
+                className="workspace-modal__input workspace-modal__input--folder"
                 readOnly
                 placeholder="Ninguna carpeta seleccionada"
                 value={targetPath}
@@ -157,15 +105,21 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
                 className="settings__button settings__button--ghost"
                 disabled={isBusy}
                 onClick={handleSelectFolder}
-                style={{ flexShrink: 0 }}
               >
                 Examinar...
               </button>
             </div>
           </div>
+
+          <div className="workspace-modal__field">
+            <label className="workspace-modal__label">
+              Estilo visual
+            </label>
+            <StylePicker value={style} onChange={setStyle} disabled={isBusy} />
+          </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+        <div className="workspace-modal__actions">
           <button
             type="button"
             className="settings__button settings__button--ghost"

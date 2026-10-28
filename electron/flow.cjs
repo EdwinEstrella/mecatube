@@ -14,6 +14,7 @@ const { FLOW_PROJECT_URL } = require('./videos.cjs');
 
 const VIDEO_ID = /^[\w-]{1,100}$/;
 const CHARACTER_KEY = /^[a-z0-9-]{1,64}$/;
+const CHARACTER_IMAGE_PATTERN = /^[\w.-]{1,120}$/;
 // Flow's "Has alcanzado tu límite de uso. Inténtalo de nuevo más tarde." (relayed by the extension)
 const USAGE_LIMIT = /l[ií]mite de uso/i;
 const USAGE_LIMIT_STOP = 'Cola detenida: Flow alcanzó tu límite de uso. Inténtalo de nuevo más tarde.';
@@ -435,8 +436,30 @@ function createFlowStore(userDataDir) {
     return full;
   }
 
+  function branchFilePath(branchId, file) {
+    validKey(branchId);
+    if (typeof file !== 'string' || !CHARACTER_IMAGE_PATTERN.test(file)) {
+      throw new Error('Nombre de imagen de personaje no válido.');
+    }
+    const base = path.join(userDataDir, 'branches', branchId, 'characters');
+    const full = path.join(base, file);
+    if (path.dirname(full) !== base) throw new Error('Ruta de imagen no válida.');
+    if (!fs.statSync(full).isFile()) throw new Error('Imagen no encontrada.');
+    return full;
+  }
+
+  function readBranchReference(branchId, character) {
+    const file = character.file || character.selectedFile;
+    if (!file) throw new Error('El personaje de la rama no tiene imagen seleccionada.');
+    const fullPath = branchFilePath(branchId, file);
+    const ext = file.split('.').pop().toLowerCase();
+    const mime = MIME_BY_EXTENSION[ext] || 'image/png';
+    return { name: file, mime, base64: fs.readFileSync(fullPath).toString('base64'), assetId: null };
+  }
+
   return {
     list, upsert, addGeneration, select, setApproved, filePath, readReference,
+    branchFilePath, readBranchReference,
     listScenes, addSceneGeneration, selectScene, sceneFilePath, selectedSceneAssetId,
     listAnimations, addAnimationGeneration, animationFilePath,
   };
@@ -478,6 +501,7 @@ function createFlowService({
   bridge,
   store,
   videos,
+  branches,
   pushToWindow,
   jobTimeoutMs = JOB_TIMEOUT_MS,
   animationTimeoutMs = ANIMATION_JOB_TIMEOUT_MS,
@@ -489,6 +513,12 @@ function createFlowService({
   const queue = [];
 
   const findVideo = (videoId) => videos.list().find((video) => video.id === videoId);
+
+  function branchOrientationFor(video) {
+    if (!video || !video.branchId || !branches?.list) return 'horizontal';
+    const branch = branches.list().find((b) => b.id === video.branchId);
+    return branch?.orientation === 'vertical' ? 'vertical' : 'horizontal';
+  }
 
   function sceneStatus(videoId, number, state, extra = {}) {
     pushToWindow('flow:scene-status', { videoId, number, state, percent: null, captcha: false, error: null, ...extra });
@@ -635,7 +665,9 @@ function createFlowService({
     job = { requestId, videoId, kind: 'character', characterKey, timer: startTimer() };
     try {
       // The prompt travels exactly as stored
-      bridge.sendFlowJob({ requestId, prompt, projectUrl: video.flowProjectUrl ?? null, model: FLOW_MODEL, outputs: FLOW_OUTPUTS, references: [] });
+      const orientation = branchOrientationFor(video);
+      const aspect = orientation === 'vertical' ? '9:16' : '16:9';
+      bridge.sendFlowJob({ requestId, prompt, projectUrl: video.flowProjectUrl ?? null, model: FLOW_MODEL, outputs: FLOW_OUTPUTS, references: [], aspect, orientation });
     } catch (error) {
       finishJob();
       throw error;
@@ -649,16 +681,52 @@ function createFlowService({
     // Only the characters of the chat's current sheets: leftovers of another chat or of a renamed
     // sheet answer to the same "Personaje N" and would be picked instead of the approved one
     const all = store.list(item.videoId);
-    const keys = item.characterKeys ?? [];
-    const characters = keys.length > 0 ? all.filter((character) => keys.includes(character.key)) : all;
+    let characters = [];
+    let isBranch = false;
+    let branchId = null;
+
+    if (all.length > 0) {
+      const keys = item.characterKeys ?? [];
+      characters = keys.length > 0 ? all.filter((character) => keys.includes(character.key)) : all;
+    } else {
+      const video = findVideo(item.videoId);
+      branchId = video?.branchId;
+      const branch =
+        branchId && branches?.get
+          ? branches.get(branchId)
+          : branchId && branches?.list
+            ? branches.list().find((b) => b.id === branchId)
+            : null;
+      if (branch) {
+        if (Array.isArray(branch.characters) && branch.characters.length > 0) {
+          characters = branch.characters;
+          isBranch = true;
+        } else if (branch.characterMode === 'own' && Array.isArray(branch.characterImages) && branch.characterImages.length > 0) {
+          characters = branch.characterImages.map((file, idx) => ({
+            key: `personaje-${idx + 1}`,
+            name: `Personaje ${idx + 1}`,
+            file,
+            source: 'own',
+          }));
+          isBranch = true;
+        }
+      }
+    }
+
     const references = [];
     const seen = new Set();
     for (const { ref, character } of resolveSheets(characters, item.sheetRefs)) {
       if (!character) throw new Error(`No encuentro el personaje de la hoja ${ref}. Genera y aprueba primero las hojas de personaje.`);
-      if (!character.selectedFile) throw new Error(`La hoja ${ref} (${character.name}) aún no tiene una imagen seleccionada.`);
-      if (seen.has(character.key)) continue;
-      seen.add(character.key);
-      references.push(store.readReference(item.videoId, character.key));
+      const selectedFile = isBranch ? (character.file || character.selectedFile) : character.selectedFile;
+      if (!selectedFile) throw new Error(`La hoja ${ref} (${character.name}) aún no tiene una imagen seleccionada.`);
+      const charKey = character.key || selectedFile;
+      if (seen.has(charKey)) continue;
+      seen.add(charKey);
+      if (isBranch) {
+        references.push(store.readBranchReference(branchId, character));
+      } else {
+        references.push(store.readReference(item.videoId, character.key));
+      }
     }
     return references;
   }
@@ -676,13 +744,17 @@ function createFlowService({
           const sourceAssetId = store.selectedSceneAssetId(item.videoId, item.number);
           job = { requestId, videoId: item.videoId, kind: 'animation', animation: { ...item, sourceAssetId }, timer: startTimer(animationTimeoutMs) };
           animationStatus(item.videoId, item.number, 'running');
+          const orientation = branchOrientationFor(video);
+          const aspect = orientation === 'vertical' ? '9:16' : '16:9';
           bridge.sendFlowJob({
             requestId,
             kind: 'animate',
             prompt: item.prompt,
             projectUrl: video.flowProjectUrl ?? null,
             sourceAssetId,
-            video: { ...ANIMATION_VIDEO_SETTINGS, seconds: item.seconds ?? ANIMATION_VIDEO_SETTINGS.seconds },
+            aspect,
+            orientation,
+            video: { ...ANIMATION_VIDEO_SETTINGS, aspect, seconds: item.seconds ?? ANIMATION_VIDEO_SETTINGS.seconds },
           });
         } catch (error) {
           finishJob();
@@ -695,6 +767,8 @@ function createFlowService({
         const references = referencesFor(item);
         job = { requestId, videoId: item.videoId, kind: 'scene', scene: item, timer: startTimer() };
         sceneStatus(item.videoId, item.number, 'running');
+        const orientation = branchOrientationFor(video);
+        const aspect = orientation === 'vertical' ? '9:16' : '16:9';
         bridge.sendFlowJob({
           requestId,
           prompt: references.length > 0 ? scenePromptForFlow(item.prompt, item.sheetRefs) : item.prompt,
@@ -702,6 +776,8 @@ function createFlowService({
           model: FLOW_MODEL,
           outputs: SCENE_OUTPUTS,
           references,
+          aspect,
+          orientation,
         });
       } catch (error) {
         finishJob();

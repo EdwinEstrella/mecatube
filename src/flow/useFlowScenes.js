@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureIllustratorVideo } from './illustratorVideo.js';
+import { chooseVideoTarget } from '../ui/videoTargetDialog.js';
 import { isActive } from './sceneStatus.js';
 
 function cleanError(error) {
@@ -73,7 +74,8 @@ export function useFlowScenes(conversationId, conversationTitle, isConnected, ch
     const api = window.electronAPI;
     setError('');
     try {
-      const video = await ensureIllustratorVideo(api, conversationId, conversationTitle);
+      const video = await ensureIllustratorVideo(api, conversationId, conversationTitle, chooseVideoTarget);
+      if (!video) return;
       videoIdRef.current = video.id;
       setVideoId(video.id);
       setProjectUrl(video.flowProjectUrl ?? null);

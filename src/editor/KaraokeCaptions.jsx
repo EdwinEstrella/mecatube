@@ -272,7 +272,7 @@ function PageEnter({ page, pageEffect, children }) {
         flexWrap: 'wrap',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '0 18px',
+        gap: isVertical ? '4px 14px' : '0 18px',
         width: '100%',
         scale,
         opacity,
@@ -287,15 +287,16 @@ function PageEnter({ page, pageEffect, children }) {
 
 function Page({ page, pageIndex, style }) {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const isVertical = height > width;
   const seconds = frame / fps;
 
   const activeIndex = activeWordIndex(page, seconds);
   const highlightColor = pageIndex % 3 === 2 ? style.altHighlightColor : style.highlightColor;
 
   const positionStyles = {
-    top: style.position === 'top' ? 120 : style.position === 'middle' ? '50%' : 'auto',
-    bottom: style.position === 'bottom' ? 140 : 'auto',
+    top: style.position === 'top' ? (isVertical ? 220 : 120) : style.position === 'middle' ? '50%' : 'auto',
+    bottom: style.position === 'bottom' ? (isVertical ? 260 : 140) : 'auto',
     translate: style.position === 'middle' ? '-50% -50%' : '-50% 0',
   };
 
@@ -308,6 +309,8 @@ function Page({ page, pageIndex, style }) {
     return offset;
   });
 
+  const effectiveSize = isVertical ? Math.round(style.size * 1.1) : style.size;
+
   return (
     <div
       style={{
@@ -315,12 +318,12 @@ function Page({ page, pageIndex, style }) {
         ...positionStyles,
         left: '50%',
         width: style.shadowType === 'box' ? 'fit-content' : '100%',
-        maxWidth: '85%',
+        maxWidth: isVertical ? '88%' : '85%',
         pointerEvents: 'none',
         ...css,
       }}
     >
-      <PageEnter page={page} pageEffect={style.pageEffect}>
+      <PageEnter page={page} pageEffect={style.pageEffect} isVertical={isVertical}>
         {page.words.map((word, index) => (
           <Word
             key={`${index}-${word.start}`}
@@ -333,7 +336,7 @@ function Page({ page, pageIndex, style }) {
             strokeWidth={style.strokeWidth}
             baseTextShadow={css.textShadow}
             shadow={style.shadowType !== 'none'}
-            size={style.size}
+            size={effectiveSize}
             wordEffect={style.wordEffect}
             pageEffect={style.pageEffect}
             charStartIndex={charOffsets[index]}

@@ -1,6 +1,6 @@
 // Run with: node src/timeline/stages.test.mjs
 import assert from 'node:assert/strict';
-import { STAGES, deriveStages, countDone, findChosenIdea } from './stages.js';
+import { STAGES, deriveStages, countDone, findChosenIdea, branchHasCharacters } from './stages.js';
 
 let failures = 0;
 function test(name, fn) {
@@ -225,6 +225,36 @@ test('a forced "not done" override beats approved characters', () => {
   assert.notEqual(statusOf(stages).characters, 'done');
 });
 
+test('branch with characters marks characters stage done', () => {
+  const branch = { id: 'b1', characters: [{ key: 'char-1', name: 'Hero', file: 'hero.png', source: 'flow' }] };
+  assert.equal(branchHasCharacters(branch), true);
+  const stages = deriveStages(video(), null, null, { branch });
+  const chars = stages.find((stage) => stage.key === 'characters');
+  assert.equal(chars.status, 'done');
+  assert.equal(chars.source, 'auto');
+});
+
+test('branch with characterMode own and characterImages marks characters stage done', () => {
+  const branch = { id: 'b2', characterMode: 'own', characterImages: ['char.png'] };
+  assert.equal(branchHasCharacters(branch), true);
+  const stages = deriveStages(video(), null, null, { branch });
+  assert.equal(statusOf(stages).characters, 'done');
+});
+
+test('override false beats branch characters', () => {
+  const branch = { id: 'b1', characters: [{ key: 'char-1', name: 'Hero', file: 'hero.png', source: 'flow' }] };
+  const stages = deriveStages(video({ characters: false }), null, null, { branch });
+  assert.notEqual(statusOf(stages).characters, 'done');
+  assert.equal(stages.find((stage) => stage.key === 'characters').source, 'manual');
+});
+
+test('branch with no characters does not mark characters stage done without approval', () => {
+  const branch = { id: 'b1', characters: [], characterImages: [], characterMode: 'create' };
+  assert.equal(branchHasCharacters(branch), false);
+  const stages = deriveStages(video(), null, null, { branch });
+  assert.notEqual(statusOf(stages).characters, 'done');
+});
+
 test('first image block delivered: characters done, images not yet', () => {
   const stages = deriveStages(video(), null, illustrator.approved());
   assert.equal(statusOf(stages).characters, 'done');
@@ -310,6 +340,28 @@ test('everything done: no current stage', () => {
 test('tolerates missing video, bad messages and non-array chats', () => {
   assert.equal(deriveStages(undefined, undefined, undefined).length, 10);
   assert.equal(deriveStages(video(), [null, { role: 'assistant' }, { role: 'assistant', content: 5 }], 'nope').length, 10);
+});
+
+test('video with brief marks idea stage done automatically', () => {
+  const vidWithBrief = { id: 'v1', title: 'Video con brief', brief: 'Contexto del capítulo 1', overrides: {} };
+  const stages = deriveStages(vidWithBrief, null, null);
+  assert.equal(statusOf(stages).idea, 'done');
+  assert.equal(statusOf(stages).script, 'current');
+  assert.equal(stages.find((s) => s.key === 'idea').overridden, false);
+  assert.equal(stages.find((s) => s.key === 'idea').source, 'auto');
+});
+
+test('video without brief keeps idea stage as current when no messages', () => {
+  const vidNoBrief = { id: 'v1', title: 'Video sin brief', brief: '', overrides: {} };
+  const stages = deriveStages(vidNoBrief, null, null);
+  assert.equal(statusOf(stages).idea, 'current');
+});
+
+test('override false beats brief auto-done', () => {
+  const vidOverridden = { id: 'v1', title: 'Video con brief', brief: 'Contexto', overrides: { idea: false } };
+  const stages = deriveStages(vidOverridden, null, null);
+  assert.equal(statusOf(stages).idea, 'current');
+  assert.equal(stages.find((s) => s.key === 'idea').overridden, true);
 });
 
 if (failures > 0) {
