@@ -44,6 +44,7 @@ export default function ChatView({
   const [workspaceStyle, setWorkspaceStyle] = useState(DEFAULT_STYLE_ID);
   const [activeOrientation, setActiveOrientation] = useState('horizontal');
   const [activeVideoType, setActiveVideoType] = useState('explainer');
+  const [activeBranchCharacters, setActiveBranchCharacters] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -64,6 +65,27 @@ export default function ChatView({
           if (branch?.videoType) {
             setActiveVideoType(branch.videoType);
           }
+          if (Array.isArray(branch?.characters) && branch.characters.length > 0) {
+            setActiveBranchCharacters(branch.characters);
+          } else if (
+            branch?.characterMode === 'own' &&
+            Array.isArray(branch?.characterImages) &&
+            branch.characterImages.length > 0
+          ) {
+            setActiveBranchCharacters(
+              branch.characterImages.map((file, idx) => ({
+                key: `personaje-${idx + 1}`,
+                name: `Personaje ${idx + 1}`,
+                description: '',
+                file,
+                source: 'own',
+              }))
+            );
+          } else {
+            setActiveBranchCharacters(null);
+          }
+        } else {
+          setActiveBranchCharacters(null);
         }
       } catch {}
     };
@@ -260,6 +282,7 @@ export default function ChatView({
           style: workspaceStyle,
           orientation: activeOrientation,
           videoType: activeVideoType,
+          branchCharacters: activeBranchCharacters,
         });
         const conversationId = await handlePreset(promptText);
         if (!conversationId || !action.videoId) return;

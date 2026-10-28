@@ -17,6 +17,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
   const [currentStyle, setCurrentStyle] = useState(DEFAULT_STYLE_ID);
   const [currentOrientation, setCurrentOrientation] = useState('horizontal');
   const [currentVideoType, setCurrentVideoType] = useState('explainer');
+  const [currentBranchCharacters, setCurrentBranchCharacters] = useState(null);
 
   // Reload on mount and whenever Settings saves or restores a prompt
   useEffect(() => {
@@ -45,6 +46,27 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
           const branch = branches.find((b) => b.id === activeVideo.branchId);
           if (branch?.orientation) setCurrentOrientation(branch.orientation);
           if (branch?.videoType) setCurrentVideoType(branch.videoType);
+          if (Array.isArray(branch?.characters) && branch.characters.length > 0) {
+            setCurrentBranchCharacters(branch.characters);
+          } else if (
+            branch?.characterMode === 'own' &&
+            Array.isArray(branch?.characterImages) &&
+            branch.characterImages.length > 0
+          ) {
+            setCurrentBranchCharacters(
+              branch.characterImages.map((file, idx) => ({
+                key: `personaje-${idx + 1}`,
+                name: `Personaje ${idx + 1}`,
+                description: '',
+                file,
+                source: 'own',
+              }))
+            );
+          } else {
+            setCurrentBranchCharacters(null);
+          }
+        } else {
+          setCurrentBranchCharacters(null);
         }
       } catch {}
     };
@@ -88,6 +110,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
               style: currentStyle,
               orientation: currentOrientation,
               videoType: currentVideoType,
+              branchCharacters: currentBranchCharacters,
             });
             onSend(text);
           }}

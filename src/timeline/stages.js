@@ -144,15 +144,26 @@ export function detectAuto(scriptMessages, illustratorMessages, hasVoice = false
 // video.overrides[key] = true | false wins over detection; anything else means "auto".
 // 'current' is the first stage that is not done. hasVoice marks the voice stage done when a
 // narration track exists for the video.
+export function branchHasCharacters(branch) {
+  if (!branch) return false;
+  if (Array.isArray(branch.characters) && branch.characters.length > 0) return true;
+  if (branch.characterMode === 'own' && Array.isArray(branch.characterImages) && branch.characterImages.length > 0) {
+    return true;
+  }
+  return false;
+}
+
 export function deriveStages(
   video,
   scriptMessages,
   illustratorMessages,
   { hasVoice = false, charactersApproved = false, videoType = null, branch = null } = {}
 ) {
-  const resolvedVideoType = videoType ?? branch?.videoType ?? video?.videoType ?? 'explainer';
+  const resolvedBranch = branch ?? video?.branch ?? null;
+  const resolvedVideoType = videoType ?? resolvedBranch?.videoType ?? video?.videoType ?? 'explainer';
   const auto = detectAuto(scriptMessages, illustratorMessages, hasVoice, charactersApproved);
   const overrides = video?.overrides && typeof video.overrides === 'object' ? video.overrides : {};
+  const hasBranchChars = branchHasCharacters(resolvedBranch);
 
   let currentAssigned = false;
   return STAGES.map(({ key, label, auto: isAuto }) => {
@@ -170,7 +181,9 @@ export function deriveStages(
       };
     }
 
-    const done = overridden ? overrides[key] : auto[key] === true;
+    const isBranchCharactersDone = key === 'characters' && hasBranchChars;
+    const isAutoDone = auto[key] === true || isBranchCharactersDone;
+    const done = overridden ? overrides[key] : isAutoDone;
     let status = 'pending';
     if (done) {
       status = 'done';
@@ -178,7 +191,7 @@ export function deriveStages(
       status = 'current';
       currentAssigned = true;
     }
-    const detected = !overridden && auto[key] === true;
+    const detected = !overridden && isAutoDone;
     return {
       key,
       label,

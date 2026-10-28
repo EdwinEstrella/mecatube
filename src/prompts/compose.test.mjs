@@ -64,3 +64,42 @@ test('composePrompt: vertical orientation removes 16:9 and 1920x1080 across all 
     );
   }
 });
+
+test('composePrompt: branchCharacters appends PERSONAJES YA DEFINIDOS block', () => {
+  const branchCharacters = [
+    { key: 'leo', name: 'Leo', description: 'Astronauta con traje espacial' },
+    { key: 'bot', name: 'Robot 1', description: '' },
+  ];
+
+  const composed = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    branchCharacters,
+  });
+
+  assert.ok(composed.includes('PERSONAJES YA DEFINIDOS'));
+  assert.ok(composed.includes('- Leo: Astronauta con traje espacial'));
+  assert.ok(composed.includes('- Robot 1: ver imagen de referencia'));
+  assert.ok(composed.includes('Omite la creación de nuevas hojas de personaje en la ETAPA 2'));
+
+  // Without branchCharacters, or with empty array, must be byte-identical
+  const emptyComposed = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    branchCharacters: [],
+  });
+  assert.equal(emptyComposed, promptTwo);
+
+  const nullComposed = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    branchCharacters: null,
+  });
+  assert.equal(nullComposed, promptTwo);
+});

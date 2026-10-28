@@ -120,6 +120,7 @@ export default function TimelineView({
       hasVoice: Boolean(voices[video.id]),
       charactersApproved: charactersDone(characters[video.id]),
       videoType: currentBranch?.videoType,
+      branch: currentBranch,
     });
   }, [video, branches, chats, voices, characters]);
 
@@ -133,6 +134,7 @@ export default function TimelineView({
         hasVoice: Boolean(voices[vid.id]),
         charactersApproved: charactersDone(characters[vid.id]),
         videoType: vidBranch?.videoType,
+        branch: vidBranch,
       });
       map[vid.id] = {
         doneCount: countDone(vidStages),
@@ -258,9 +260,15 @@ export default function TimelineView({
           {isLoaded && video ? (
             <VideoDetail
               video={video}
+              branch={branches.find((b) => b.id === video.branchId)}
               stages={stages}
               doneCount={doneCount}
               onSendPrompt1={handleSendPrompt1}
+              onEditBranch={(branchToEdit) => {
+                setWizardBranch(branchToEdit);
+                setIsWizardOpen(true);
+              }}
+              onBranchUpdated={refresh}
               {...detail}
               scriptMessages={chats[video.scriptConversationId]}
               voice={voices[video.id]}

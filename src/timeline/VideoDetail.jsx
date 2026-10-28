@@ -46,6 +46,7 @@ function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onS
 // Presentational: 1 single timeline for the workspace
 export default function VideoDetail({
   video,
+  branch = null,
   stages = [],
   doneCount = 0,
   chatStates,
@@ -64,6 +65,8 @@ export default function VideoDetail({
   onToggleStage,
   onDelete,
   onEdited,
+  onEditBranch,
+  onBranchUpdated,
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -154,9 +157,12 @@ export default function VideoDetail({
             ) : (
               <CharactersPanel
                 video={video}
+                branch={branch}
                 characters={characters}
                 onSetProject={onSetFlowProject}
                 onOpenProject={onOpenFlowProject}
+                onEditBranch={onEditBranch}
+                onBranchUpdated={onBranchUpdated}
               />
             )
           )}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ChoiceCards from '../ui/ChoiceCards.jsx';
+import { slugify } from '../flow/parseCharacterSheets.js';
 import {
   ORIENTATION_DESCRIPTIONS,
   VIDEO_TYPE_LABELS,
@@ -8,13 +9,28 @@ import {
   MODE_HINTS,
 } from '../timeline/branchHelpers.js';
 
+function ensureUniqueKeys(characters) {
+  const used = new Set();
+  return characters.map((char, idx) => {
+    let base = slugify(char.name) || `personaje-${idx + 1}`;
+    let key = base;
+    let n = 2;
+    while (used.has(key)) {
+      key = `${base.slice(0, 55)}-${n}`;
+      n++;
+    }
+    used.add(key);
+    return { ...char, key };
+  });
+}
+
 export function useBranchForm(branch, isOpen) {
   const [name, setName] = useState('');
   const [orientation, setOrientation] = useState('horizontal');
   const [videoType, setVideoType] = useState('explainer');
   const [characterMode, setCharacterMode] = useState('create');
-  const [characterImages, setCharacterImages] = useState([]);
-  const [pendingFiles, setPendingFiles] = useState([]);
+  const [characters, setCharacters] = useState([]);
+  const [pendingCharacters, setPendingCharacters] = useState([]);
   const [mode, setMode] = useState('free');
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
@@ -26,17 +42,28 @@ export function useBranchForm(branch, isOpen) {
       setOrientation(branch.orientation || 'horizontal');
       setVideoType(branch.videoType || 'explainer');
       setCharacterMode(branch.characterMode || 'create');
-      setCharacterImages(branch.characterImages || []);
+      const loadedChars = Array.isArray(branch.characters) && branch.characters.length > 0
+        ? branch.characters.map((c) => ({ ...c }))
+        : Array.isArray(branch.characterImages) && branch.characterImages.length > 0
+          ? branch.characterImages.map((file, idx) => ({
+              key: `personaje-${idx + 1}`,
+              name: `Personaje ${idx + 1}`,
+              description: '',
+              file,
+              source: branch.characterMode === 'create' ? 'flow' : 'own',
+            }))
+          : [];
+      setCharacters(loadedChars);
       setMode(branch.mode || 'free');
     } else {
       setName('');
       setOrientation('horizontal');
       setVideoType('explainer');
       setCharacterMode('create');
-      setCharacterImages([]);
+      setCharacters([]);
       setMode('free');
     }
-    setPendingFiles([]);
+    setPendingCharacters([]);
     setIsBusy(false);
     setError('');
   }, [branch, isOpen]);
@@ -50,10 +77,10 @@ export function useBranchForm(branch, isOpen) {
     setVideoType,
     characterMode,
     setCharacterMode,
-    characterImages,
-    setCharacterImages,
-    pendingFiles,
-    setPendingFiles,
+    characters,
+    setCharacters,
+    pendingCharacters,
+    setPendingCharacters,
     mode,
     setMode,
     isBusy,
@@ -96,10 +123,10 @@ export default function NewBranchWizard({
     setVideoType,
     characterMode,
     setCharacterMode,
-    characterImages,
-    setCharacterImages,
-    pendingFiles,
-    setPendingFiles,
+    characters,
+    setCharacters,
+    pendingCharacters,
+    setPendingCharacters,
     mode,
     setMode,
     isBusy,
@@ -121,34 +148,54 @@ export default function NewBranchWizard({
 
   if (!isOpen) return null;
 
-  const totalImagesCount = characterImages.length + pendingFiles.length;
+  const totalCharactersCount = characters.length + pendingCharacters.length;
 
   const handleSelectFiles = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    const remainingSlots = 10 - totalImagesCount;
+    const remainingSlots = 10 - totalCharactersCount;
     if (remainingSlots <= 0) {
-      setError('Se alcanzó el límite máximo de 10 imágenes.');
+      setError('Se alcanzó el límite máximo de 10 personajes.');
       return;
     }
 
-    const allowed = files.slice(0, remainingSlots).map((file) => ({
-      name: file.name,
+    const currentTotal = characters.length + pendingCharacters.length;
+    const allowed = files.slice(0, remainingSlots).map((file, i) => ({
+      id: crypto.randomUUID(),
+      name: `Personaje ${currentTotal + i + 1}`,
+      description: '',
+      fileName: file.name,
       path: file.path,
       previewUrl: URL.createObjectURL(file),
     }));
 
-    setPendingFiles((prev) => [...prev, ...allowed]);
+    setPendingCharacters((prev) => [...prev, ...allowed]);
     e.target.value = '';
   };
 
-  const handleRemoveExistingImage = (imageName) => {
-    setCharacterImages((prev) => prev.filter((img) => img !== imageName));
+  const handleUpdateExistingCharacter = (index, field, value) => {
+    setCharacters((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
   };
 
-  const handleRemovePendingFile = (index) => {
-    setPendingFiles((prev) => {
+  const handleUpdatePendingCharacter = (index, field, value) => {
+    setPendingCharacters((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleRemoveExistingCharacter = (index) => {
+    setCharacters((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemovePendingCharacter = (index) => {
+    setPendingCharacters((prev) => {
       const copy = [...prev];
       const removed = copy.splice(index, 1)[0];
       if (removed?.previewUrl) {
@@ -177,58 +224,87 @@ export default function NewBranchWizard({
       const api = window.electronAPI;
       if (!api) throw new Error('API no disponible.');
 
-      if (isEdit) {
-        // Edit existing branch
-        let finalImages = [...characterImages];
-        if (pendingFiles.length > 0) {
-          const filePaths = pendingFiles.map((f) => f.path).filter(Boolean);
-          if (filePaths.length > 0) {
-            const added = await api.addBranchCharacterImage({
-              branchId: branch.id,
-              filePaths,
-            });
-            finalImages = [...finalImages, ...added];
-          }
-        }
+      let targetBranchId = branch?.id;
 
-        const updated = await api.updateBranch(branch.id, {
-          name: cleanName,
-          orientation,
-          videoType,
-          characterMode,
-          characterImages: characterMode === 'own' ? finalImages : [],
-          mode,
-        });
-        onSaved?.(updated);
-        onClose();
-      } else {
-        // Create new branch
+      if (!isEdit) {
         const created = await api.createBranch({
           name: cleanName,
           orientation,
           videoType,
           characterMode,
           characterImages: [],
+          characters: [],
           mode,
         });
-
-        if (characterMode === 'own' && pendingFiles.length > 0) {
-          const filePaths = pendingFiles.map((f) => f.path).filter(Boolean);
-          if (filePaths.length > 0) {
-            const storedNames = await api.addBranchCharacterImage({
-              branchId: created.id,
-              filePaths,
-            });
-            await api.updateBranch(created.id, {
-              characterImages: storedNames,
-            });
-            created.characterImages = storedNames;
-          }
-        }
-
-        onSaved?.(created);
-        onClose();
+        targetBranchId = created.id;
       }
+
+      let uploadedFileNames = [];
+      if (pendingCharacters.length > 0) {
+        const filePaths = pendingCharacters.map((f) => f.path).filter(Boolean);
+        if (filePaths.length > 0) {
+          uploadedFileNames = await api.addBranchCharacterImage({
+            branchId: targetBranchId,
+            filePaths,
+          });
+        }
+      }
+
+      const newCharsFromPending = pendingCharacters.map((p, idx) => ({
+        key: slugify(p.name) || `personaje-${characters.length + idx + 1}`,
+        name: p.name.trim() || `Personaje ${characters.length + idx + 1}`,
+        description: p.description.trim(),
+        file: uploadedFileNames[idx],
+        source: 'own',
+      }));
+
+      const allChars = [
+        ...characters.map((c, idx) => ({
+          key: slugify(c.name) || c.key || `personaje-${idx + 1}`,
+          name: c.name.trim() || `Personaje ${idx + 1}`,
+          description: c.description ? c.description.trim() : '',
+          file: c.file,
+          source: c.source || 'own',
+        })),
+        ...newCharsFromPending,
+      ];
+
+      const finalCharacters = ensureUniqueKeys(allChars);
+      const finalImages = finalCharacters.map((c) => c.file).filter(Boolean);
+
+      let savedResult;
+      if (isEdit) {
+        savedResult = await api.updateBranch(branch.id, {
+          name: cleanName,
+          orientation,
+          videoType,
+          characterMode,
+          characterImages: finalImages,
+          characters: finalCharacters,
+          mode,
+        });
+      } else {
+        if (finalCharacters.length > 0) {
+          savedResult = await api.updateBranch(targetBranchId, {
+            characterImages: finalImages,
+            characters: finalCharacters,
+          });
+        } else {
+          savedResult = {
+            id: targetBranchId,
+            name: cleanName,
+            orientation,
+            videoType,
+            characterMode,
+            characterImages: [],
+            characters: [],
+            mode,
+          };
+        }
+      }
+
+      onSaved?.(savedResult);
+      onClose();
     } catch (err) {
       setError(err.message || 'Error guardando la rama.');
       setIsBusy(false);
@@ -392,16 +468,16 @@ export default function NewBranchWizard({
               </p>
             )}
 
-            {characterMode === 'own' && (
+            {(characterMode === 'own' || (isEdit && (characters.length > 0 || pendingCharacters.length > 0))) && (
               <div className="branch-wizard__character-section">
                 <div className="branch-wizard__character-header">
                   <span className="branch-wizard__character-title">
-                    Imágenes del personaje ({totalImagesCount}/10)
+                    Personajes de la rama ({totalCharactersCount}/10)
                   </span>
                   <button
                     type="button"
                     className="settings__button settings__button--ghost"
-                    disabled={isBusy || totalImagesCount >= 10}
+                    disabled={isBusy || totalCharactersCount >= 10}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     + Subir imágenes
@@ -416,53 +492,87 @@ export default function NewBranchWizard({
                   />
                 </div>
 
-                {totalImagesCount === 0 ? (
+                {totalCharactersCount === 0 ? (
                   <p className="branch-wizard__empty-hint">
-                    No has añadido imágenes. Puedes subir hasta 10 imágenes (PNG, JPG, WebP).
+                    No has añadido imágenes. Puedes subir hasta 10 personajes con su imagen (PNG, JPG, WebP).
                   </p>
                 ) : (
                   <div className="branch-wizard__images-grid">
-                    {/* Existing stored images */}
-                    {characterImages.map((imageName) => (
-                      <div key={imageName} className="branch-wizard__image-thumb">
-                        <img
-                          src={`mecatube-media://branch-character/${branch?.id}/${encodeURIComponent(imageName)}`}
-                          alt={imageName}
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                        <span className="branch-wizard__image-name" title={imageName}>
-                          {imageName}
-                        </span>
-                        <button
-                          type="button"
-                          className="branch-wizard__image-remove"
-                          title="Eliminar imagen"
+                    {/* Existing stored characters */}
+                    {characters.map((char, idx) => (
+                      <div key={char.file || idx} className="branch-wizard__character-card">
+                        <div className="branch-wizard__card-thumb">
+                          <img
+                            src={`mecatube-media://branch-character/${branch?.id}/${encodeURIComponent(char.file)}`}
+                            alt={char.name}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="branch-wizard__image-remove"
+                            title="Eliminar personaje"
+                            disabled={isBusy}
+                            onClick={() => handleRemoveExistingCharacter(idx)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          className="branch-wizard__char-input"
+                          placeholder="Nombre del personaje"
+                          maxLength={80}
+                          value={char.name}
                           disabled={isBusy}
-                          onClick={() => handleRemoveExistingImage(imageName)}
-                        >
-                          ✕
-                        </button>
+                          onChange={(e) => handleUpdateExistingCharacter(idx, 'name', e.target.value)}
+                        />
+                        <input
+                          type="text"
+                          className="branch-wizard__char-input"
+                          placeholder="Descripción (opcional)"
+                          maxLength={2000}
+                          value={char.description || ''}
+                          disabled={isBusy}
+                          onChange={(e) => handleUpdateExistingCharacter(idx, 'description', e.target.value)}
+                        />
                       </div>
                     ))}
 
-                    {/* Pending added files */}
-                    {pendingFiles.map((file, idx) => (
-                      <div key={file.name + idx} className="branch-wizard__image-thumb">
-                        <img src={file.previewUrl} alt={file.name} />
-                        <span className="branch-wizard__image-name" title={file.name}>
-                          {file.name}
-                        </span>
-                        <button
-                          type="button"
-                          className="branch-wizard__image-remove"
-                          title="Eliminar imagen"
+                    {/* Pending added characters */}
+                    {pendingCharacters.map((file, idx) => (
+                      <div key={file.id || idx} className="branch-wizard__character-card">
+                        <div className="branch-wizard__card-thumb">
+                          <img src={file.previewUrl} alt={file.name} />
+                          <button
+                            type="button"
+                            className="branch-wizard__image-remove"
+                            title="Eliminar personaje"
+                            disabled={isBusy}
+                            onClick={() => handleRemovePendingCharacter(idx)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          className="branch-wizard__char-input"
+                          placeholder="Nombre del personaje"
+                          maxLength={80}
+                          value={file.name}
                           disabled={isBusy}
-                          onClick={() => handleRemovePendingFile(idx)}
-                        >
-                          ✕
-                        </button>
+                          onChange={(e) => handleUpdatePendingCharacter(idx, 'name', e.target.value)}
+                        />
+                        <input
+                          type="text"
+                          className="branch-wizard__char-input"
+                          placeholder="Descripción (opcional)"
+                          maxLength={2000}
+                          value={file.description || ''}
+                          disabled={isBusy}
+                          onChange={(e) => handleUpdatePendingCharacter(idx, 'description', e.target.value)}
+                        />
                       </div>
                     ))}
                   </div>

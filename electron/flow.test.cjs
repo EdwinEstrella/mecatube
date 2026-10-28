@@ -855,6 +855,59 @@ async function waitUntil(check, label) {
     assert.match(watchedEvents.findLast(([c]) => c === 'flow:animation-status')[1].error, /tardó demasiado/);
   });
 
+  await test('scene job reference resolution falls back to branch characters when video characters are absent', async () => {
+    const branchDir = path.join(sceneRoot, 'branches', 'b-branch-chars', 'characters');
+    fs.mkdirSync(branchDir, { recursive: true });
+    const branchImg = path.join(branchDir, 'hero_safe.webp');
+    fs.writeFileSync(branchImg, WEBP);
+
+    const testBranches = {
+      get: (id) => {
+        if (id === 'b-branch-chars') {
+          return {
+            id: 'b-branch-chars',
+            characters: [
+              { key: 'personaje-1', name: 'Personaje 1 — Leo', file: 'hero_safe.webp', source: 'flow' },
+            ],
+          };
+        }
+        return null;
+      },
+    };
+
+    const vSent = [];
+    const testBridge = {
+      isConnected: () => true,
+      sendFlowJob: (payload) => vSent.push(payload),
+      onMessage: () => {},
+      onStatusChange: () => {},
+    };
+
+    const branchEvents = [];
+    const branchService = createFlowService({
+      bridge: testBridge,
+      store: sceneStore,
+      videos: {
+        list: () => [{ id: 'v-no-chars', branchId: 'b-branch-chars' }],
+      },
+      branches: testBranches,
+      pushToWindow: (c, p) => branchEvents.push([c, p]),
+    });
+
+    branchService.generateScenes({
+      videoId: 'v-no-chars',
+      scenes: [{ number: 1, title: 'Scene 1', prompt: 'Scene with character sheet 1', sheetRefs: ['1'] }],
+    });
+
+    assert.equal(vSent.length, 1);
+    assert.equal(vSent[0].references.length, 1);
+    assert.equal(vSent[0].references[0].name, 'hero_safe.webp');
+    assert.equal(vSent[0].references[0].mime, 'image/webp');
+    assert.equal(vSent[0].references[0].assetId, null);
+    assert.equal(vSent[0].references[0].base64, WEBP.toString('base64'));
+    assert.match(vSent[0].prompt, /Use the attached reference image/);
+  });
+
   fs.rmSync(sceneRoot, { recursive: true, force: true });
   bridge.stop();
   fs.rmSync(dir,{ recursive: true, force: true });

@@ -5,9 +5,13 @@ const crypto = require('node:crypto');
 
 const ID_PATTERN = /^[\w-]{1,100}$/;
 const CHARACTER_IMAGE_PATTERN = /^[\w.-]{1,120}$/;
+const CHARACTER_KEY_PATTERN = /^[\w-]{1,60}$/;
+const FLOW_PROJECT_URL = /^https:\/\/flow\.google\.com\/(?:u\/\d+\/)?project\/[0-9a-f-]{36}$/;
+const CHARACTER_SOURCES = ['own', 'flow'];
 const NAME_MAX = 80;
 const TEXT_MAX = 4000;
 const TITLE_MAX = 200;
+const CHARACTER_DESC_MAX = 2000;
 
 const ORIENTATIONS = ['horizontal', 'vertical'];
 const MODES = ['series', 'titles', 'free'];
@@ -20,6 +24,8 @@ const KNOWN_BRANCH_FIELDS = [
   'videoType',
   'characterMode',
   'characterImages',
+  'characters',
+  'flowProjectUrl',
   'mode',
   'series',
   'titles',
@@ -66,6 +72,53 @@ function validCharacterImages(value) {
     }
   }
   return [...value];
+}
+
+function validCharacters(value) {
+  if (!Array.isArray(value)) throw new Error('Lista de personajes no válida.');
+  if (value.length > 50) throw new Error('Se superó el límite de personajes.');
+  return value.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('Personaje no válido.');
+    }
+    if (typeof item.key !== 'string' || !CHARACTER_KEY_PATTERN.test(item.key)) {
+      throw new Error('Clave de personaje no válida.');
+    }
+    if (typeof item.name !== 'string') {
+      throw new Error('Nombre de personaje no válido.');
+    }
+    const name = item.name.trim();
+    if (!name || name.length > NAME_MAX) {
+      throw new Error('Nombre de personaje no válido.');
+    }
+    if (item.description !== undefined && item.description !== null) {
+      if (typeof item.description !== 'string' || item.description.length > CHARACTER_DESC_MAX) {
+        throw new Error('Descripción de personaje no válida.');
+      }
+    }
+    const description = typeof item.description === 'string' ? item.description : '';
+    if (typeof item.file !== 'string' || !CHARACTER_IMAGE_PATTERN.test(item.file)) {
+      throw new Error('Nombre de imagen de personaje no válido.');
+    }
+    if (typeof item.source !== 'string' || !CHARACTER_SOURCES.includes(item.source)) {
+      throw new Error('Origen de personaje no válido.');
+    }
+    return {
+      key: item.key,
+      name,
+      description,
+      file: item.file,
+      source: item.source,
+    };
+  });
+}
+
+function validFlowProjectUrl(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string' || !FLOW_PROJECT_URL.test(value)) {
+    throw new Error('URL del proyecto de Flow no válida.');
+  }
+  return value;
 }
 
 function validMode(value) {
@@ -184,6 +237,8 @@ function validateBranchPatch(patch) {
   if (patch.videoType !== undefined) fields.videoType = validVideoType(patch.videoType);
   if (patch.characterMode !== undefined) fields.characterMode = validCharacterMode(patch.characterMode);
   if (patch.characterImages !== undefined) fields.characterImages = validCharacterImages(patch.characterImages);
+  if (patch.characters !== undefined) fields.characters = validCharacters(patch.characters);
+  if (patch.flowProjectUrl !== undefined) fields.flowProjectUrl = validFlowProjectUrl(patch.flowProjectUrl);
   if (patch.mode !== undefined) fields.mode = validMode(patch.mode);
   if (patch.series !== undefined) fields.series = validSeries(patch.series);
   if (patch.titles !== undefined) fields.titles = validTitles(patch.titles);
@@ -207,8 +262,12 @@ function createBranchStore(dir) {
         const data = JSON.parse(raw);
         if (Array.isArray(data)) {
           return data.map((b) => {
-            if (b && typeof b === 'object' && !b.videoType) {
-              return { ...b, videoType: 'explainer' };
+            if (b && typeof b === 'object') {
+              let mod = b;
+              if (!b.videoType) mod = { ...mod, videoType: 'explainer' };
+              if (!mod.characters) mod = { ...mod, characters: [] };
+              if (mod.flowProjectUrl === undefined) mod = { ...mod, flowProjectUrl: null };
+              return mod;
             }
             return b;
           });
@@ -246,6 +305,8 @@ function createBranchStore(dir) {
     const videoType = input.videoType !== undefined ? validVideoType(input.videoType) : 'explainer';
     const characterMode = input.characterMode !== undefined ? validCharacterMode(input.characterMode) : 'create';
     const characterImages = input.characterImages !== undefined ? validCharacterImages(input.characterImages) : [];
+    const characters = input.characters !== undefined ? validCharacters(input.characters) : [];
+    const flowProjectUrl = input.flowProjectUrl !== undefined ? validFlowProjectUrl(input.flowProjectUrl) : null;
     const mode = input.mode !== undefined ? validMode(input.mode) : 'free';
     const series = input.series !== undefined ? validSeries(input.series) : null;
     const titles = input.titles !== undefined ? validTitles(input.titles) : [];
@@ -258,6 +319,8 @@ function createBranchStore(dir) {
       videoType,
       characterMode,
       characterImages,
+      characters,
+      flowProjectUrl,
       mode,
       series,
       titles,
@@ -293,7 +356,24 @@ function createBranchStore(dir) {
     write(branches);
   }
 
-  return { list, get, create, update, delete: remove };
+  function setCharacters(id, characters, flowProjectUrl) {
+    if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new Error('ID de rama no válido.');
+    const branch = get(id);
+    if (!branch) throw new Error('Rama no encontrada.');
+    const validatedCharacters = validCharacters(characters);
+    const patch = { characters: validatedCharacters };
+    if (flowProjectUrl !== undefined) {
+      patch.flowProjectUrl = validFlowProjectUrl(flowProjectUrl);
+    }
+    const images = new Set(branch.characterImages || []);
+    for (const c of validatedCharacters) {
+      if (c.file) images.add(c.file);
+    }
+    patch.characterImages = Array.from(images);
+    return update(id, patch);
+  }
+
+  return { list, get, create, update, delete: remove, setCharacters };
 }
 
 function migrateWorkspace(dir) {
@@ -335,6 +415,8 @@ function migrateWorkspace(dir) {
         videoType: 'explainer',
         characterMode: 'create',
         characterImages: [],
+        characters: [],
+        flowProjectUrl: null,
         mode: 'free',
         series: null,
         titles: [],
@@ -347,6 +429,14 @@ function migrateWorkspace(dir) {
     for (const branch of branches) {
       if (!branch.videoType) {
         branch.videoType = 'explainer';
+        branchesModified = true;
+      }
+      if (!branch.characters) {
+        branch.characters = [];
+        branchesModified = true;
+      }
+      if (branch.flowProjectUrl === undefined) {
+        branch.flowProjectUrl = null;
         branchesModified = true;
       }
     }
@@ -452,6 +542,67 @@ function getCharacterFilePath(workspaceDir, branchId, fileName) {
   return full;
 }
 
+function copyVideoCharacterFiles(workspaceDir, branchId, videoId, characters) {
+  if (typeof branchId !== 'string' || !ID_PATTERN.test(branchId)) {
+    throw new Error('ID de rama no válido.');
+  }
+  if (typeof videoId !== 'string' || !ID_PATTERN.test(videoId)) {
+    throw new Error('ID de video no válido.');
+  }
+  if (!Array.isArray(characters)) {
+    throw new Error('Lista de personajes no válida.');
+  }
+
+  const targetDir = path.join(workspaceDir, 'branches', branchId, 'characters');
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  const copiedCharacters = [];
+  for (const item of characters) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('Personaje no válido.');
+    }
+    const key = item.key;
+    if (typeof key !== 'string' || !CHARACTER_KEY_PATTERN.test(key)) {
+      throw new Error('Clave de personaje no válida.');
+    }
+    const fileName = item.selectedFile || item.file;
+    if (typeof fileName !== 'string' || !CHARACTER_IMAGE_PATTERN.test(fileName)) {
+      throw new Error('Nombre de imagen de personaje no válido.');
+    }
+    const charBaseDir = path.join(workspaceDir, 'videos', videoId, 'characters', key);
+    const srcPath = path.resolve(charBaseDir, fileName);
+    if (path.dirname(srcPath) !== charBaseDir) {
+      throw new Error('Ruta de imagen no válida.');
+    }
+    if (!fs.existsSync(srcPath) || !fs.statSync(srcPath).isFile()) {
+      throw new Error(`Archivo no encontrado: ${fileName}`);
+    }
+    const ext = path.extname(srcPath).toLowerCase();
+    if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+      throw new Error('Formato de imagen no permitido.');
+    }
+    const rawBase = path.basename(srcPath, ext).replace(/[^\w.-]/g, '_').slice(0, 50);
+    const safeName = `${rawBase ? rawBase + '_' : ''}${Date.now()}_${crypto.randomBytes(3).toString('hex')}${ext}`;
+    if (!CHARACTER_IMAGE_PATTERN.test(safeName)) {
+      throw new Error('Nombre de imagen de personaje no válido.');
+    }
+    const destPath = path.resolve(targetDir, safeName);
+    if (!destPath.startsWith(targetDir + path.sep)) {
+      throw new Error('Ruta de imagen no válida.');
+    }
+    fs.copyFileSync(srcPath, destPath);
+
+    copiedCharacters.push({
+      key,
+      name: item.name && typeof item.name === 'string' ? item.name.trim() : key,
+      description: item.description || item.role || item.prompt || '',
+      file: safeName,
+      source: 'flow',
+    });
+  }
+  return copiedCharacters;
+}
+
 module.exports = {
   createBranchStore,
   migrateWorkspace,
@@ -464,10 +615,14 @@ module.exports = {
   validVideoType,
   validCharacterMode,
   validCharacterImages,
+  validCharacters,
+  validFlowProjectUrl,
   validMode,
   validSeries,
   validTitles,
   validateBranchPatch,
   copyCharacterImages,
   getCharacterFilePath,
+  copyVideoCharacterFiles,
+  copyVideoCharacters: copyVideoCharacterFiles,
 };

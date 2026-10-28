@@ -8,7 +8,7 @@ const { createConversationStore } = require('./conversations.cjs');
 const { createPromptStore } = require('./prompts.cjs');
 const { createIdeaStore } = require('./ideas.cjs');
 const { createVideoStore } = require('./videos.cjs');
-const { createBranchStore, migrateWorkspace, copyCharacterImages, getCharacterFilePath } = require('./branches.cjs');
+const { createBranchStore, migrateWorkspace, copyCharacterImages, getCharacterFilePath, copyVideoCharacterFiles } = require('./branches.cjs');
 const { createConversationPurger } = require('./purge.cjs');
 const { createSecretStore } = require('./secrets.cjs');
 const deepseek = require('./deepseek.cjs');
@@ -216,6 +216,31 @@ ipcMain.handle('branches:delete', (_event, payload) => {
     throw new Error('No se puede eliminar una rama que contiene videos.');
   }
   branches.delete(id);
+});
+
+ipcMain.handle('branches:set-characters', (_event, payload) => {
+  const branchId = payload?.branchId || payload?.id;
+  const characters = payload?.characters;
+  const flowProjectUrl = payload?.flowProjectUrl;
+  return branches.setCharacters(branchId, characters, flowProjectUrl);
+});
+
+ipcMain.handle('branches:save-from-video', async (_event, payload) => {
+  const branchId = payload?.branchId;
+  const videoId = payload?.videoId;
+  if (!branchId) throw new Error('ID de rama no válido.');
+  if (!videoId) throw new Error('ID de video no válido.');
+  const video = videos.list().find((v) => v.id === videoId);
+  if (!video) throw new Error('Video no encontrado.');
+  const videoCharacters = flowStore.list(videoId);
+  if (!videoCharacters || videoCharacters.length === 0) {
+    throw new Error('El video no tiene personajes.');
+  }
+  for (const c of videoCharacters) {
+    if (!c.selectedFile) throw new Error(`El personaje "${c.name || c.key}" no tiene imagen seleccionada.`);
+  }
+  const copied = copyVideoCharacterFiles(activeWorkspacePath, branchId, videoId, videoCharacters);
+  return branches.setCharacters(branchId, copied, video.flowProjectUrl ?? null);
 });
 
 ipcMain.handle('branches:add-character-image', async (_event, payload) => {

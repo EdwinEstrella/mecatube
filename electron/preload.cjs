@@ -28,6 +28,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createBranch: (input) => ipcRenderer.invoke('branches:create', input),
   updateBranch: (id, patch) => ipcRenderer.invoke('branches:update', { ...patch, id }),
   deleteBranch: (id) => ipcRenderer.invoke('branches:delete', { id }),
+  setBranchCharacters: (branchId, characters, flowProjectUrl) => {
+    if (typeof branchId === 'object' && branchId !== null) {
+      return ipcRenderer.invoke('branches:set-characters', branchId);
+    }
+    return ipcRenderer.invoke('branches:set-characters', { branchId, characters, flowProjectUrl });
+  },
+  saveBranchCharactersFromVideo: (branchId, videoId) =>
+    ipcRenderer.invoke('branches:save-from-video', { branchId, videoId }),
   addBranchCharacterImage: (payload) =>
     ipcRenderer.invoke('branches:add-character-image', typeof payload === 'object' && payload !== null ? payload : { branchId: payload }),
   listVideos: (branchId) => ipcRenderer.invoke('videos:list', branchId),

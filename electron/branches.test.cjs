@@ -14,6 +14,10 @@ const {
   validVideoType,
   copyCharacterImages,
   getCharacterFilePath,
+  validCharacters,
+  validFlowProjectUrl,
+  copyVideoCharacterFiles,
+  copyVideoCharacters,
 } = require('./branches.cjs');
 
 function makeTmpDir() {
@@ -444,4 +448,157 @@ test('copyCharacterImages and getCharacterFilePath comprehensive security and va
       `getCharacterFilePath should reject bad fileName: ${badName}`
     );
   }
+});
+
+
+test('branch characters validation and flowProjectUrl validation', () => {
+  // Valid characters
+  const valid = [
+    {
+      key: 'personaje-1',
+      name: '  Tomás  ',
+      description: 'El protagonista científico',
+      file: 'char1.png',
+      source: 'own',
+    },
+    {
+      key: 'personaje_2-robot',
+      name: 'Robot X',
+      description: '',
+      file: 'robot.webp',
+      source: 'flow',
+    },
+  ];
+  const cleaned = validCharacters(valid);
+  assert.equal(cleaned.length, 2);
+  assert.equal(cleaned[0].name, 'Tomás');
+  assert.equal(cleaned[0].source, 'own');
+  assert.equal(cleaned[1].source, 'flow');
+
+  // Invalid key
+  assert.throws(() => validCharacters([{ key: 'bad key with spaces', name: 'N', file: 'f.png', source: 'own' }]), /Clave de personaje no válida\./);
+  assert.throws(() => validCharacters([{ key: 'bad#char', name: 'N', file: 'f.png', source: 'own' }]), /Clave de personaje no válida\./);
+  assert.throws(() => validCharacters([{ key: 'a'.repeat(61), name: 'N', file: 'f.png', source: 'own' }]), /Clave de personaje no válida\./);
+
+  // Invalid name
+  assert.throws(() => validCharacters([{ key: 'k', name: '   ', file: 'f.png', source: 'own' }]), /Nombre de personaje no válido\./);
+  assert.throws(() => validCharacters([{ key: 'k', name: 'a'.repeat(81), file: 'f.png', source: 'own' }]), /Nombre de personaje no válido\./);
+
+  // Invalid description
+  assert.throws(() => validCharacters([{ key: 'k', name: 'N', description: 'a'.repeat(2001), file: 'f.png', source: 'own' }]), /Descripción de personaje no válida\./);
+
+  // Invalid file
+  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: '../traversal.png', source: 'own' }]), /Nombre de imagen de personaje no válido\./);
+  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'bad file name.png', source: 'own' }]), /Nombre de imagen de personaje no válido\./);
+
+  // Invalid source
+  assert.throws(() => validCharacters([{ key: 'k', name: 'N', file: 'f.png', source: 'other' }]), /Origen de personaje no válido\./);
+
+  // Non-array
+  assert.throws(() => validCharacters('not-array'), /Lista de personajes no válida\./);
+
+  // validFlowProjectUrl
+  assert.equal(validFlowProjectUrl(null), null);
+  assert.equal(validFlowProjectUrl(undefined), null);
+  assert.equal(validFlowProjectUrl('https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'), 'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc');
+  assert.equal(validFlowProjectUrl('https://flow.google.com/u/1/project/12345678-1234-1234-1234-123456789abc'), 'https://flow.google.com/u/1/project/12345678-1234-1234-1234-123456789abc');
+  assert.throws(() => validFlowProjectUrl('https://malicious.com/project/12345678-1234-1234-1234-123456789abc'), /URL del proyecto de Flow no válida\./);
+  assert.throws(() => validFlowProjectUrl('not-url'), /URL del proyecto de Flow no válida\./);
+});
+
+test('setCharacters updates characters, flowProjectUrl, and synchronizes characterImages', () => {
+  const dir = makeTmpDir();
+  const store = createBranchStore(dir);
+  const branch = store.create({ name: 'Rama Personajes' });
+  assert.deepEqual(branch.characters, []);
+  assert.equal(branch.flowProjectUrl, null);
+
+  const updated = store.setCharacters(
+    branch.id,
+    [
+      { key: 'char-1', name: 'Personaje 1', description: 'Desc 1', file: 'char1.png', source: 'own' },
+      { key: 'char-2', name: 'Personaje 2', description: 'Desc 2', file: 'char2.webp', source: 'flow' },
+    ],
+    'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc'
+  );
+
+  assert.equal(updated.characters.length, 2);
+  assert.equal(updated.characters[0].key, 'char-1');
+  assert.equal(updated.flowProjectUrl, 'https://flow.google.com/project/12345678-1234-1234-1234-123456789abc');
+  assert.ok(updated.characterImages.includes('char1.png'));
+  assert.ok(updated.characterImages.includes('char2.webp'));
+
+  // Re-read from disk
+  const reloaded = store.get(branch.id);
+  assert.deepEqual(reloaded.characters, updated.characters);
+  assert.equal(reloaded.flowProjectUrl, updated.flowProjectUrl);
+  assert.deepEqual(reloaded.characterImages, updated.characterImages);
+
+  // Unknown branch throws
+  assert.throws(() => store.setCharacters('unknown-id', []), /Rama no encontrada\./);
+});
+
+test('copyVideoCharacterFiles: copies with safe names and rejects traversal', () => {
+  const wsDir = makeTmpDir();
+  const branchId = 'branch-copy-test';
+  const videoId = 'video-source-1';
+  const charKey = 'personaje-1';
+
+  // Set up video character folder on disk
+  const videoCharDir = path.join(wsDir, 'videos', videoId, 'characters', charKey);
+  fs.mkdirSync(videoCharDir, { recursive: true });
+  const srcFile = path.join(videoCharDir, 'sheet_1.png');
+  fs.writeFileSync(srcFile, 'png-bytes-from-video');
+
+  const result = copyVideoCharacterFiles(wsDir, branchId, videoId, [
+    {
+      key: charKey,
+      name: 'Personaje 1',
+      description: 'El héroe',
+      selectedFile: 'sheet_1.png',
+    },
+  ]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].key, charKey);
+  assert.equal(result[0].name, 'Personaje 1');
+  assert.equal(result[0].description, 'El héroe');
+  assert.equal(result[0].source, 'flow');
+  assert.ok(/^[\w.-]{1,120}$/.test(result[0].file));
+  assert.ok(result[0].file.endsWith('.png'));
+
+  // Check file actually exists on disk in branch characters folder
+  const branchCharFile = path.join(wsDir, 'branches', branchId, 'characters', result[0].file);
+  assert.ok(fs.existsSync(branchCharFile));
+  assert.equal(fs.readFileSync(branchCharFile, 'utf8'), 'png-bytes-from-video');
+
+  // Traversal rejected in branchId
+  assert.throws(
+    () => copyVideoCharacterFiles(wsDir, '../bad-branch', videoId, [{ key: charKey, selectedFile: 'sheet_1.png' }]),
+    /ID de rama no válido\./
+  );
+
+  // Traversal rejected in videoId
+  assert.throws(
+    () => copyVideoCharacterFiles(wsDir, branchId, '../bad-video', [{ key: charKey, selectedFile: 'sheet_1.png' }]),
+    /ID de video no válido\./
+  );
+
+  // Traversal rejected in key
+  assert.throws(
+    () => copyVideoCharacterFiles(wsDir, branchId, videoId, [{ key: '../bad-key', selectedFile: 'sheet_1.png' }]),
+    /Clave de personaje no válida\./
+  );
+
+  // Traversal rejected in file name
+  assert.throws(
+    () => copyVideoCharacterFiles(wsDir, branchId, videoId, [{ key: charKey, selectedFile: '../../etc/passwd.png' }]),
+    /Nombre de imagen de personaje no válido\./
+  );
+
+  // Non-existent file
+  assert.throws(
+    () => copyVideoCharacterFiles(wsDir, branchId, videoId, [{ key: charKey, selectedFile: 'missing.png' }]),
+    /Archivo no encontrado/
+  );
 });

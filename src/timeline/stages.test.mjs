@@ -1,6 +1,6 @@
 // Run with: node src/timeline/stages.test.mjs
 import assert from 'node:assert/strict';
-import { STAGES, deriveStages, countDone, findChosenIdea } from './stages.js';
+import { STAGES, deriveStages, countDone, findChosenIdea, branchHasCharacters } from './stages.js';
 
 let failures = 0;
 function test(name, fn) {
@@ -222,6 +222,36 @@ test('approved characters with images mark the characters stage done, even witho
 
 test('a forced "not done" override beats approved characters', () => {
   const stages = deriveStages(video({ characters: false }), null, null, { charactersApproved: true });
+  assert.notEqual(statusOf(stages).characters, 'done');
+});
+
+test('branch with characters marks characters stage done', () => {
+  const branch = { id: 'b1', characters: [{ key: 'char-1', name: 'Hero', file: 'hero.png', source: 'flow' }] };
+  assert.equal(branchHasCharacters(branch), true);
+  const stages = deriveStages(video(), null, null, { branch });
+  const chars = stages.find((stage) => stage.key === 'characters');
+  assert.equal(chars.status, 'done');
+  assert.equal(chars.source, 'auto');
+});
+
+test('branch with characterMode own and characterImages marks characters stage done', () => {
+  const branch = { id: 'b2', characterMode: 'own', characterImages: ['char.png'] };
+  assert.equal(branchHasCharacters(branch), true);
+  const stages = deriveStages(video(), null, null, { branch });
+  assert.equal(statusOf(stages).characters, 'done');
+});
+
+test('override false beats branch characters', () => {
+  const branch = { id: 'b1', characters: [{ key: 'char-1', name: 'Hero', file: 'hero.png', source: 'flow' }] };
+  const stages = deriveStages(video({ characters: false }), null, null, { branch });
+  assert.notEqual(statusOf(stages).characters, 'done');
+  assert.equal(stages.find((stage) => stage.key === 'characters').source, 'manual');
+});
+
+test('branch with no characters does not mark characters stage done without approval', () => {
+  const branch = { id: 'b1', characters: [], characterImages: [], characterMode: 'create' };
+  assert.equal(branchHasCharacters(branch), false);
+  const stages = deriveStages(video(), null, null, { branch });
   assert.notEqual(statusOf(stages).characters, 'done');
 });
 
