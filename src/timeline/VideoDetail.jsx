@@ -8,9 +8,12 @@ import PublishKit from './PublishKit.jsx';
 import { getRememberedStageKey, rememberStageKey } from './stageMemory.js';
 import IdeaStagePanel from './IdeaStagePanel.jsx';
 import ScriptStagePanel from './ScriptStagePanel.jsx';
+import CharacterSheetsStage from './CharacterSheetsStage.jsx';
 import { latestIdeas, latestScript } from './stageContent.js';
 import { syncChosenIdea } from './syncChosenIdea.js';
 import { usesCartesia } from '../voice/voiceMode.js';
+import { useFlowCharacters } from '../flow/useFlowCharacters.js';
+import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
@@ -86,15 +89,26 @@ export default function VideoDetail({
   onEditBranch,
   onBranchUpdated,
   onOpenBranchPanel,
+  illustratorMessages,
+  isAwaitingIllustrator = false,
+  isConnected = false,
+  isApiConfigured = false,
+  stageNonce = 0,
+  onSendIllustratorChat,
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
 
   const [prevVideoId, setPrevVideoId] = useState(video.id);
+  const [prevNonce, setPrevNonce] = useState(stageNonce);
   const [selectedKey, setSelectedKey] = useState(() => getRememberedStageKey(video.id, stages));
   const orientation = branch?.orientation ?? video?.orientation ?? 'horizontal';
 
   if (video.id !== prevVideoId) {
     setPrevVideoId(video.id);
+    setSelectedKey(getRememberedStageKey(video.id, stages));
+  }
+  if (stageNonce !== prevNonce) {
+    setPrevNonce(stageNonce);
     setSelectedKey(getRememberedStageKey(video.id, stages));
   }
 
@@ -140,6 +154,39 @@ export default function VideoDetail({
     } else {
       onStartPrompt(video.id, 'illustrator');
     }
+  };
+
+  const flow = useFlowCharacters(
+    video.illustratorConversationId,
+    video.title,
+    isConnected,
+    illustratorMessages
+  );
+
+  const illMessages = Array.isArray(illustratorMessages) ? illustratorMessages : [];
+  const assistantMessages = illMessages.filter((m) => m?.role === 'assistant');
+  const latestAssistantMessage = assistantMessages[assistantMessages.length - 1] ?? null;
+  const isIllustratorLoading = hasIllustrator && (isAwaitingIllustrator || !latestAssistantMessage);
+
+  const sheetsResult = latestAssistantMessage ? parseCharacterSheets(latestAssistantMessage.content) : null;
+  const characterSheets = sheetsResult?.characters ?? null;
+
+  const lastAssistantIndex = latestAssistantMessage ? illMessages.lastIndexOf(latestAssistantMessage) : -1;
+  const hasUserMessageAfter = lastAssistantIndex >= 0 && illMessages.slice(lastAssistantIndex + 1).some((m) => m?.role === 'user');
+  const isSheetsOpen = !hasUserMessageAfter;
+  const canSendIllustrator = (isConnected || isApiConfigured) && !isAwaitingIllustrator;
+
+  const handleApproveCharacters = async (keys) => {
+    if (await flow.approve(keys)) {
+      await onSendIllustratorChat?.('1');
+      onEdited?.();
+    }
+  };
+
+  const handleRequestChanges = async (keys) => {
+    await flow.unapprove(keys);
+    await onSendIllustratorChat?.('2');
+    onEdited?.();
   };
 
   const handleVoiceAction = () => {
@@ -244,15 +291,26 @@ export default function VideoDetail({
                 Esta etapa no es requerida para videos de tipo lista (sin personajes principales).
               </p>
             ) : (
-              <CharactersPanel
-                video={video}
-                branch={branch}
-                characters={characters}
-                onSetProject={onSetFlowProject}
-                onOpenProject={onOpenFlowProject}
-                onEditBranch={onEditBranch}
-                onBranchUpdated={onBranchUpdated}
-              />
+              <>
+                <CharacterSheetsStage
+                  loading={isIllustratorLoading}
+                  characters={characterSheets}
+                  flow={flow}
+                  isOpen={isSheetsOpen}
+                  canSend={canSendIllustrator}
+                  onApprove={handleApproveCharacters}
+                  onRequestChanges={handleRequestChanges}
+                />
+                <CharactersPanel
+                  video={video}
+                  branch={branch}
+                  characters={characters}
+                  onSetProject={onSetFlowProject}
+                  onOpenProject={onOpenFlowProject}
+                  onEditBranch={onEditBranch}
+                  onBranchUpdated={onBranchUpdated}
+                />
+              </>
             )
           )}
 
