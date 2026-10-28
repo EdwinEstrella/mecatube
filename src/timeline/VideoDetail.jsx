@@ -388,6 +388,8 @@ export default function VideoDetail({
                         scenes={blockResult.scenes}
                         flow={flowScenes}
                         characterBusy={flow.job !== null}
+                        layout="grid"
+                        orientation={orientation}
                       />
                       {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
                         <NextStepButtons
@@ -426,6 +428,8 @@ export default function VideoDetail({
                         flow={flowAnimations}
                         sceneRecords={flowScenes.records}
                         characterBusy={flow.job !== null}
+                        layout="grid"
+                        orientation={orientation}
                       />
                       {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
                         <NextStepButtons
@@ -456,6 +460,7 @@ export default function VideoDetail({
                     thumbnail={thumbnail}
                     flow={flowScenes}
                     characterBusy={flow.job !== null}
+                    orientation={orientation}
                   />
                   {!hasUserMessageAfter(illMessages, thumbnail.messageIndex) && (
                     <NextStepButtons
