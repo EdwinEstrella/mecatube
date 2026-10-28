@@ -205,9 +205,10 @@ function Word({
   );
 }
 
-function PageEnter({ page, pageEffect, children }) {
+function PageEnter({ page, pageEffect, isVertical: isVerticalProp, children }) {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const isVertical = isVerticalProp ?? height > width;
 
   const pageStartFrame = Math.round(page.start * fps);
   const diff = Math.max(0, frame - pageStartFrame);

@@ -4,6 +4,7 @@ import { AbsoluteFill, Img } from 'remotion';
 import { Video } from '@remotion/media';
 import { Player } from '@remotion/player';
 import KaraokeCaptions from './KaraokeCaptions.jsx';
+import { frameSize } from './plan.js';
 
 const DEFAULT_SAMPLE_SENTENCE = 'Nadie sabía qué había debajo del hielo hasta que alguien miró';
 
