@@ -457,11 +457,18 @@ app.whenReady().then(() => {
     return result.filePaths[0];
   });
 
-  ipcMain.handle('workspace:create', async (_event, { name, path: targetPath }) => {
-    const newWs = workspaceStore.createWorkspace({ name, targetPath });
+  ipcMain.handle('workspace:create', async (_event, { name, path: targetPath, style }) => {
+    const newWs = workspaceStore.createWorkspace({ name, targetPath, style });
     setupWorkspace(newWs.path);
     BrowserWindow.getAllWindows().forEach((win) => win.reload());
     return newWs;
+  });
+
+  ipcMain.handle('workspace:set-style', async (_event, payload) => {
+    const style = typeof payload === 'string' ? payload : payload?.style;
+    const active = workspaceStore.getActive();
+    if (!active) throw new Error('No hay espacio de trabajo activo.');
+    return workspaceStore.updateStyle(active.id, style);
   });
 
   ipcMain.handle('workspace:switch', async (_event, { id }) => {

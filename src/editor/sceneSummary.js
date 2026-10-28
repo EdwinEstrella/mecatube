@@ -4,6 +4,14 @@
 const STYLE_HEURISTICS = [
   'character sheet',
   'stickman man of about',
+  'man of about',
+  'woman of about',
+  'person of about',
+  'classic 2d cartoon style',
+  'japanese anime style',
+  'stylized 3d animated movie look',
+  'modern flat vector illustration',
+  'photorealistic cinematic style',
   'linework',
   '1920x1080',
 ];

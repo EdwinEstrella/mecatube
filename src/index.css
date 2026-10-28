@@ -3352,3 +3352,85 @@ body {
   font-size: 0.85rem;
   color: #f87171;
 }
+
+/* Visual style picker: small square cards in an aligned grid */
+.style-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+}
+
+.style-picker__card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: #0b0b0f;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.style-picker__card:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.style-picker__card:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.style-picker__card:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.style-picker__card--selected {
+  border-color: #fff;
+}
+
+.style-picker__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.style-picker__overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 18px 8px 7px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
+  text-align: left;
+}
+
+.style-picker__label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+}
+
+/* The full description stays available through the card's aria-label */
+.style-picker__description {
+  display: none;
+}
+
+.style-picker__badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  color: #0b0b0f;
+}

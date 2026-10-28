@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { STYLE_IDS, DEFAULT_STYLE_ID } = require('./styles.cjs');
 
 function createWorkspaceStore(defaultUserDataDir) {
   const configFile = path.join(defaultUserDataDir, 'workspaces.json');
@@ -8,7 +9,16 @@ function createWorkspaceStore(defaultUserDataDir) {
   function readConfig() {
     try {
       if (fs.existsSync(configFile)) {
-        return JSON.parse(fs.readFileSync(configFile, 'utf8'));
+        const parsed = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+        if (parsed && Array.isArray(parsed.workspaces)) {
+          return {
+            ...parsed,
+            workspaces: parsed.workspaces.map((w) => ({
+              ...w,
+              style: w.style || DEFAULT_STYLE_ID,
+            })),
+          };
+        }
       }
     } catch {}
     return {
@@ -19,6 +29,7 @@ function createWorkspaceStore(defaultUserDataDir) {
           name: 'Espacio Principal',
           path: defaultUserDataDir,
           createdAt: Date.now(),
+          style: DEFAULT_STYLE_ID,
         },
       ],
     };
@@ -31,18 +42,30 @@ function createWorkspaceStore(defaultUserDataDir) {
 
   function getActive() {
     const config = readConfig();
-    const found = config.workspaces.find((w) => w.id === config.activeId);
-    return found || config.workspaces[0];
+    const found = config.workspaces.find((w) => w.id === config.activeId) || config.workspaces[0];
+    if (!found) return null;
+    return {
+      ...found,
+      style: found.style || DEFAULT_STYLE_ID,
+    };
   }
 
   function list() {
     const config = readConfig();
-    return config.workspaces;
+    return config.workspaces.map((w) => ({
+      ...w,
+      style: w.style || DEFAULT_STYLE_ID,
+    }));
   }
 
-  function createWorkspace({ name, targetPath }) {
+  function createWorkspace({ name, targetPath, style }) {
     if (!name || !name.trim()) throw new Error('El nombre del espacio de trabajo es requerido.');
     if (!targetPath || !targetPath.trim()) throw new Error('La carpeta de destino es requerida.');
+
+    const resolvedStyle = style || DEFAULT_STYLE_ID;
+    if (!STYLE_IDS.includes(resolvedStyle)) {
+      throw new Error(`Estilo visual no válido: "${resolvedStyle}". Estilos permitidos: ${STYLE_IDS.join(', ')}.`);
+    }
 
     const cleanPath = path.resolve(targetPath.trim());
     fs.mkdirSync(cleanPath, { recursive: true });
@@ -56,6 +79,7 @@ function createWorkspaceStore(defaultUserDataDir) {
       name: name.trim(),
       path: cleanPath,
       createdAt: Date.now(),
+      style: resolvedStyle,
     };
 
     try {
@@ -77,7 +101,41 @@ function createWorkspaceStore(defaultUserDataDir) {
     if (!found) throw new Error('Espacio de trabajo no encontrado.');
     config.activeId = id;
     writeConfig(config);
-    return found;
+    return {
+      ...found,
+      style: found.style || DEFAULT_STYLE_ID,
+    };
+  }
+
+  function updateStyle(id, style) {
+    if (!STYLE_IDS.includes(style)) {
+      throw new Error(`Estilo visual no válido: "${style}". Estilos permitidos: ${STYLE_IDS.join(', ')}.`);
+    }
+    const config = readConfig();
+    const ws = config.workspaces.find((w) => w.id === id);
+    if (!ws) throw new Error('Espacio de trabajo no encontrado.');
+
+    ws.style = style;
+    writeConfig(config);
+
+    if (ws.path) {
+      try {
+        const wsJsonPath = path.join(ws.path, 'workspace.json');
+        let data = {};
+        if (fs.existsSync(wsJsonPath)) {
+          try {
+            data = JSON.parse(fs.readFileSync(wsJsonPath, 'utf8'));
+          } catch {}
+        }
+        data = { ...data, ...ws, style };
+        fs.writeFileSync(wsJsonPath, JSON.stringify(data, null, 2), 'utf8');
+      } catch {}
+    }
+
+    return {
+      ...ws,
+      style,
+    };
   }
 
   return {
@@ -85,6 +143,7 @@ function createWorkspaceStore(defaultUserDataDir) {
     list,
     createWorkspace,
     switchWorkspace,
+    updateStyle,
   };
 }
 

@@ -11,7 +11,8 @@ import {
 import { parseConnectors } from './prompts/connectors.js';
 import CartesiaSettings from './voice/CartesiaSettings.jsx';
 import DeepSeekSettings from './settings/DeepSeekSettings.jsx';
-
+import StylePicker from './workspace/StylePicker.jsx';
+import { DEFAULT_STYLE_ID } from './prompts/styles.js';
 
 // Edits one preset prompt; text is kept and saved exactly as typed, with no trimming or normalization
 function PromptEditor({ preset, override, onChanged, countConnectors = false }) {
@@ -103,11 +104,36 @@ function PromptEditor({ preset, override, onChanged, countConnectors = false }) 
 
 export default function SettingsView() {
   const [overrides, setOverrides] = useState({});
+  const [currentStyle, setCurrentStyle] = useState(DEFAULT_STYLE_ID);
+  const [styleError, setStyleError] = useState('');
+
   const refreshOverrides = useCallback(async () => setOverrides(await loadOverrides()), []);
+
+  const refreshStyle = useCallback(async () => {
+    try {
+      const ws = await window.electronAPI?.getCurrentWorkspace?.();
+      if (ws?.style) setCurrentStyle(ws.style);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     refreshOverrides();
-  }, [refreshOverrides]);
+    refreshStyle();
+  }, [refreshOverrides, refreshStyle]);
+
+  const handleStyleChange = async (newStyle) => {
+    setStyleError('');
+    setCurrentStyle(newStyle);
+    try {
+      await window.electronAPI?.setWorkspaceStyle?.(newStyle);
+      window.dispatchEvent(
+        new CustomEvent('mecatube:workspace-style-changed', { detail: { style: newStyle } })
+      );
+    } catch (err) {
+      setStyleError(err.message || 'Error al actualizar el estilo visual.');
+      refreshStyle();
+    }
+  };
 
   return (
     <motion.section
@@ -121,6 +147,17 @@ export default function SettingsView() {
       <DeepSeekSettings />
 
       <CartesiaSettings />
+
+      <div className="settings__card settings__card--spaced">
+        <div>
+          <h2 className="settings__card-title">Estilo visual</h2>
+          <p className="settings__card-text">
+            El estilo artístico para la generación de personajes e ilustraciones en este espacio de trabajo.
+          </p>
+        </div>
+        <StylePicker value={currentStyle} onChange={handleStyleChange} />
+        {styleError && <p className="prompt-editor__error">{styleError}</p>}
+      </div>
 
       <div className="settings__card settings__card--spaced">
         <div>

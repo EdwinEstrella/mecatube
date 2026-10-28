@@ -13,6 +13,7 @@ import { useFlowScenes } from './flow/useFlowScenes.js';
 import { useFlowAnimations } from './flow/useFlowAnimations.js';
 import { latestCharacterKeys } from './flow/currentCharacters.js';
 import { withImageBudget } from './flow/imageBudget.js';
+import { applyStyle, DEFAULT_STYLE_ID } from './prompts/styles.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -39,6 +40,33 @@ export default function ChatView({
   // True once the first bridge status reply arrived, so a queued action does not run on the initial "false"
   const [bridgeChecked, setBridgeChecked] = useState(false);
   const [savedIdeas, setSavedIdeas] = useState([]);
+  const [workspaceStyle, setWorkspaceStyle] = useState(DEFAULT_STYLE_ID);
+
+  useEffect(() => {
+    let active = true;
+    const fetchStyle = async () => {
+      try {
+        const ws = await window.electronAPI?.getCurrentWorkspace?.();
+        if (active && ws?.style) {
+          setWorkspaceStyle(ws.style);
+        }
+      } catch {}
+    };
+    fetchStyle();
+
+    const onStyleChanged = (e) => {
+      if (e.detail?.style) {
+        setWorkspaceStyle(e.detail.style);
+      } else {
+        fetchStyle();
+      }
+    };
+    window.addEventListener('mecatube:workspace-style-changed', onStyleChanged);
+    return () => {
+      active = false;
+      window.removeEventListener('mecatube:workspace-style-changed', onStyleChanged);
+    };
+  }, []);
   // DeepSeek chat URL of the active conversation (needed to resync it) and the resync state
   const [activeUrl, setActiveUrl] = useState(null);
   const [resync, setResync] = useState({ busy: false, message: '' });
@@ -185,7 +213,11 @@ export default function ChatView({
         }
         const preset = PRESETS.find((item) => item.id === action.presetId);
         if (!preset) return;
-        const conversationId = await handlePreset(effectiveText(preset, await loadOverrides()));
+        let promptText = effectiveText(preset, await loadOverrides());
+        if (preset.id === 'prompt-2') {
+          promptText = applyStyle(promptText, workspaceStyle);
+        }
+        const conversationId = await handlePreset(promptText);
         if (!conversationId || !action.videoId) return;
         const field = action.role === 'illustrator' ? 'illustratorConversationId' : 'scriptConversationId';
         await window.electronAPI.updateVideo(action.videoId, { [field]: conversationId });

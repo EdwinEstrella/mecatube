@@ -152,4 +152,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createWorkspace: (payload) => ipcRenderer.invoke('workspace:create', payload),
   switchWorkspace: (id) => ipcRenderer.invoke('workspace:switch', { id }),
   revealWorkspace: () => ipcRenderer.invoke('workspace:reveal'),
+  setWorkspaceStyle: (style) => ipcRenderer.invoke('workspace:set-style', typeof style === 'string' ? { style } : style),
 });

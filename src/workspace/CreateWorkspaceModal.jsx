@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import StylePicker from './StylePicker.jsx';
+import { DEFAULT_STYLE_ID } from '../prompts/styles.js';
 
 export default function CreateWorkspaceModal({ isOpen, onClose }) {
   const [name, setName] = useState('');
   const [targetPath, setTargetPath] = useState('');
+  const [style, setStyle] = useState(DEFAULT_STYLE_ID);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,6 +40,7 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
       await window.electronAPI?.createWorkspace({
         name: name.trim(),
         path: targetPath.trim(),
+        style,
       });
       onClose();
     } catch (err) {
@@ -64,7 +68,9 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
       <div
         style={{
           width: '100%',
-          maxWidth: '480px',
+          maxWidth: '760px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           background: '#15151c',
           border: '1px solid rgba(255, 255, 255, 0.15)',
           borderRadius: '12px',
@@ -99,7 +105,7 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
             <label
               style={{
@@ -162,6 +168,21 @@ export default function CreateWorkspaceModal({ isOpen, onClose }) {
                 Examinar...
               </button>
             </div>
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                color: 'rgba(255, 255, 255, 0.7)',
+                marginBottom: '6px',
+              }}
+            >
+              Estilo visual
+            </label>
+            <StylePicker value={style} onChange={setStyle} disabled={isBusy} />
           </div>
         </div>
 
