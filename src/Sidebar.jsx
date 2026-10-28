@@ -24,8 +24,8 @@ function TimelineIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M4 12h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       <circle cx="5.5" cy="12" r="2" fill="currentColor" />
-      <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.6" fill="#0b0b0f" />
-      <circle cx="18.5" cy="12" r="2" stroke="currentColor" strokeWidth="1.6" fill="#0b0b0f" />
+      <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.6" fill="var(--background)" />
+      <circle cx="18.5" cy="12" r="2" stroke="currentColor" strokeWidth="1.6" fill="var(--background)" />
       <path d="M4 6.5h9M4 17.5h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.5" />
     </svg>
   );

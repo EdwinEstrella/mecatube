@@ -109,7 +109,7 @@ function createWindow() {
     fullscreen: false,
     frame: false,
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    backgroundColor: '#0b0b0f',
+    backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

@@ -5,17 +5,13 @@ import CustomSelect from '../ui/CustomSelect.jsx';
 import CharactersPanel from '../flow/CharactersPanel.jsx';
 import AutoEditPanel from '../editor/AutoEditPanel.jsx';
 import PublishKit from './PublishKit.jsx';
+import { getRememberedStageKey, rememberStageKey } from './stageMemory.js';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
   animations: 'Las animaciones se generan desde el chat del ilustrador.',
   thumbnail: 'La miniatura se genera desde el chat del ilustrador.',
 };
-
-function getInitialStageKey(stageList) {
-  const notDone = stageList.find((stage) => stage.status !== 'done');
-  return notDone?.key ?? stageList[stageList.length - 1]?.key ?? null;
-}
 
 // state: 'ok' | 'deleted' | 'none' for one linked chat
 function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onStart, openLabel, startLabel }) {
@@ -72,11 +68,11 @@ export default function VideoDetail({
   const [isConfirming, setIsConfirming] = useState(false);
 
   const [prevVideoId, setPrevVideoId] = useState(video.id);
-  const [selectedKey, setSelectedKey] = useState(() => getInitialStageKey(stages));
+  const [selectedKey, setSelectedKey] = useState(() => getRememberedStageKey(video.id, stages));
 
   if (video.id !== prevVideoId) {
     setPrevVideoId(video.id);
-    setSelectedKey(getInitialStageKey(stages));
+    setSelectedKey(getRememberedStageKey(video.id, stages));
   }
 
   const selectedStage = stages.find((stage) => stage.key === selectedKey) ?? stages[0] ?? null;
@@ -111,7 +107,10 @@ export default function VideoDetail({
         <StageTrack
           stages={stages}
           selectedKey={selectedStage?.key}
-          onSelect={(stage) => setSelectedKey(stage.key)}
+          onSelect={(stage) => {
+            setSelectedKey(stage.key);
+            rememberStageKey(video.id, stage.key);
+          }}
         />
       </div>
 
@@ -195,7 +194,7 @@ export default function VideoDetail({
         </section>
       )}
 
-      <div className="saved-idea__actions" style={{ marginTop: '16px' }}>
+      <div className="saved-idea__actions video-detail__reset-actions">
         {isConfirming ? (
           <>
             <button type="button" className="settings__button settings__button--danger" onClick={() => onDelete(video.id)}>
