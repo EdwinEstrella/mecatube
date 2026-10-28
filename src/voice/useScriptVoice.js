@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cleanIpcError } from './constants.js';
 import { extractNarration } from './narration.js';
 import { ensureScriptVideo } from './scriptVideo.js';
+import { chooseVideoTarget } from '../ui/videoTargetDialog.js';
 import { FALLBACK_PREFS, useVoicePrefs } from './useVoicePrefs.js';
 
 // Container logic for the "Generar voz en off" buttons of a script chat. All script messages share
@@ -83,7 +84,8 @@ export function useScriptVoice(conversationId, messages) {
     setBusy(true);
     setPhase({ messageId: message.id, kind: 'generating' });
     try {
-      const video = await ensureScriptVideo(api, conversationId, messagesRef.current);
+      const video = await ensureScriptVideo(api, conversationId, messagesRef.current, chooseVideoTarget);
+      if (!video) return;
       videoIdRef.current = video.id;
       setVideoId(video.id);
       // The Timeline voice panel shows exactly what was spoken

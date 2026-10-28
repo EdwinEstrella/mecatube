@@ -40,7 +40,7 @@ async function waitUntil(check, label) {
   const pushed = [];
   const service = createFlowService({ bridge, store, videos, pushToWindow: (channel, payload) => pushed.push([channel, payload]), jobTimeoutMs: 60000 });
   const media = createMediaHandler({ wavPath: () => '', voiceoverWavPath: () => '' }, { characterFile: store.filePath });
-  const video = videos.create({ title: 'Test video' });
+  const video = videos.create({ title: 'Test video', branchId: 'b-flow' });
   const request = (url) => media({ url, headers: new Headers() });
 
   // The extension: connects with a chrome-extension origin and records what it receives
@@ -282,7 +282,7 @@ async function waitUntil(check, label) {
   const sceneRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mecatube-scenes-'));
   const sceneVideos = createVideoStore(sceneRoot);
   const sceneStore = createFlowStore(sceneRoot);
-  const sceneVideo = sceneVideos.create({ title: 'Scenes video' });
+  const sceneVideo = sceneVideos.create({ title: 'Scenes video', branchId: 'b-scenes' });
   const sent = [];
   let sceneListener = null;
   let statusListener = null;

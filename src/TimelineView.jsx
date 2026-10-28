@@ -16,6 +16,7 @@ function chatState(linkedId, chats) {
 // Container: 1 workspace = 1 video timeline project
 export default function TimelineView({ onOpenChat, onChatAction }) {
   const [videos, setVideos] = useState([]);
+  const [activeVideo, setActiveVideo] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [chats, setChats] = useState({});
   const [voices, setVoices] = useState({});
@@ -26,13 +27,18 @@ export default function TimelineView({ onOpenChat, onChatAction }) {
   const refresh = useCallback(async () => {
     const api = window.electronAPI;
     if (!api) return;
-    const [videoList, conversationList] = await Promise.all([api.listVideos(), api.listConversations()]);
+    const [active, videoList, conversationList] = await Promise.all([
+      api.getActiveVideo(),
+      api.listVideos(),
+      api.listConversations(),
+    ]);
     const ids = new Set(
       videoList.flatMap((video) => [video.scriptConversationId, video.illustratorConversationId]).filter(Boolean),
     );
     const loaded = await Promise.all([...ids].map(async (id) => [id, (await api.getConversation(id))?.messages ?? null]));
     const voiceMetas = await Promise.all(videoList.map(async (video) => [video.id, (await api.getVoice(video.id)) ?? null]));
     const characterLists = await Promise.all(videoList.map(async (video) => [video.id, (await api.getCharacters(video.id)) ?? []]));
+    setActiveVideo(active ?? null);
     setVideos(videoList);
     setVoices(Object.fromEntries(voiceMetas));
     setCharacters(Object.fromEntries(characterLists));
@@ -55,7 +61,7 @@ export default function TimelineView({ onOpenChat, onChatAction }) {
     };
   }, [refresh]);
 
-  const video = videos[0] ?? null;
+  const video = activeVideo ?? null;
 
   const stages = useMemo(() => {
     if (!video) return [];

@@ -45,21 +45,48 @@ function createConversationPurger({ conversations, videos, workspaceDir, isVideo
     return { conversationId, removedVideoIds };
   }
 
-  // The workspace keeps a single video, so a new illustrator chat re-links the same record. Before
-  // that happens its illustration data (character sheets, scene images, animation videos, their indexes and the Flow
-  // project) is removed, so the new chat starts clean; script, voice and timeline data stay.
+  // Links into the active video (or creates one). When a different illustrator chat takes
+  // over the active video, its illustration data (character sheets, scene images, animation
+  // videos, their indexes and the Flow project) is removed so the new chat starts clean;
+  // script, voice and timeline data stay.
   const ILLUSTRATION_ENTRIES = ['characters', 'scenes', 'animations', 'characters.json', 'scenes.json', 'animations.json'];
 
   function linkIllustrator(input = {}) {
-    const next = input.illustratorConversationId;
-    const current = videos.list()[0];
-    if (!next || !current?.illustratorConversationId || current.illustratorConversationId === next) {
-      return videos.create(input);
+    if (input?.newVideo === true) {
+      const { newVideo: _unused, ...createInput } = input;
+      return videos.create(createInput);
     }
-    const folder = videoFolder(current.id);
-    if (isVideoBusy(current.id)) throw new Error(BUSY_MESSAGE);
-    for (const entry of ILLUSTRATION_ENTRIES) fs.rmSync(path.join(folder, entry), { recursive: true, force: true });
-    return videos.create({ ...input, flowProjectUrl: null });
+
+    const current = videos.getActive();
+    if (!current) {
+      const { newVideo: _unused, ...createInput } = input;
+      return videos.create(createInput);
+    }
+
+    const next = input?.illustratorConversationId;
+    let purged = false;
+    if (next && current.illustratorConversationId && current.illustratorConversationId !== next) {
+      const folder = videoFolder(current.id);
+      if (isVideoBusy(current.id)) throw new Error(BUSY_MESSAGE);
+      for (const entry of ILLUSTRATION_ENTRIES) fs.rmSync(path.join(folder, entry), { recursive: true, force: true });
+      purged = true;
+    }
+
+    const { newVideo: _unused, branchId: _ignoreBranch, ...fields } = input ?? {};
+    if (purged) {
+      fields.flowProjectUrl = null;
+    }
+
+    if (fields.title !== undefined) {
+      if (current.titleEdited) {
+        delete fields.title;
+        delete fields.titleEdited;
+      } else if (fields.titleEdited === undefined) {
+        fields.titleEdited = false;
+      }
+    }
+
+    return videos.update(current.id, fields);
   }
 
   return { purge, linkedVideos, linkIllustrator };

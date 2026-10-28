@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureIllustratorVideo } from './illustratorVideo.js';
+import { chooseVideoTarget } from '../ui/videoTargetDialog.js';
 import { allSelected } from './characterStatus.js';
 
 function cleanError(error) {
@@ -90,7 +91,11 @@ export function useFlowCharacters(conversationId, conversationTitle, isConnected
     setErrors((current) => ({ ...current, [card.key]: '' }));
     setJob({ videoId: null, characterKey: card.key, stage: 'starting', percent: null, captcha: false });
     try {
-      const video = await ensureIllustratorVideo(api, conversationId, conversationTitle);
+      const video = await ensureIllustratorVideo(api, conversationId, conversationTitle, chooseVideoTarget);
+      if (!video) {
+        setJob(null);
+        return;
+      }
       videoIdRef.current = video.id;
       setVideoId(video.id);
       setProjectUrl(video.flowProjectUrl ?? null);

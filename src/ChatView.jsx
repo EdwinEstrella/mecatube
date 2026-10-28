@@ -6,6 +6,7 @@ import Composer from './chat/Composer.jsx';
 import PromptPresets from './chat/PromptPresets.jsx';
 import { PRESETS, effectiveText, loadOverrides } from './prompts/presets.js';
 import { syncChosenIdea } from './timeline/syncChosenIdea.js';
+import { chooseVideoTarget } from './ui/videoTargetDialog.js';
 import { useScriptVoice } from './voice/useScriptVoice.js';
 import { useFlowCharacters } from './flow/useFlowCharacters.js';
 import { useFlowScenes } from './flow/useFlowScenes.js';
@@ -201,7 +202,7 @@ export default function ChatView({
     const conversationId = await handleSend(String(idea.number));
     if (!conversationId) return;
     try {
-      await syncChosenIdea(window.electronAPI, conversationId, idea);
+      await syncChosenIdea(window.electronAPI, conversationId, idea, chooseVideoTarget);
     } catch (syncError) {
       setError(cleanError(syncError));
     }

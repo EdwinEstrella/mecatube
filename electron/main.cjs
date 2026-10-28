@@ -8,6 +8,7 @@ const { createConversationStore } = require('./conversations.cjs');
 const { createPromptStore } = require('./prompts.cjs');
 const { createIdeaStore } = require('./ideas.cjs');
 const { createVideoStore } = require('./videos.cjs');
+const { createBranchStore, migrateWorkspace } = require('./branches.cjs');
 const { createConversationPurger } = require('./purge.cjs');
 const { createSecretStore } = require('./secrets.cjs');
 const deepseek = require('./deepseek.cjs');
@@ -201,13 +202,43 @@ ipcMain.handle('ideas:list', () => ideas.list());
 ipcMain.handle('ideas:save', (_event, idea) => ideas.save(idea));
 ipcMain.handle('ideas:delete', (_event, payload) => ideas.delete(payload?.id));
 
-ipcMain.handle('videos:list', () => videos.list());
+ipcMain.handle('branches:list', () => branches.list());
+ipcMain.handle('branches:create', (_event, input) => branches.create(input));
+ipcMain.handle('branches:update', (_event, { id, ...patch } = {}) => branches.update(id, patch));
+ipcMain.handle('branches:delete', (_event, payload) => {
+  const id = typeof payload === 'object' && payload !== null ? payload.id : payload;
+  if (!id) throw new Error('ID de rama no válido.');
+  if (branches.list().length <= 1) {
+    throw new Error('No se puede eliminar la única rama del espacio de trabajo.');
+  }
+  const branchVideos = videos.list(id);
+  if (branchVideos.length > 0) {
+    throw new Error('No se puede eliminar una rama que contiene videos.');
+  }
+  branches.delete(id);
+});
+
+ipcMain.handle('videos:list', (_event, payload) => {
+  const branchId = typeof payload === 'object' && payload !== null ? payload.branchId : payload;
+  return videos.list(branchId);
+});
+ipcMain.handle('videos:get-active', () => videos.getActive());
+ipcMain.handle('videos:set-active', (_event, payload) => {
+  const id = typeof payload === 'object' && payload !== null ? payload.id : payload;
+  return videos.setActive(id);
+});
 // A different illustrator chat taking over the workspace video starts with clean illustration data
-ipcMain.handle('videos:create', (_event, input) => conversationPurger().linkIllustrator(input ?? {}));
+ipcMain.handle('videos:create', (_event, input) => {
+  const payload = { ...(input ?? {}) };
+  if (!payload.branchId) {
+    payload.branchId = branches.list()[0]?.id;
+  }
+  return conversationPurger().linkIllustrator(payload);
+});
 ipcMain.handle('videos:update', (_event, { id, ...patch } = {}) => videos.update(id, patch));
 ipcMain.handle('videos:set-stage', (_event, { id, key, value } = {}) => videos.setStage(id, key, value));
 ipcMain.handle('videos:delete', (_event, payload) => {
-  const id = payload?.id;
+  const id = typeof payload === 'object' && payload !== null ? payload.id : payload;
   videos.delete(id);
   // Generated narration lives next to the video record; id was validated by the store
   fs.rmSync(path.join(activeWorkspacePath, 'videos', id), { recursive: true, force: true });
@@ -308,12 +339,14 @@ ipcMain.handle('bridge:status', () => bridge.isConnected());
 
 let workspaceStore;
 let activeWorkspacePath;
+let branches;
 let prefs;
 let credits;
 let savedVoices;
 let flowStore;
 let flowService;
 
+const branchesProxy = new Proxy({}, { get: (_t, p) => branches?.[p] });
 const voiceProxy = new Proxy({}, { get: (_t, p) => voice?.[p] });
 const videosProxy = new Proxy({}, { get: (_t, p) => videos?.[p] });
 const flowStoreProxy = new Proxy({}, { get: (_t, p) => flowStore?.[p] });
@@ -328,6 +361,8 @@ function setupWorkspace(workspacePath) {
   fs.mkdirSync(path.join(workspacePath, 'voiceovers'), { recursive: true });
   fs.mkdirSync(path.join(workspacePath, 'conversations'), { recursive: true });
 
+  migrateWorkspace(workspacePath);
+  branches = createBranchStore(workspacePath);
   conversations = createConversationStore(path.join(workspacePath, 'conversations'));
   prompts = createPromptStore(path.join(workspacePath, 'prompts'));
   ideas = createIdeaStore(workspacePath);

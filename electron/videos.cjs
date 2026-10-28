@@ -1,10 +1,11 @@
-// Timeline videos store: one JSON array, written atomically.
+// Timeline videos store: JSON array of videos, written atomically.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
 const ID_PATTERN = /^[\w-]{1,100}$/;
 const TITLE_MAX = 120;
+const BRIEF_MAX = 8000;
 const NARRATION_MAX = 200000;
 const DEFAULT_TITLE = 'Video sin título';
 // Accounts other than the default one carry a "/u/<n>/" prefix
@@ -50,7 +51,16 @@ function validIdeaNumber(value) {
 function validateFields(input) {
   if (!input || typeof input !== 'object') throw new Error('Video no válido.');
   const fields = {};
+  if (input.branchId !== undefined) {
+    fields.branchId = validId(input.branchId, 'ID de rama');
+  }
   if (input.title !== undefined) fields.title = validTitle(input.title);
+  if (input.brief !== undefined) {
+    if (input.brief !== null && (typeof input.brief !== 'string' || input.brief.length > BRIEF_MAX)) {
+      throw new Error('Brief de video no válido.');
+    }
+    fields.brief = input.brief;
+  }
   if (input.scriptConversationId !== undefined) {
     fields.scriptConversationId = validLink(input.scriptConversationId, 'script conversation id');
   }
@@ -64,14 +74,20 @@ function validateFields(input) {
   }
   // null clears the edited narration so the text follows the script again
   if (input.narrationText !== undefined) {
-    if (input.narrationText !== null && (typeof input.narrationText !== 'string' || input.narrationText.length > NARRATION_MAX)) {
+    if (
+      input.narrationText !== null &&
+      (typeof input.narrationText !== 'string' || input.narrationText.length > NARRATION_MAX)
+    ) {
       throw new Error('Texto de narración no válido.');
     }
     fields.narrationText = input.narrationText;
   }
   // null clears the Google Flow project this video's characters are generated in
   if (input.flowProjectUrl !== undefined) {
-    if (input.flowProjectUrl !== null && !(typeof input.flowProjectUrl === 'string' && FLOW_PROJECT_URL.test(input.flowProjectUrl))) {
+    if (
+      input.flowProjectUrl !== null &&
+      !(typeof input.flowProjectUrl === 'string' && FLOW_PROJECT_URL.test(input.flowProjectUrl))
+    ) {
       throw new Error('URL del proyecto de Flow no válida.');
     }
     fields.flowProjectUrl = input.flowProjectUrl;
@@ -79,87 +95,131 @@ function validateFields(input) {
   return fields;
 }
 
+function writeAtomicJson(filePath, data) {
+  const temp = `${filePath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(temp, filePath);
+}
+
 function createVideoStore(dir) {
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'videos.json');
-
-  function getWorkspaceTitle() {
-    try {
-      const wsFile = path.join(dir, 'workspace.json');
-      if (fs.existsSync(wsFile)) {
-        const data = JSON.parse(fs.readFileSync(wsFile, 'utf8'));
-        if (data?.name) return data.name;
-      }
-    } catch {}
-    return DEFAULT_TITLE;
-  }
+  const activeFile = path.join(dir, 'active-video.json');
 
   function read() {
     try {
-      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-      if (Array.isArray(data) && data.length > 0) return [data[0]];
+      if (fs.existsSync(file)) {
+        const raw = fs.readFileSync(file, 'utf8');
+        const data = JSON.parse(raw);
+        if (Array.isArray(data)) return data;
+      }
     } catch {}
     return [];
   }
 
   function write(videos) {
-    const single = Array.isArray(videos) && videos.length > 0 ? [videos[0]] : [];
-    const temp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temp, JSON.stringify(single, null, 2), 'utf8');
-    fs.renameSync(temp, file);
+    writeAtomicJson(file, Array.isArray(videos) ? videos : []);
   }
 
-  function ensureSingle() {
-    let videos = read();
-    if (videos.length === 0) {
-      const now = Date.now();
-      const record = {
-        id: crypto.randomUUID(),
-        title: getWorkspaceTitle(),
-        titleEdited: false,
-        ideaNumber: null,
-        scriptConversationId: null,
-        illustratorConversationId: null,
-        flowProjectUrl: null,
-        overrides: {},
-        createdAt: now,
-        updatedAt: now,
-      };
-      videos = [record];
-      write(videos);
+  function readActiveId() {
+    try {
+      if (fs.existsSync(activeFile)) {
+        const raw = fs.readFileSync(activeFile, 'utf8');
+        const data = JSON.parse(raw);
+        if (data && typeof data.videoId === 'string') return data.videoId;
+      }
+    } catch {}
+    return null;
+  }
+
+  function writeActivePointer(videoId) {
+    if (videoId) {
+      writeAtomicJson(activeFile, { videoId });
+    } else {
+      try {
+        if (fs.existsSync(activeFile)) fs.unlinkSync(activeFile);
+      } catch {}
     }
-    return videos;
   }
 
-  // Exactly 1 single video timeline per workspace
-  function list() {
-    return ensureSingle();
+  function list(branchId) {
+    const videos = read();
+    const filtered = branchId ? videos.filter((v) => v.branchId === branchId) : videos;
+    return filtered.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   }
 
-  function create(input = {}) {
-    const fields = validateFields(input ?? {});
-    const videos = ensureSingle();
-    const video = videos[0];
-    Object.assign(video, fields, { updatedAt: Date.now() });
-    write(videos);
+  function get(id) {
+    if (typeof id !== 'string' || !ID_PATTERN.test(id)) return null;
+    return read().find((v) => v.id === id) || null;
+  }
+
+  function getActive() {
+    const activeId = readActiveId();
+    if (activeId) {
+      const video = get(activeId);
+      if (video) return video;
+    }
+    const all = list();
+    if (all.length === 0) return null;
+    return all.reduce((latest, v) => ((v.createdAt || 0) >= (latest.createdAt || 0) ? v : latest), all[0]);
+  }
+
+  function setActive(id) {
+    validId(id, 'ID de video');
+    const video = get(id);
+    if (!video) throw new Error('Video no encontrado.');
+    writeActivePointer(video.id);
     return video;
   }
 
+  function create(input = {}) {
+    if (!input || !input.branchId) {
+      throw new Error('El ID de rama es obligatorio.');
+    }
+    const branchId = validId(input.branchId, 'ID de rama');
+    const fields = validateFields(input);
+    const now = Date.now();
+    const record = {
+      id: crypto.randomUUID(),
+      branchId,
+      title: fields.title ?? DEFAULT_TITLE,
+      titleEdited: fields.titleEdited ?? false,
+      ideaNumber: fields.ideaNumber ?? null,
+      scriptConversationId: fields.scriptConversationId ?? null,
+      illustratorConversationId: fields.illustratorConversationId ?? null,
+      flowProjectUrl: fields.flowProjectUrl ?? null,
+      narrationText: fields.narrationText ?? null,
+      brief: fields.brief ?? null,
+      overrides: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+    const videos = read();
+    videos.push(record);
+    write(videos);
+    writeActivePointer(record.id);
+    return record;
+  }
+
   function update(id, patch) {
+    validId(id, 'ID de video');
     const fields = validateFields(patch);
     if (fields.title !== undefined && fields.titleEdited === undefined) fields.titleEdited = true;
-    const videos = ensureSingle();
-    const video = videos[0];
+    const videos = read();
+    const video = videos.find((v) => v.id === id);
+    if (!video) throw new Error('Video no encontrado.');
     Object.assign(video, fields, { updatedAt: Date.now() });
     write(videos);
     return video;
   }
 
   function setStage(id, key, value) {
+    validId(id, 'ID de video');
     if (!STAGE_KEYS.includes(key)) throw new Error('Etapa no válida.');
     if (value !== true && value !== false && value !== null) throw new Error('Valor de etapa no válido.');
-    const videos = ensureSingle();
-    const video = videos[0];
+    const videos = read();
+    const video = videos.find((v) => v.id === id);
+    if (!video) throw new Error('Video no encontrado.');
     const overrides = { ...(video.overrides && typeof video.overrides === 'object' ? video.overrides : {}) };
     if (value === null) delete overrides[key];
     else overrides[key] = value;
@@ -170,23 +230,25 @@ function createVideoStore(dir) {
   }
 
   function remove(id) {
-    const now = Date.now();
-    const reset = {
-      id: crypto.randomUUID(),
-      title: getWorkspaceTitle(),
-      titleEdited: false,
-      ideaNumber: null,
-      scriptConversationId: null,
-      illustratorConversationId: null,
-      flowProjectUrl: null,
-      overrides: {},
-      createdAt: now,
-      updatedAt: now,
-    };
-    write([reset]);
+    validId(id, 'ID de video');
+    const videos = read();
+    const index = videos.findIndex((v) => v.id === id);
+    if (index === -1) throw new Error('Video no encontrado.');
+    videos.splice(index, 1);
+    write(videos);
+    if (readActiveId() === id) {
+      writeActivePointer(null);
+    }
   }
 
-  return { list, create, update, setStage, delete: remove };
+  return { list, get, getActive, setActive, create, update, setStage, delete: remove };
 }
 
-module.exports = { createVideoStore, STAGE_KEYS, FLOW_PROJECT_URL };
+module.exports = {
+  createVideoStore,
+  STAGE_KEYS,
+  FLOW_PROJECT_URL,
+  validateFields,
+  DEFAULT_TITLE,
+  BRIEF_MAX,
+};
