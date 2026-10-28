@@ -11,7 +11,9 @@ const {
   MODES,
   CHARACTER_MODES,
   VIDEO_TYPES,
+  VOICE_MODES,
   validVideoType,
+  validVoiceMode,
   copyCharacterImages,
   getCharacterFilePath,
   validCharacters,
@@ -100,6 +102,7 @@ test('create defaults applied when optional fields omitted', () => {
   assert.equal(branch.orientation, 'horizontal');
   assert.equal(branch.characterMode, 'create');
   assert.deepEqual(branch.characterImages, []);
+  assert.equal(branch.voiceMode, 'voiceover');
   assert.equal(branch.mode, 'free');
   assert.equal(branch.series, null);
   assert.deepEqual(branch.titles, []);
@@ -115,7 +118,8 @@ test('validation rejects invalid branch fields and unknown properties', () => {
   assert.throws(() => store.create({ name: 'a'.repeat(81) }), /El nombre de la rama es demasiado largo\./);
   assert.throws(() => store.create({ name: 123 }), /Nombre de rama no válido\./);
 
-  // Invalid orientation, characterMode, mode
+  // Invalid orientation, characterMode, mode, voiceMode
+  assert.throws(() => store.create({ name: 'X', voiceMode: 'invalid' }), /Modo de voz no válido\./);
   assert.throws(() => store.create({ name: 'X', orientation: 'diagonal' }), /Orientación de rama no válida\./);
   assert.throws(() => store.create({ name: 'X', characterMode: 'other' }), /Modo de personaje no válido\./);
   assert.throws(() => store.create({ name: 'X', mode: 'random' }), /Modo de rama no válido\./);
@@ -222,6 +226,7 @@ test('migration of a legacy workspace: default branch created and videos gain br
   assert.equal(defaultBranch.name, 'Principal');
   assert.equal(defaultBranch.orientation, 'horizontal');
   assert.equal(defaultBranch.characterMode, 'create');
+  assert.equal(defaultBranch.voiceMode, 'voiceover');
   assert.equal(defaultBranch.mode, 'free');
 
   // Verify videos.json on disk
@@ -239,6 +244,7 @@ test('migration on empty workspace creates default branch and one default video 
 
   const result = migrateWorkspace(dir);
   assert.equal(result.branches.length, 1);
+  assert.equal(result.branches[0].voiceMode, 'voiceover');
   assert.equal(result.videos.length, 1);
 
   const video = result.videos[0];
@@ -326,6 +332,65 @@ test('migration populates videoType explainer on existing branches missing it', 
 
   const onDisk = JSON.parse(fs.readFileSync(branchesFile, 'utf8'));
   assert.equal(onDisk[0].videoType, 'explainer');
+});
+test('voiceMode: validation, defaults, update, and backward compatibility', () => {
+  assert.deepEqual(VOICE_MODES, ['voiceover', 'flow']);
+  assert.equal(validVoiceMode('voiceover'), 'voiceover');
+  assert.equal(validVoiceMode('flow'), 'flow');
+  assert.throws(() => validVoiceMode('unknown'), /Modo de voz no válido\./);
+  assert.throws(() => validVoiceMode(123), /Modo de voz no válido\./);
+  assert.throws(() => validVoiceMode(null), /Modo de voz no válido\./);
+  assert.throws(() => validVoiceMode(undefined), /Modo de voz no válido\./);
+
+  const dir = makeTmpDir();
+  const store = createBranchStore(dir);
+
+  // Default is 'voiceover'
+  const b1 = store.create({ name: 'Rama Default' });
+  assert.equal(b1.voiceMode, 'voiceover');
+
+  // Explicit mode
+  const b2 = store.create({ name: 'Rama Flow', voiceMode: 'flow' });
+  assert.equal(b2.voiceMode, 'flow');
+
+  // Update
+  const updated = store.update(b1.id, { voiceMode: 'flow' });
+  assert.equal(updated.voiceMode, 'flow');
+
+  // Branches missing voiceMode on disk are read as 'voiceover'
+  const rawBranchesFile = path.join(dir, 'branches.json');
+  const onDisk = JSON.parse(fs.readFileSync(rawBranchesFile, 'utf8'));
+  delete onDisk[0].voiceMode;
+  fs.writeFileSync(rawBranchesFile, JSON.stringify(onDisk));
+
+  const reloaded = store.list();
+  assert.equal(reloaded[0].voiceMode, 'voiceover');
+});
+
+test('migration populates voiceMode voiceover on existing branches missing it', () => {
+  const dir = makeTmpDir();
+  const branchesFile = path.join(dir, 'branches.json');
+  const legacyBranch = {
+    id: 'legacy-branch-voice',
+    name: 'Rama Vieja Sin Voz',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    characterMode: 'create',
+    characterImages: [],
+    mode: 'free',
+    series: null,
+    titles: [],
+    createdAt: 1000,
+    updatedAt: 1000,
+  };
+  fs.writeFileSync(branchesFile, JSON.stringify([legacyBranch]));
+
+  const result = migrateWorkspace(dir);
+  assert.equal(result.branches.length, 1);
+  assert.equal(result.branches[0].voiceMode, 'voiceover');
+
+  const onDisk = JSON.parse(fs.readFileSync(branchesFile, 'utf8'));
+  assert.equal(onDisk[0].voiceMode, 'voiceover');
 });
 
 test('copyCharacterImages and getCharacterFilePath: copy, sanitization, and traversal rejection', () => {

@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { VOICE_MODES } = require('./branches.cjs');
 
 const ID_PATTERN = /^[\w-]{1,100}$/;
 const TITLE_MAX = 120;
@@ -68,6 +69,12 @@ function validateFields(input) {
     fields.illustratorConversationId = validLink(input.illustratorConversationId, 'illustrator conversation id');
   }
   if (input.ideaNumber !== undefined) fields.ideaNumber = validIdeaNumber(input.ideaNumber);
+  if (input.voiceMode !== undefined) {
+    if (input.voiceMode !== null && (typeof input.voiceMode !== 'string' || !VOICE_MODES.includes(input.voiceMode))) {
+      throw new Error('Modo de voz no válido.');
+    }
+    fields.voiceMode = input.voiceMode;
+  }
   if (input.titleEdited !== undefined) {
     if (typeof input.titleEdited !== 'boolean') throw new Error('Indicador titleEdited no válido.');
     fields.titleEdited = input.titleEdited;
@@ -184,6 +191,7 @@ function createVideoStore(dir) {
       branchId,
       title: fields.title ?? DEFAULT_TITLE,
       titleEdited: fields.titleEdited ?? false,
+      voiceMode: fields.voiceMode ?? null,
       ideaNumber: fields.ideaNumber ?? null,
       scriptConversationId: fields.scriptConversationId ?? null,
       illustratorConversationId: fields.illustratorConversationId ?? null,
@@ -246,6 +254,7 @@ function createVideoStore(dir) {
 
 module.exports = {
   createVideoStore,
+  VOICE_MODES,
   STAGE_KEYS,
   FLOW_PROJECT_URL,
   validateFields,

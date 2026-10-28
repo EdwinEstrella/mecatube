@@ -34,6 +34,7 @@ export function useBranchForm(branch, isOpen) {
   const [characters, setCharacters] = useState([]);
   const [pendingCharacters, setPendingCharacters] = useState([]);
   const [narratorVoiceId, setNarratorVoiceId] = useState('');
+  const [voiceMode, setVoiceMode] = useState('voiceover');
   const [mode, setMode] = useState('free');
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
@@ -46,6 +47,7 @@ export function useBranchForm(branch, isOpen) {
       setVideoType(branch.videoType || 'explainer');
       setCharacterMode(branch.characterMode || 'create');
       setNarratorVoiceId(branch.narratorVoiceId || '');
+      setVoiceMode(branch.voiceMode || 'voiceover');
       const loadedChars = Array.isArray(branch.characters) && branch.characters.length > 0
         ? branch.characters.map((c) => ({ ...c }))
         : Array.isArray(branch.characterImages) && branch.characterImages.length > 0
@@ -66,6 +68,7 @@ export function useBranchForm(branch, isOpen) {
       setCharacterMode('create');
       setCharacters([]);
       setNarratorVoiceId('');
+      setVoiceMode('voiceover');
       setMode('free');
     }
     setPendingCharacters([]);
@@ -88,6 +91,8 @@ export function useBranchForm(branch, isOpen) {
     setPendingCharacters,
     narratorVoiceId,
     setNarratorVoiceId,
+    voiceMode,
+    setVoiceMode,
     mode,
     setMode,
     isBusy,
@@ -136,6 +141,8 @@ export default function NewBranchWizard({
     setPendingCharacters,
     narratorVoiceId,
     setNarratorVoiceId,
+    voiceMode,
+    setVoiceMode,
     mode,
     setMode,
     isBusy,
@@ -256,6 +263,7 @@ export default function NewBranchWizard({
           characterImages: [],
           characters: [],
           narratorVoiceId: narratorVoiceId || null,
+          voiceMode,
           mode,
         });
         targetBranchId = created.id;
@@ -304,6 +312,7 @@ export default function NewBranchWizard({
           characterImages: finalImages,
           characters: finalCharacters,
           narratorVoiceId: narratorVoiceId || null,
+          voiceMode,
           mode,
         });
       } else {
@@ -312,6 +321,7 @@ export default function NewBranchWizard({
             characterImages: finalImages,
             characters: finalCharacters,
             narratorVoiceId: narratorVoiceId || null,
+            voiceMode,
           });
         } else {
           savedResult = {
@@ -323,6 +333,7 @@ export default function NewBranchWizard({
             characterImages: [],
             characters: [],
             narratorVoiceId: narratorVoiceId || null,
+            voiceMode,
             mode,
           };
         }
@@ -387,6 +398,10 @@ export default function NewBranchWizard({
     },
   ];
 
+  const voiceModeOptions = [
+    { value: 'voiceover', label: 'Voz en off (Cartesia)' },
+    { value: 'flow', label: 'Voz de los personajes (Flow)' },
+  ];
   const modeOptions = [
     {
       id: 'free',
@@ -619,25 +634,39 @@ export default function NewBranchWizard({
             />
           </div>
 
-          {/* Section 6: Voz de narración */}
+          {/* Section: Voz del video */}
           <div className="workspace-modal__field">
-            <label className="workspace-modal__label">Voz del narrador (opcional)</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CustomSelect
-                value={narratorVoiceId || ''}
-                options={narratorVoiceOptions}
-                placeholder="Predeterminada global"
-                ariaLabel="Voz del narrador de la rama"
-                disabled={isBusy}
-                onChange={(val) => setNarratorVoiceId(val || '')}
-                style={{ flex: 1 }}
-              />
-              <VoicePreviewButton voiceId={narratorVoiceId} />
-            </div>
-            <p className="branch-wizard__hint" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Se usará esta voz de Cartesia para las narraciones de los videos de esta rama.
-            </p>
+            <label className="workspace-modal__label">Voz del video</label>
+            <CustomSelect
+              value={voiceMode}
+              options={voiceModeOptions}
+              ariaLabel="Voz del video"
+              disabled={isBusy}
+              onChange={(val) => setVoiceMode(val || 'voiceover')}
+            />
           </div>
+
+          {/* Section 6: Voz de narración */}
+          {voiceMode !== 'flow' && (
+            <div className="workspace-modal__field">
+              <label className="workspace-modal__label">Voz del narrador (opcional)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CustomSelect
+                  value={narratorVoiceId || ''}
+                  options={narratorVoiceOptions}
+                  placeholder="Predeterminada global"
+                  ariaLabel="Voz del narrador de la rama"
+                  disabled={isBusy}
+                  onChange={(val) => setNarratorVoiceId(val || '')}
+                  style={{ flex: 1 }}
+                />
+                <VoicePreviewButton voiceId={narratorVoiceId} />
+              </div>
+              <p className="branch-wizard__hint" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Se usará esta voz de Cartesia para las narraciones de los videos de esta rama.
+              </p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="workspace-modal__actions">

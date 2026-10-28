@@ -123,20 +123,22 @@ export default function CharactersPanel({
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Voz de narración:</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <CustomSelect
-              value={branch?.narratorVoiceId || ''}
-              options={narratorVoiceOptions}
-              placeholder="Predeterminada global"
-              ariaLabel="Voz de narración de la rama"
-              onChange={handleNarratorVoiceChange}
-              style={{ minWidth: '180px', fontSize: '0.8rem' }}
-            />
-            <VoicePreviewButton voiceId={branch?.narratorVoiceId} />
+        {branch?.voiceMode !== 'flow' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Voz de narración:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CustomSelect
+                value={branch?.narratorVoiceId || ''}
+                options={narratorVoiceOptions}
+                placeholder="Predeterminada global"
+                ariaLabel="Voz de narración de la rama"
+                onChange={handleNarratorVoiceChange}
+                style={{ minWidth: '180px', fontSize: '0.8rem' }}
+              />
+              <VoicePreviewButton voiceId={branch?.narratorVoiceId} />
+            </div>
           </div>
-        </div>
+        )}
 
         <ul className="char-panel__list">
           {branchCharacters.map((char) => (
