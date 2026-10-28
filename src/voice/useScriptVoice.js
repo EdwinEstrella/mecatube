@@ -4,6 +4,7 @@ import { extractNarration } from './narration.js';
 import { ensureScriptVideo } from './scriptVideo.js';
 import { chooseVideoTarget } from '../ui/videoTargetDialog.js';
 import { FALLBACK_PREFS, useVoicePrefs } from './useVoicePrefs.js';
+import { parseCharacterLines, planVoiceSegments } from './characterLines.js';
 
 // Container logic for the "Generar voz en off" buttons of a script chat. All script messages share
 // one track: the video linked to the conversation.
@@ -88,9 +89,39 @@ export function useScriptVoice(conversationId, messages) {
       if (!video) return;
       videoIdRef.current = video.id;
       setVideoId(video.id);
+
+      const branches = (await api.listBranches?.()) ?? [];
+      const branch = branches.find((b) => b.id === video.branchId) ?? null;
+      const parsedSegments = parseCharacterLines(text, branch?.characters);
+      const planned = planVoiceSegments(parsedSegments, {
+        characters: branch?.characters,
+        narratorVoiceId: branch?.narratorVoiceId,
+        defaultVoiceId: voiceId,
+      });
+
+      const finalVoiceId = chosenVoice?.id ?? (planned.narratorVoiceId || voiceId);
+      const finalVoiceName = chosenVoice?.name ?? (branch?.narratorVoiceId ? 'Narrador de rama' : voiceName);
+
       // The Timeline voice panel shows exactly what was spoken
       await api.updateVideo(video.id, { narrationText: text });
-      await api.generateVoice({ videoId: video.id, text, voiceId, voiceName, model: prefs.model });
+      if (planned.isMultiVoice) {
+        await api.generateVoice({
+          videoId: video.id,
+          text,
+          voiceId: finalVoiceId,
+          voiceName: finalVoiceName,
+          model: prefs.model,
+          segments: planned.segments,
+        });
+      } else {
+        await api.generateVoice({
+          videoId: video.id,
+          text,
+          voiceId: finalVoiceId,
+          voiceName: finalVoiceName,
+          model: prefs.model,
+        });
+      }
       setDoneId(message.id);
     } catch (generateError) {
       setError({ messageId: message.id, text: cleanIpcError(generateError) });

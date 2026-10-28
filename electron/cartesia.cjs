@@ -458,6 +458,7 @@ function createVoiceService({
     model = DEFAULT_MODEL,
     language = DEFAULT_LANGUAGE,
     speed,
+    segments,
   }) {
     const isVoiceover = kind === 'voiceover';
     if (kind !== 'video' && !isVoiceover) throw new Error('Destino de generación desconocido.');
@@ -468,6 +469,24 @@ function createVoiceService({
     if (typeof voiceId !== 'string' || !ID_PATTERN.test(voiceId)) throw new Error('Voz no válida.');
     if (!MODELS.includes(model)) throw new Error('Modelo de voz desconocido.');
     if (typeof language !== 'string' || !/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(language)) throw new Error('Idioma no válido.');
+    if (segments !== undefined) {
+      if (!Array.isArray(segments) || segments.length > 200) {
+        throw new Error('Segmentos de voz no válidos.');
+      }
+      let totalLength = 0;
+      for (const seg of segments) {
+        if (!seg || typeof seg !== 'object' || typeof seg.text !== 'string') {
+          throw new Error('Segmentos de voz no válidos.');
+        }
+        if (seg.voiceId !== undefined && typeof seg.voiceId !== 'string') {
+          throw new Error('Segmentos de voz no válidos.');
+        }
+        totalLength += seg.text.length;
+      }
+      if (totalLength > TEXT_MAX) {
+        throw new Error('El texto de la narración es demasiado largo.');
+      }
+    }
     const apiKey = simulate ? null : requireKey();
 
     const voiceoverId = isVoiceover ? crypto.randomUUID() : null;
@@ -477,14 +496,68 @@ function createVoiceService({
     try {
       let words;
       let pcm;
-      if (simulate) {
-        ({ words, pcm } = simulateTake(text));
-        onProgress({ videoId: run.videoId, voiceoverId, seconds: pcm.length / (SAMPLE_RATE * 2) });
+      let finalChars = text.length;
+      let finalTranscript = text;
+
+      if (Array.isArray(segments) && segments.length > 1) {
+        const pcmChunks = [];
+        let totalPcmBytes = 0;
+        const mergedWords = [];
+        let currentOffset = 0;
+        let totalChars = 0;
+
+        for (let i = 0; i < segments.length; i += 1) {
+          if (run.cancelled) throw new Error('Generación cancelada.');
+          const seg = segments[i];
+          if (!seg || typeof seg.text !== 'string' || !seg.text.trim()) continue;
+          totalChars += seg.text.length;
+          const segVoiceId = typeof seg.voiceId === 'string' && ID_PATTERN.test(seg.voiceId) ? seg.voiceId : voiceId;
+
+          let segPcm;
+          let segWords;
+          if (simulate) {
+            const take = simulateTake(seg.text);
+            segPcm = take.pcm;
+            segWords = take.words;
+          } else {
+            const take = await streamTake(buildRequestBody({ model, text: seg.text, voiceId: segVoiceId, language, speed }), run);
+            segPcm = take.pcm();
+            segWords = take.words;
+          }
+          if (run.cancelled) throw new Error('Generación cancelada.');
+          if (segPcm.length === 0) throw new Error('Cartesia no devolvió audio.');
+
+          const segDuration = segPcm.length / (SAMPLE_RATE * 2);
+          for (const item of segWords) {
+            mergedWords.push({
+              w: item.w,
+              s: Math.round((item.s + currentOffset) * 1000) / 1000,
+              e: Math.round((item.e + currentOffset) * 1000) / 1000,
+            });
+          }
+
+          pcmChunks.push(segPcm);
+          totalPcmBytes += segPcm.length;
+          currentOffset += segDuration;
+          onProgress({ videoId: run.videoId, voiceoverId, seconds: currentOffset });
+        }
+
+        if (totalPcmBytes === 0) throw new Error('Cartesia no devolvió audio.');
+        pcm = Buffer.concat(pcmChunks, totalPcmBytes);
+        words = mergedWords;
+        finalChars = totalChars;
+        finalTranscript = segments.map((s) => s.text).join('\n\n');
       } else {
-        const take = await streamTake(buildRequestBody({ model, text, voiceId, language, speed }), run);
-        pcm = take.pcm();
-        words = take.words;
+        if (simulate) {
+          ({ words, pcm } = simulateTake(text));
+          onProgress({ videoId: run.videoId, voiceoverId, seconds: pcm.length / (SAMPLE_RATE * 2) });
+        } else {
+          const take = await streamTake(buildRequestBody({ model, text, voiceId, language, speed }), run);
+          pcm = take.pcm();
+          words = take.words;
+        }
       }
+
       if (run.cancelled) throw new Error('Generación cancelada.');
       if (pcm.length === 0) throw new Error('Cartesia no devolvió audio.');
 
@@ -493,14 +566,14 @@ function createVoiceService({
         voiceId,
         voiceName: typeof voiceName === 'string' ? voiceName.slice(0, 120) : voiceId,
         language,
-        chars: text.length,
+        chars: finalChars,
         duration: Math.round((pcm.length / (SAMPLE_RATE * 2)) * 1000) / 1000,
         sampleRate: SAMPLE_RATE,
-        transcript: text,
+        transcript: finalTranscript,
         words,
         createdAt: Date.now(),
         ...(simulate ? { simulated: true } : {}),
-        ...(isVoiceover ? { id: voiceoverId, title: voiceoverTitle(title, text) } : {}),
+        ...(isVoiceover ? { id: voiceoverId, title: voiceoverTitle(title, finalTranscript) } : {}),
       };
       const dir = isVoiceover ? voiceoverDir(voiceoverId) : voiceDir(videoId);
       fs.mkdirSync(dir, { recursive: true });
@@ -563,4 +636,5 @@ module.exports = {
   DEFAULT_MODEL,
   SAMPLE_RATE,
   API_VERSION,
+  TEXT_MAX,
 };

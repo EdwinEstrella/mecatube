@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { characterImageUrl, branchCharacterImageUrl } from './characterStatus.js';
+import CustomSelect from '../ui/CustomSelect.jsx';
+import VoicePreviewButton from '../voice/VoicePreviewButton.jsx';
 
 // Presentational Timeline section: selected image per character plus the editable Flow project link
 export default function CharactersPanel({
@@ -39,6 +41,41 @@ export default function CharactersPanel({
 
   const changed = draft.trim() !== stored;
   const allHaveSelected = characters.length > 0 && characters.every((c) => Boolean(c.selectedFile));
+
+  const [savedVoices, setSavedVoices] = useState([]);
+  useEffect(() => {
+    if (!window.electronAPI?.listSavedVoices) return;
+    window.electronAPI.listSavedVoices().then((list) => setSavedVoices(list || [])).catch(() => {});
+  }, []);
+
+  const narratorVoiceOptions = [
+    { value: '', label: 'Predeterminada global' },
+    ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
+  ];
+
+  const characterVoiceOptions = [
+    { value: '', label: 'Sin voz (solo narración)' },
+    ...savedVoices.map((v) => ({ value: v.id, label: v.label || v.name })),
+  ];
+
+  const handleNarratorVoiceChange = async (val) => {
+    if (!branch?.id || !window.electronAPI?.updateBranch) return;
+    try {
+      await window.electronAPI.updateBranch(branch.id, { narratorVoiceId: val || null });
+      onBranchUpdated?.();
+    } catch {}
+  };
+
+  const handleCharacterVoiceChange = async (charKey, val) => {
+    if (!branch?.id || !window.electronAPI?.updateBranch) return;
+    try {
+      const updated = branchCharacters.map((c) =>
+        c.key === charKey ? { ...c, voiceId: val || null } : c
+      );
+      await window.electronAPI.updateBranch(branch.id, { characters: updated });
+      onBranchUpdated?.();
+    } catch {}
+  };
 
   const handleSaveToBranch = async () => {
     if (!branch?.id || !video?.id || !window.electronAPI) return;
@@ -100,6 +137,21 @@ export default function CharactersPanel({
           </div>
         )}
 
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Voz de narración:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CustomSelect
+              value={branch?.narratorVoiceId || ''}
+              options={narratorVoiceOptions}
+              placeholder="Predeterminada global"
+              ariaLabel="Voz de narración de la rama"
+              onChange={handleNarratorVoiceChange}
+              style={{ minWidth: '180px', fontSize: '0.8rem' }}
+            />
+            <VoicePreviewButton voiceId={branch?.narratorVoiceId} />
+          </div>
+        </div>
+
         <ul className="char-panel__list">
           {branchCharacters.map((char) => (
             <li key={char.key || char.file} className="char-panel__item">
@@ -121,6 +173,17 @@ export default function CharactersPanel({
               ) : (
                 <span className="char-panel__state">Rama</span>
               )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', width: '100%' }}>
+                <CustomSelect
+                  value={char.voiceId || ''}
+                  options={characterVoiceOptions}
+                  placeholder="Sin voz (solo narración)"
+                  ariaLabel={`Voz para ${char.name}`}
+                  onChange={(val) => handleCharacterVoiceChange(char.key, val)}
+                  style={{ flex: 1, fontSize: '0.8rem' }}
+                />
+                <VoicePreviewButton voiceId={char.voiceId} />
+              </div>
             </li>
           ))}
         </ul>

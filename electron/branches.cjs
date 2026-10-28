@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const ID_PATTERN = /^[\w-]{1,100}$/;
 const CHARACTER_IMAGE_PATTERN = /^[\w.-]{1,120}$/;
 const CHARACTER_KEY_PATTERN = /^[\w-]{1,60}$/;
+const VOICE_ID_PATTERN = /^[\w-]{1,100}$/;
 const FLOW_PROJECT_URL = /^https:\/\/flow\.google\.com\/(?:u\/\d+\/)?project\/[0-9a-f-]{36}$/;
 const CHARACTER_SOURCES = ['own', 'flow'];
 const NAME_MAX = 80;
@@ -26,6 +27,7 @@ const KNOWN_BRANCH_FIELDS = [
   'characterImages',
   'characters',
   'flowProjectUrl',
+  'narratorVoiceId',
   'mode',
   'series',
   'titles',
@@ -103,14 +105,30 @@ function validCharacters(value) {
     if (typeof item.source !== 'string' || !CHARACTER_SOURCES.includes(item.source)) {
       throw new Error('Origen de personaje no válido.');
     }
+    let voiceId = null;
+    if (item.voiceId !== undefined && item.voiceId !== null && item.voiceId !== '') {
+      if (typeof item.voiceId !== 'string' || !VOICE_ID_PATTERN.test(item.voiceId)) {
+        throw new Error('ID de voz de personaje no válido.');
+      }
+      voiceId = item.voiceId;
+    }
     return {
       key: item.key,
       name,
       description,
       file: item.file,
       source: item.source,
+      voiceId,
     };
   });
+}
+
+function validNarratorVoiceId(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !VOICE_ID_PATTERN.test(value)) {
+    throw new Error('ID de voz de narrador no válido.');
+  }
+  return value;
 }
 
 function validFlowProjectUrl(value) {
@@ -239,6 +257,7 @@ function validateBranchPatch(patch) {
   if (patch.characterImages !== undefined) fields.characterImages = validCharacterImages(patch.characterImages);
   if (patch.characters !== undefined) fields.characters = validCharacters(patch.characters);
   if (patch.flowProjectUrl !== undefined) fields.flowProjectUrl = validFlowProjectUrl(patch.flowProjectUrl);
+  if (patch.narratorVoiceId !== undefined) fields.narratorVoiceId = validNarratorVoiceId(patch.narratorVoiceId);
   if (patch.mode !== undefined) fields.mode = validMode(patch.mode);
   if (patch.series !== undefined) fields.series = validSeries(patch.series);
   if (patch.titles !== undefined) fields.titles = validTitles(patch.titles);
@@ -267,6 +286,16 @@ function createBranchStore(dir) {
               if (!b.videoType) mod = { ...mod, videoType: 'explainer' };
               if (!mod.characters) mod = { ...mod, characters: [] };
               if (mod.flowProjectUrl === undefined) mod = { ...mod, flowProjectUrl: null };
+              if (mod.narratorVoiceId === undefined) mod = { ...mod, narratorVoiceId: null };
+              if (Array.isArray(mod.characters)) {
+                mod = {
+                  ...mod,
+                  characters: mod.characters.map((c) => ({
+                    ...c,
+                    voiceId: c && typeof c === 'object' && c.voiceId ? c.voiceId : null,
+                  })),
+                };
+              }
               return mod;
             }
             return b;
@@ -307,6 +336,7 @@ function createBranchStore(dir) {
     const characterImages = input.characterImages !== undefined ? validCharacterImages(input.characterImages) : [];
     const characters = input.characters !== undefined ? validCharacters(input.characters) : [];
     const flowProjectUrl = input.flowProjectUrl !== undefined ? validFlowProjectUrl(input.flowProjectUrl) : null;
+    const narratorVoiceId = input.narratorVoiceId !== undefined ? validNarratorVoiceId(input.narratorVoiceId) : null;
     const mode = input.mode !== undefined ? validMode(input.mode) : 'free';
     const series = input.series !== undefined ? validSeries(input.series) : null;
     const titles = input.titles !== undefined ? validTitles(input.titles) : [];
@@ -321,6 +351,7 @@ function createBranchStore(dir) {
       characterImages,
       characters,
       flowProjectUrl,
+      narratorVoiceId,
       mode,
       series,
       titles,
@@ -417,6 +448,7 @@ function migrateWorkspace(dir) {
         characterImages: [],
         characters: [],
         flowProjectUrl: null,
+        narratorVoiceId: null,
         mode: 'free',
         series: null,
         titles: [],
@@ -437,6 +469,10 @@ function migrateWorkspace(dir) {
       }
       if (branch.flowProjectUrl === undefined) {
         branch.flowProjectUrl = null;
+        branchesModified = true;
+      }
+      if (branch.narratorVoiceId === undefined) {
+        branch.narratorVoiceId = null;
         branchesModified = true;
       }
     }
@@ -617,6 +653,8 @@ module.exports = {
   validCharacterImages,
   validCharacters,
   validFlowProjectUrl,
+  validNarratorVoiceId,
+  VOICE_ID_PATTERN,
   validMode,
   validSeries,
   validTitles,
