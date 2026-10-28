@@ -18,6 +18,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
   const [currentOrientation, setCurrentOrientation] = useState('horizontal');
   const [currentVideoType, setCurrentVideoType] = useState('explainer');
   const [currentBranchCharacters, setCurrentBranchCharacters] = useState(null);
+  const [currentBrief, setCurrentBrief] = useState(null);
 
   // Reload on mount and whenever Settings saves or restores a prompt
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
         ]);
         if (!active) return;
         if (activeVideo?.branchId && Array.isArray(branches)) {
+          setCurrentBrief(activeVideo?.brief ?? null);
           const branch = branches.find((b) => b.id === activeVideo.branchId);
           if (branch?.orientation) setCurrentOrientation(branch.orientation);
           if (branch?.videoType) setCurrentVideoType(branch.videoType);
@@ -111,6 +113,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
               orientation: currentOrientation,
               videoType: currentVideoType,
               branchCharacters: currentBranchCharacters,
+              brief: currentBrief,
             });
             onSend(text);
           }}

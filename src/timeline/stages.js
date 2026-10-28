@@ -164,6 +164,7 @@ export function deriveStages(
   const auto = detectAuto(scriptMessages, illustratorMessages, hasVoice, charactersApproved);
   const overrides = video?.overrides && typeof video.overrides === 'object' ? video.overrides : {};
   const hasBranchChars = branchHasCharacters(resolvedBranch);
+  const hasBrief = Boolean(video?.brief && typeof video.brief === 'string' && video.brief.trim());
 
   let currentAssigned = false;
   return STAGES.map(({ key, label, auto: isAuto }) => {
@@ -182,7 +183,8 @@ export function deriveStages(
     }
 
     const isBranchCharactersDone = key === 'characters' && hasBranchChars;
-    const isAutoDone = auto[key] === true || isBranchCharactersDone;
+    const isBriefDone = key === 'idea' && hasBrief;
+    const isAutoDone = auto[key] === true || isBranchCharactersDone || isBriefDone;
     const done = overridden ? overrides[key] : isAutoDone;
     let status = 'pending';
     if (done) {

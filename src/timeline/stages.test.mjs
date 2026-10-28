@@ -342,6 +342,28 @@ test('tolerates missing video, bad messages and non-array chats', () => {
   assert.equal(deriveStages(video(), [null, { role: 'assistant' }, { role: 'assistant', content: 5 }], 'nope').length, 10);
 });
 
+test('video with brief marks idea stage done automatically', () => {
+  const vidWithBrief = { id: 'v1', title: 'Video con brief', brief: 'Contexto del capítulo 1', overrides: {} };
+  const stages = deriveStages(vidWithBrief, null, null);
+  assert.equal(statusOf(stages).idea, 'done');
+  assert.equal(statusOf(stages).script, 'current');
+  assert.equal(stages.find((s) => s.key === 'idea').overridden, false);
+  assert.equal(stages.find((s) => s.key === 'idea').source, 'auto');
+});
+
+test('video without brief keeps idea stage as current when no messages', () => {
+  const vidNoBrief = { id: 'v1', title: 'Video sin brief', brief: '', overrides: {} };
+  const stages = deriveStages(vidNoBrief, null, null);
+  assert.equal(statusOf(stages).idea, 'current');
+});
+
+test('override false beats brief auto-done', () => {
+  const vidOverridden = { id: 'v1', title: 'Video con brief', brief: 'Contexto', overrides: { idea: false } };
+  const stages = deriveStages(vidOverridden, null, null);
+  assert.equal(statusOf(stages).idea, 'current');
+  assert.equal(stages.find((s) => s.key === 'idea').overridden, true);
+});
+
 if (failures > 0) {
   console.log(`\n${failures} test(s) failed`);
   process.exit(1);

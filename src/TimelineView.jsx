@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import VideoDetail from './timeline/VideoDetail.jsx';
 import BranchTree from './timeline/BranchTree.jsx';
+import BranchPanel from './timeline/BranchPanel.jsx';
 import NewBranchWizard from './workspace/NewBranchWizard.jsx';
 import DeleteBranchModal from './timeline/DeleteBranchModal.jsx';
 import { countDone, deriveStages } from './timeline/stages.js';
@@ -26,6 +27,8 @@ export default function TimelineView({
   const [branches, setBranches] = useState([]);
   const [videos, setVideos] = useState([]);
   const [activeVideo, setActiveVideo] = useState(null);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [viewMode, setViewMode] = useState('video'); // 'video' | 'branch'
   const [conversations, setConversations] = useState([]);
   const [chats, setChats] = useState({});
   const [voices, setVoices] = useState({});
@@ -126,6 +129,18 @@ export default function TimelineView({
 
   const doneCount = countDone(stages);
 
+  const currentBranch = useMemo(() => {
+    if (selectedBranchId) {
+      const found = branches.find((b) => b.id === selectedBranchId);
+      if (found) return found;
+    }
+    if (video?.branchId) {
+      const found = branches.find((b) => b.id === video.branchId);
+      if (found) return found;
+    }
+    return branches[0] ?? null;
+  }, [branches, selectedBranchId, video]);
+
   const videoStagesMap = useMemo(() => {
     const map = {};
     for (const vid of videos) {
@@ -156,6 +171,7 @@ export default function TimelineView({
 
   const handleSelectVideo = async (videoId) => {
     setError('');
+    setViewMode('video');
     try {
       await window.electronAPI.setActiveVideo(videoId);
       window.dispatchEvent(new CustomEvent('mecatube:active-video-changed', { detail: { videoId } }));
@@ -165,8 +181,14 @@ export default function TimelineView({
     }
   };
 
+  const handleSelectBranch = (branchId) => {
+    setSelectedBranchId(branchId);
+    setViewMode('branch');
+  };
+
   const handleCreateVideoInBranch = async (branchId) => {
     setError('');
+    setViewMode('video');
     try {
       const created = await window.electronAPI.createVideo({ newVideo: true, branchId });
       window.dispatchEvent(new CustomEvent('mecatube:active-video-changed', { detail: { videoId: created.id } }));
@@ -235,9 +257,11 @@ export default function TimelineView({
         <BranchTree
           branches={branches}
           videos={videos}
-          activeVideoId={video?.id}
+          activeVideoId={viewMode === 'video' ? video?.id : null}
+          selectedBranchId={viewMode === 'branch' ? currentBranch?.id : null}
           expandedBranchIds={expandedBranchIds}
           onToggleBranch={handleToggleBranch}
+          onSelectBranch={handleSelectBranch}
           onSelectVideo={handleSelectVideo}
           onCreateVideo={handleCreateVideoInBranch}
           onNewBranch={() => {
@@ -257,7 +281,20 @@ export default function TimelineView({
         />
 
         <div className="timeline__detail-pane">
-          {isLoaded && video ? (
+          {isLoaded && viewMode === 'branch' && currentBranch ? (
+            <BranchPanel
+              branch={currentBranch}
+              videos={videos}
+              videoStagesMap={videoStagesMap}
+              onSelectVideo={handleSelectVideo}
+              onCreateVideo={handleCreateVideoInBranch}
+              onEditBranch={(branchToEdit) => {
+                setWizardBranch(branchToEdit);
+                setIsWizardOpen(true);
+              }}
+              onBranchUpdated={refresh}
+            />
+          ) : isLoaded && video ? (
             <VideoDetail
               video={video}
               branch={branches.find((b) => b.id === video.branchId)}
@@ -269,6 +306,7 @@ export default function TimelineView({
                 setIsWizardOpen(true);
               }}
               onBranchUpdated={refresh}
+              onOpenBranchPanel={handleSelectBranch}
               {...detail}
               scriptMessages={chats[video.scriptConversationId]}
               voice={voices[video.id]}
@@ -277,6 +315,19 @@ export default function TimelineView({
                 script: chatState(video.scriptConversationId, chats),
                 illustrator: chatState(video.illustratorConversationId, chats),
               }}
+            />
+          ) : isLoaded && currentBranch ? (
+            <BranchPanel
+              branch={currentBranch}
+              videos={videos}
+              videoStagesMap={videoStagesMap}
+              onSelectVideo={handleSelectVideo}
+              onCreateVideo={handleCreateVideoInBranch}
+              onEditBranch={(branchToEdit) => {
+                setWizardBranch(branchToEdit);
+                setIsWizardOpen(true);
+              }}
+              onBranchUpdated={refresh}
             />
           ) : isLoaded ? (
             <div className="timeline__empty">

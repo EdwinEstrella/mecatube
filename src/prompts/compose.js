@@ -7,7 +7,14 @@ import { applyVideoType } from './videoTypes.js';
 
 export function composePrompt(
   text,
-  { presetId, style, orientation = 'horizontal', videoType = 'explainer', branchCharacters = null } = {}
+  {
+    presetId,
+    style,
+    orientation = 'horizontal',
+    videoType = 'explainer',
+    branchCharacters = null,
+    brief = null,
+  } = {}
 ) {
   if (typeof text !== 'string') return '';
 
@@ -44,6 +51,22 @@ export function composePrompt(
       '1. Omite la creación de nuevas hojas de personaje en la ETAPA 2. Responde en la ETAPA 2 indicando que los personajes ya están definidos utilizando exactamente estos mismos nombres.',
       '2. Utiliza obligatoriamente y de forma exacta estos nombres y descripciones en todos los prompts de escenas y animaciones (ETAPAS 3, 4 y 5) para mantener la coherencia con las imágenes de referencia aprobadas.',
       '================================',
+    ].join('\n');
+
+    result = `${result.trim()}\n\n${block}\n`;
+  }
+
+  // 5. Brief injection (only for prompt-1 when a video brief is provided)
+  if (presetId === 'prompt-1' && typeof brief === 'string' && brief.trim().length > 0) {
+    const block = [
+      '=== CONTEXTO DE ESTE VIDEO ===',
+      brief.trim(),
+      '',
+      'INSTRUCCIONES:',
+      'Este video ya tiene su tema y enfoque definidos en el contexto anterior.',
+      'Omite la ETAPA 1 (no propongas nuevas ideas ni pidas al usuario elegir una).',
+      'Trata este contexto como la idea seleccionada y redacta directamente el guion completo siguiendo la estructura y el formato de salida requerido (incluyendo título, Formato, Duración, GANCHO y DESARROLLO).',
+      '==============================',
     ].join('\n');
 
     result = `${result.trim()}\n\n${block}\n`;

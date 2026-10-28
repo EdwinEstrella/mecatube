@@ -261,6 +261,23 @@ ipcMain.handle('branches:add-character-image', async (_event, payload) => {
   return copyCharacterImages(activeWorkspacePath, branchId, filePaths);
 });
 
+ipcMain.handle('branches:generate-series-outline', async (_event, payload) => {
+  const prompt = typeof payload === 'string' ? payload : payload?.prompt;
+  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+    throw new Error('El prompt para la IA está vacío.');
+  }
+  const apiKey = secrets.getDeepSeekKey();
+  if (!apiKey) {
+    throw new Error('Configura tu API Key de DeepSeek en Configuración para generar capítulos con IA.');
+  }
+  const raw = await deepseek.streamChat({
+    apiKey,
+    messages: [{ role: 'user', content: prompt }],
+    model: 'deepseek-chat',
+  });
+  return { raw };
+});
+
 ipcMain.handle('videos:list', (_event, payload) => {
   const branchId = typeof payload === 'object' && payload !== null ? payload.branchId : payload;
   return videos.list(branchId);

@@ -28,6 +28,11 @@ export const MODE_LABELS = {
   titles: 'Títulos',
 };
 
+export const CHARACTER_MODE_LABELS = {
+  create: 'Crear en Flow',
+  own: 'Personaje propio',
+};
+
 export const MODE_HINTS = {
   free: 'Crea videos con total libertad',
   series: 'Lo configuras después en la rama',
@@ -44,6 +49,10 @@ export function getVideoTypeLabel(videoType) {
 
 export function getModeLabel(mode) {
   return MODE_LABELS[mode] ?? 'Libre';
+}
+
+export function getCharacterModeLabel(characterMode) {
+  return CHARACTER_MODE_LABELS[characterMode] ?? 'Crear en Flow';
 }
 
 /**

@@ -10,8 +10,10 @@ export default function BranchTree({
   branches = [],
   videos = [],
   activeVideoId = null,
+  selectedBranchId = null,
   expandedBranchIds = new Set(),
   onToggleBranch,
+  onSelectBranch,
   onSelectVideo,
   onCreateVideo,
   onNewBranch,
@@ -82,18 +84,26 @@ export default function BranchTree({
         {grouped.map(({ branch, videos: branchVideos }) => {
           const isExpanded = expandedBranchIds.has(branch.id);
           const isMenuOpen = menuBranchId === branch.id;
+          const isSelected = selectedBranchId === branch.id;
 
           return (
             <div key={branch.id} className="branch-tree__branch">
               {/* Branch Header */}
               <div
-                className={`branch-tree__branch-header${isExpanded ? ' branch-tree__branch-header--expanded' : ''}`}
-                onClick={() => onToggleBranch(branch.id)}
+                className={`branch-tree__branch-header${isExpanded ? ' branch-tree__branch-header--expanded' : ''}${isSelected ? ' branch-tree__branch-header--selected' : ''}`}
+                onClick={() => {
+                  onSelectBranch?.(branch.id);
+                  if (!isExpanded) onToggleBranch?.(branch.id);
+                }}
               >
                 <div className="branch-tree__branch-top">
                   <span
                     className={`branch-tree__chevron${isExpanded ? ' branch-tree__chevron--expanded' : ''}`}
                     aria-hidden="true"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleBranch?.(branch.id);
+                    }}
                   >
                     ▶
                   </span>
@@ -119,6 +129,21 @@ export default function BranchTree({
 
                     {isMenuOpen && (
                       <div className="branch-tree__menu-dropdown" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="branch-tree__menu-item"
+                          onClick={() => {
+                            setMenuBranchId(null);
+                            onSelectBranch?.(branch.id);
+                          }}
+                        >
+                          {branch.mode === 'series'
+                            ? 'Planificar serie'
+                            : branch.mode === 'titles'
+                            ? 'Banco de títulos'
+                            : 'Panel de rama'}
+                        </button>
                         <button
                           type="button"
                           role="menuitem"

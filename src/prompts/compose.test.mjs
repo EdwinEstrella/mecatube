@@ -103,3 +103,69 @@ test('composePrompt: branchCharacters appends PERSONAJES YA DEFINIDOS block', ()
   });
   assert.equal(nullComposed, promptTwo);
 });
+
+test('composePrompt: prompt-1 with brief appends CONTEXTO DE ESTE VIDEO and skip instructions', () => {
+  const briefText = 'Título del video: Los secretos del océano\nDuración objetivo: 5 minutos';
+  const composed = composePrompt(promptOne, {
+    presetId: 'prompt-1',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    brief: briefText,
+  });
+
+  assert.ok(composed.includes('=== CONTEXTO DE ESTE VIDEO ==='));
+  assert.ok(composed.includes(briefText));
+  assert.ok(composed.includes('Omite la ETAPA 1'));
+  assert.ok(composed.includes('Trata este contexto como la idea seleccionada'));
+  assert.ok(composed.includes('=============================='));
+});
+
+test('composePrompt: prompt-1 without brief is strictly byte-identical', () => {
+  const empty = composePrompt(promptOne, {
+    presetId: 'prompt-1',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    brief: '',
+  });
+  assert.equal(empty, promptOne);
+
+  const spaces = composePrompt(promptOne, {
+    presetId: 'prompt-1',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    brief: '   \n  ',
+  });
+  assert.equal(spaces, promptOne);
+
+  const nullBrief = composePrompt(promptOne, {
+    presetId: 'prompt-1',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    brief: null,
+  });
+  assert.equal(nullBrief, promptOne);
+
+  const omitted = composePrompt(promptOne, {
+    presetId: 'prompt-1',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+  });
+  assert.equal(omitted, promptOne);
+});
+
+test('composePrompt: prompt-2 ignores brief and remains byte-identical', () => {
+  const composed = composePrompt(promptTwo, {
+    presetId: 'prompt-2',
+    style: 'stickman',
+    orientation: 'horizontal',
+    videoType: 'explainer',
+    brief: 'Brief que no debe aplicarse a prompt-2',
+  });
+  assert.equal(composed, promptTwo);
+});
+

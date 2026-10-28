@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('branches:save-from-video', { branchId, videoId }),
   addBranchCharacterImage: (payload) =>
     ipcRenderer.invoke('branches:add-character-image', typeof payload === 'object' && payload !== null ? payload : { branchId: payload }),
+  generateSeriesOutline: (payload) =>
+    ipcRenderer.invoke('branches:generate-series-outline', typeof payload === 'object' && payload !== null ? payload : { prompt: payload }),
   listVideos: (branchId) => ipcRenderer.invoke('videos:list', branchId),
   getActiveVideo: () => ipcRenderer.invoke('videos:get-active'),
   setActiveVideo: (id) => ipcRenderer.invoke('videos:set-active', { id }),

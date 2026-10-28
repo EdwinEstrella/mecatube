@@ -45,6 +45,7 @@ export default function ChatView({
   const [activeOrientation, setActiveOrientation] = useState('horizontal');
   const [activeVideoType, setActiveVideoType] = useState('explainer');
   const [activeBranchCharacters, setActiveBranchCharacters] = useState(null);
+  const [activeBrief, setActiveBrief] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -57,6 +58,11 @@ export default function ChatView({
           api.listBranches?.(),
         ]);
         if (!active) return;
+        if (activeVideo?.brief) {
+          setActiveBrief(activeVideo.brief);
+        } else {
+          setActiveBrief(null);
+        }
         if (activeVideo?.branchId && Array.isArray(branches)) {
           const branch = branches.find((b) => b.id === activeVideo.branchId);
           if (branch?.orientation) {
@@ -277,12 +283,21 @@ export default function ChatView({
         }
         const preset = PRESETS.find((item) => item.id === action.presetId);
         if (!preset) return;
+        let videoBrief = activeBrief;
+        if (action.videoId) {
+          try {
+            const vList = await window.electronAPI?.listVideos?.();
+            const targetVid = vList?.find((v) => v.id === action.videoId);
+            if (targetVid?.brief) videoBrief = targetVid.brief;
+          } catch {}
+        }
         let promptText = composePrompt(effectiveText(preset, await loadOverrides()), {
           presetId: preset.id,
           style: workspaceStyle,
           orientation: activeOrientation,
           videoType: activeVideoType,
           branchCharacters: activeBranchCharacters,
+          brief: videoBrief,
         });
         const conversationId = await handlePreset(promptText);
         if (!conversationId || !action.videoId) return;

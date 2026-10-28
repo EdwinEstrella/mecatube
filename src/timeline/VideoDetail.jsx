@@ -67,6 +67,7 @@ export default function VideoDetail({
   onEdited,
   onEditBranch,
   onBranchUpdated,
+  onOpenBranchPanel,
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -102,6 +103,16 @@ export default function VideoDetail({
   return (
     <div className="video-detail">
       <div className="video-detail__header-bar">
+        {branch && onOpenBranchPanel && (
+          <button
+            type="button"
+            className="settings__button settings__button--ghost video-detail__branch-btn"
+            onClick={() => onOpenBranchPanel(branch.id)}
+            title="Ver panel de la rama"
+          >
+            ← Rama: {branch.name}
+          </button>
+        )}
         <span className="video-detail__completed-counter">
           {doneCount}/{stages.length} etapas completadas
         </span>
