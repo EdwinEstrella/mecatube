@@ -28,6 +28,8 @@ test('outputsLabel builds xN and validates', () => {
 test('labelMatches handles icon ligature prefixes, accents and loose mode', () => {
   assert.equal(flow.labelMatches('crop_16_9 16:9', '16:9'), true);
   assert.equal(flow.labelMatches('crop_16_9 9:16', '16:9'), false);
+  assert.equal(flow.labelMatches('crop_9_16 9:16', '9:16'), true);
+  assert.equal(flow.labelMatches('crop_9_16 16:9', '9:16'), false);
   assert.equal(flow.labelMatches('image Imagen', 'Imagen'), true);
   assert.equal(flow.labelMatches('videocam Vídeo', 'Imagen'), false);
   assert.equal(flow.labelMatches('x2', 'x2'), true);

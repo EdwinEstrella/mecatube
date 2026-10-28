@@ -359,3 +359,89 @@ test('copyCharacterImages and getCharacterFilePath: copy, sanitization, and trav
   assert.throws(() => getCharacterFilePath(dir, branchId, '../secret.png'), /Nombre de imagen de personaje no válido\./);
   assert.throws(() => getCharacterFilePath(dir, branchId, 'non-existent.png'), /Imagen no encontrada\./);
 });
+
+test('copyCharacterImages and getCharacterFilePath comprehensive security and validation checks', () => {
+  const dir = makeTmpDir();
+  const branchId = 'security-branch-99';
+  const targetCharsDir = path.join(dir, 'branches', branchId, 'characters');
+
+  const tmpSrc = makeTmpDir();
+  const validFile = path.join(tmpSrc, 'test image 1.png');
+  const exeFile = path.join(tmpSrc, 'malware.exe');
+  const noExtFile = path.join(tmpSrc, 'rawfile');
+  fs.writeFileSync(validFile, 'valid-bytes');
+  fs.writeFileSync(exeFile, 'fake-exe');
+  fs.writeFileSync(noExtFile, 'fake-raw');
+
+  // 1. Rejects bad branch ids
+  const badBranchIds = ['', '   ', null, undefined, 12345, '../traversal', '..\\traversal', 'has spaces', 'branch#special', 'branch$bad'];
+  for (const badId of badBranchIds) {
+    assert.throws(
+      () => copyCharacterImages(dir, badId, [validFile]),
+      /ID de rama no válido./,
+      `copyCharacterImages should reject bad branchId: ${badId}`
+    );
+    assert.throws(
+      () => getCharacterFilePath(dir, badId, 'some-image.png'),
+      /ID de rama no válido./,
+      `getCharacterFilePath should reject bad branchId: ${badId}`
+    );
+  }
+
+  // 2. Rejects non-image extensions (.exe, no extension)
+  assert.throws(
+    () => copyCharacterImages(dir, branchId, [exeFile]),
+    /Formato de imagen no permitido./,
+    'Should reject .exe extension'
+  );
+  assert.throws(
+    () => copyCharacterImages(dir, branchId, [noExtFile]),
+    /Formato de imagen no permitido./,
+    'Should reject file with no extension'
+  );
+
+  // 3. Rejects missing files
+  const missingFile = path.join(tmpSrc, 'does-not-exist.png');
+  assert.throws(
+    () => copyCharacterImages(dir, branchId, [missingFile]),
+    /Archivo no encontrado/,
+    'Should throw when source image file does not exist'
+  );
+
+  // 4. Copies with a generated safe name and never resolves outside characters folder
+  const complexName = path.join(tmpSrc, 'mi personaje #1 [final] @ 2026.webp');
+  fs.writeFileSync(complexName, 'webp-content');
+  const [copiedName] = copyCharacterImages(dir, branchId, [complexName]);
+
+  assert.ok(/^[\w.-]{1,120}$/.test(copiedName), 'Generated safe name must match safe pattern');
+  assert.ok(copiedName.endsWith('.webp'));
+  assert.ok(!copiedName.includes(' '));
+  assert.ok(!copiedName.includes('#'));
+  assert.ok(!copiedName.includes('@'));
+
+  const resolved = getCharacterFilePath(dir, branchId, copiedName);
+  assert.ok(resolved.startsWith(targetCharsDir + path.sep), 'Resolved path must be inside characters folder');
+  assert.equal(path.dirname(resolved), targetCharsDir, 'Parent directory must strictly match characters directory');
+  assert.equal(fs.readFileSync(resolved, 'utf8'), 'webp-content');
+
+  // 5. Rejects names with path separators or ".." in getCharacterFilePath
+  const badFileNames = [
+    '../other.png',
+    '..\\other.png',
+    'sub/image.png',
+    'sub\\image.png',
+    '..',
+    '',
+    null,
+    undefined,
+    123,
+    'bad name with spaces.png',
+  ];
+  for (const badName of badFileNames) {
+    assert.throws(
+      () => getCharacterFilePath(dir, branchId, badName),
+      /(Nombre de imagen de personaje no válido|Ruta de imagen no válida)./,
+      `getCharacterFilePath should reject bad fileName: ${badName}`
+    );
+  }
+});

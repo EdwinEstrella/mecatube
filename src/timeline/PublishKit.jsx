@@ -141,7 +141,7 @@ export function usePublishKit(video, scriptMessages) {
   };
 }
 
-export default function PublishKit({ video, scriptMessages }) {
+export default function PublishKit({ video, scriptMessages, orientation = 'horizontal' }) {
   const {
     exportPath,
     videoFileName,
@@ -218,7 +218,8 @@ export default function PublishKit({ video, scriptMessages }) {
 
         {thumbnailUrl ? (
           <div className="publish-kit__thumb-section">
-            <div className="publish-kit__thumb-preview-wrapper">
+            <div className={`publish-kit__thumb-preview-wrapper${orientation === 'vertical' ? ' publish-kit__thumb-preview-wrapper--vertical' : ''}`}>
+
               <img src={thumbnailUrl} alt="Miniatura de YouTube" className="publish-kit__thumb-preview" />
             </div>
             {metadata?.thumbnailText && (

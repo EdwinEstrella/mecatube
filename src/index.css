@@ -2644,6 +2644,17 @@ body {
   margin: 0;
 }
 
+.auto-edit__player-wrapper--vertical {
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.auto-edit__player-placeholder--vertical {
+  aspect-ratio: 9 / 16;
+  max-width: 340px;
+  margin: 0 auto;
+}
+
 .auto-edit__player-placeholder {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -3245,6 +3256,12 @@ body {
   min-width: 140px;
 }
 
+.auto-edit__caption-preview-player--vertical {
+  aspect-ratio: 9 / 16;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
 .auto-edit__caption-preview-player {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -3297,6 +3314,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.publish-kit__thumb-preview-wrapper--vertical {
+  aspect-ratio: 9 / 16;
+  max-width: 220px;
 }
 
 .publish-kit__thumb-preview-wrapper {

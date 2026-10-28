@@ -8,6 +8,8 @@ import {
   TRANSITION_FRAMES,
   PUNCH_FRAMES,
   compositionSize,
+  frameSize,
+  getCompositionDimensions,
   buildPlan,
   activeSubtitle,
 } from './plan.js';
@@ -32,6 +34,18 @@ test('constants and compositionSize match contract', () => {
   assert.deepEqual(TRANSITION_FRAMES, { fade: 12, slide: 12 });
   assert.equal(PUNCH_FRAMES, 8);
   assert.deepEqual(compositionSize, { width: 1920, height: 1080, fps: 30 });
+});
+
+test('frameSize returns 1080x1920 for vertical and 1920x1080 for horizontal', () => {
+  assert.deepEqual(frameSize('vertical'), { width: 1080, height: 1920 });
+  assert.deepEqual(frameSize('horizontal'), { width: 1920, height: 1080 });
+  assert.deepEqual(frameSize(), { width: 1920, height: 1080 });
+  assert.deepEqual(frameSize(null), { width: 1920, height: 1080 });
+  assert.deepEqual(frameSize('unknown'), { width: 1920, height: 1080 });
+
+  assert.deepEqual(getCompositionDimensions('vertical'), { width: 1080, height: 1920, fps: 30 });
+  assert.deepEqual(getCompositionDimensions('horizontal'), { width: 1920, height: 1080, fps: 30 });
+  assert.deepEqual(getCompositionDimensions('vertical', 60), { width: 1080, height: 1920, fps: 60 });
 });
 
 // --- Null for empty EDL -----------------------------------------------------

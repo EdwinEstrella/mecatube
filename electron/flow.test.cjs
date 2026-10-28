@@ -78,6 +78,8 @@ async function waitUntil(check, label) {
       model: 'nano-banana-pro',
       outputs: 1,
       references: [],
+      aspect: '16:9',
+      orientation: 'horizontal',
     });
 
     assert.throws(() => generate({ characterKey: 'otro' }), /otra generación de Flow en curso/);
@@ -613,6 +615,8 @@ async function waitUntil(check, label) {
       prompt: 'animate 90',
       projectUrl: PROJECT,
       sourceAssetId: SRC_ID,
+      aspect: '16:9',
+      orientation: 'horizontal',
       video: { model: 'omni-1.1-flash', resolution: '720p', seconds: 8, aspect: '16:9', outputs: 1 },
     });
     assert.deepEqual(animStates(90), ['queued', 'running']);
@@ -753,6 +757,85 @@ async function waitUntil(check, label) {
     assert.equal(sent.length, 1);
     assert.equal(sent[0].video.seconds, 8);
     finishClip(sent[0]);
+  });
+
+  await test('vertical branch: sends aspect 9:16 and orientation vertical on character, scene, and animation jobs', async () => {
+    const vSent = [];
+    const vBridge = {
+      isConnected: () => true,
+      sendFlowJob: (payload) => vSent.push(payload),
+      onMessage: () => {},
+      onStatusChange: () => {},
+    };
+    const vBranches = {
+      list: () => [{ id: 'b-vert', orientation: 'vertical' }],
+    };
+    const vVideos = {
+      list: () => [{ id: 'v-vert', branchId: 'b-vert', flowProjectUrl: null }],
+    };
+    const vStore = {
+      upsert: () => {},
+      list: () => [],
+      selectedSceneAssetId: () => 'asset-1',
+      readReference: () => ({ name: 'ref.png', base64: 'AAAA' }),
+    };
+    const vService = createFlowService({
+      bridge: vBridge,
+      store: vStore,
+      videos: vVideos,
+      branches: vBranches,
+      pushToWindow: () => {},
+    });
+
+    // Character job
+    vService.generate({
+      videoId: 'v-vert',
+      characterKey: 'personaje-1-tomas',
+      name: 'Tomás',
+      role: 'Protagonista',
+      prompt: 'Vertical character',
+    });
+    assert.equal(vSent.length, 1);
+    assert.equal(vSent[0].aspect, '9:16');
+    assert.equal(vSent[0].orientation, 'vertical');
+
+    // Reset job
+    vBridge.onMessage(); // noop
+    vSent.length = 0;
+
+    // Animation job
+    const animService = createFlowService({
+      bridge: vBridge,
+      store: vStore,
+      videos: vVideos,
+      branches: vBranches,
+      pushToWindow: () => {},
+    });
+    animService.generateAnimations({
+      videoId: 'v-vert',
+      animations: [{ number: 1, prompt: 'Vertical animation', seconds: 8 }],
+    });
+    assert.equal(vSent.length, 1);
+    assert.equal(vSent[0].aspect, '9:16');
+    assert.equal(vSent[0].orientation, 'vertical');
+    assert.equal(vSent[0].video.aspect, '9:16');
+
+    // Scene job
+    vSent.length = 0;
+    const sceneServiceVert = createFlowService({
+      bridge: vBridge,
+      store: vStore,
+      videos: vVideos,
+      branches: vBranches,
+      pushToWindow: () => {},
+    });
+    sceneServiceVert.generateScenes({
+      videoId: 'v-vert',
+      scenes: [{ number: 1, title: 'Scene 1', prompt: 'Vertical scene', sheetRefs: [] }],
+    });
+    assert.equal(vSent.length, 1);
+    assert.equal(vSent[0].aspect, '9:16');
+    assert.equal(vSent[0].orientation, 'vertical');
   });
 
   await test('an animation has its own, longer watchdog', async () => {

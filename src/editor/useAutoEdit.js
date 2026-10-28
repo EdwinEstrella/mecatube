@@ -57,6 +57,7 @@ export function useAutoEdit(videoId, options = {}) {
   const [notices, setNotices] = useState([]);
   const [error, setError] = useState('');
   const [usedFallback, setUsedFallback] = useState(false);
+  const [orientation, setOrientation] = useState('horizontal');
   const [sources, setSources] = useState({});
   const [audioUrl, setAudioUrl] = useState('');
   const [words, setWords] = useState([]);
@@ -103,6 +104,7 @@ export function useAutoEdit(videoId, options = {}) {
       setAvailable([]);
       setSceneImages({});
       setVideoTitle('');
+      setOrientation('horizontal');
       return;
     }
 
@@ -114,16 +116,21 @@ export function useAutoEdit(videoId, options = {}) {
 
     const api = window.electronAPI;
     try {
-      const [voiceMeta, anims, savedEdit, busy, scenesList, videosList] = await Promise.all([
+      const [voiceMeta, anims, savedEdit, busy, scenesList, videosList, branchesList] = await Promise.all([
         api?.getVoice?.(videoId) ?? null,
         api?.getAnimations?.(videoId) ?? [],
         api?.getEdit?.(videoId) ?? null,
         api?.getEditBusy?.() ?? false,
         api?.getScenes?.(videoId) ?? [],
         api?.listVideos?.() ?? [],
+        api?.listBranches?.() ?? [],
       ]);
 
       if (reqId !== reqIdRef.current) return;
+
+      const currentVideo = (videosList || []).find((v) => v.id === videoId);
+      const currentBranch = currentVideo?.branchId ? (branchesList || []).find((b) => b.id === currentVideo.branchId) : null;
+      setOrientation(currentBranch?.orientation ?? 'horizontal');
 
       const duration = voiceMeta?.duration;
       const rawWords = voiceMeta?.words;
@@ -138,7 +145,6 @@ export function useAutoEdit(videoId, options = {}) {
       const availableNums = availableItems.map((a) => a.number);
 
       // Collect image scenes from illustrator conversation if present
-      const currentVideo = Array.isArray(videosList) ? videosList.find((v) => v?.id === videoId) : null;
       setVideoTitle(currentVideo?.title || '');
       let collectedChatScenes = [];
       if (currentVideo?.illustratorConversationId) {
@@ -629,6 +635,7 @@ export function useAutoEdit(videoId, options = {}) {
     available,
     sceneImages,
     videoTitle,
+    orientation,
     generate,
     runFallback,
   };

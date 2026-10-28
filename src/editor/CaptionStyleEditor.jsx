@@ -32,6 +32,7 @@ export default function CaptionStyleEditor({
   sceneImages = {},
   available = [],
   words = [],
+  orientation = 'horizontal',
 }) {
   const style = useMemo(() => normalizeCaptionStyle(captionStyle), [captionStyle]);
 
@@ -529,6 +530,7 @@ export default function CaptionStyleEditor({
             backgroundType={bgType}
             style={style}
             words={words}
+            orientation={orientation}
           />
         </div>
       </div>

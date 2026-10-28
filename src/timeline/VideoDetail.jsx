@@ -69,6 +69,7 @@ export default function VideoDetail({
 
   const [prevVideoId, setPrevVideoId] = useState(video.id);
   const [selectedKey, setSelectedKey] = useState(() => getRememberedStageKey(video.id, stages));
+  const orientation = propOrientation ?? branch?.orientation ?? 'horizontal';
 
   if (video.id !== prevVideoId) {
     setPrevVideoId(video.id);

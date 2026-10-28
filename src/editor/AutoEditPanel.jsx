@@ -64,6 +64,9 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
   const available = customProps.available ?? hookResult.available ?? [];
   const sceneImages = customProps.sceneImages ?? hookResult.sceneImages ?? {};
   const videoTitle = customProps.videoTitle ?? hookResult.videoTitle ?? '';
+  const orientation = customProps.orientation ?? hookResult.orientation ?? 'horizontal';
+  const isVertical = orientation === 'vertical';
+  const { width: compWidth, height: compHeight } = frameSize(orientation);
 
   const [notes, setNotes] = useState('');
   const [isExporting, setIsExporting] = useState(false);
@@ -113,8 +116,8 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
         component: VideoComposition,
         durationInFrames,
         fps: compositionSize.fps,
-        width: compositionSize.width,
-        height: compositionSize.height,
+        width: compWidth,
+        height: compHeight,
         inputProps: { edl, sources, audioUrl, clipDurations, words, captionStyle },
         onProgress: (p) => {
           if (typeof p?.progress === 'number') {
@@ -182,19 +185,19 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
       <div className="auto-edit__top-grid">
         <div className="auto-edit__player-col">
           {edl ? (
-            <div className="auto-edit__player-wrapper">
+            <div className={`auto-edit__player-wrapper${isVertical ? ' auto-edit__player-wrapper--vertical' : ''}`}>
               <Player
                 ref={playerRef}
                 component={VideoComposition}
                 inputProps={{ edl, sources, audioUrl, clipDurations, words, captionStyle }}
                 durationInFrames={Math.max(1, Math.round((edl.duration ?? 0) * compositionSize.fps))}
-                compositionWidth={compositionSize.width}
-                compositionHeight={compositionSize.height}
+                compositionWidth={compWidth}
+                compositionHeight={compHeight}
                 fps={compositionSize.fps}
                 controls
                 style={{
                   width: '100%',
-                  aspectRatio: '16 / 9',
+                  aspectRatio: isVertical ? '9 / 16' : '16 / 9',
                 }}
               />
               <div className="auto-edit__export-container">
@@ -256,7 +259,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
               </div>
             </div>
           ) : (
-            <div className="auto-edit__player-placeholder">
+            <div className={`auto-edit__player-placeholder${isVertical ? ' auto-edit__player-placeholder--vertical' : ''}`}>
               <div className="auto-edit__player-placeholder-box">
                 <span className="auto-edit__player-placeholder-icon" aria-hidden="true">🎬</span>
                 <p className="auto-edit__player-placeholder-text">
@@ -458,6 +461,7 @@ export default function AutoEditPanel({ videoId, onEdited, stages, ...customProp
           sceneImages={sceneImages}
           available={available}
           words={words}
+          orientation={orientation}
         />
       </div>
     </div>

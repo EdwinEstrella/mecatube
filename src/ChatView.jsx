@@ -13,7 +13,8 @@ import { useFlowScenes } from './flow/useFlowScenes.js';
 import { useFlowAnimations } from './flow/useFlowAnimations.js';
 import { latestCharacterKeys } from './flow/currentCharacters.js';
 import { withImageBudget } from './flow/imageBudget.js';
-import { applyStyle, DEFAULT_STYLE_ID } from './prompts/styles.js';
+import { DEFAULT_STYLE_ID } from './prompts/styles.js';
+import { composePrompt } from './prompts/compose.js';
 
 // Strips the "Error invoking remote method" prefix Electron adds to IPC rejections
 function cleanError(error) {
@@ -41,6 +42,47 @@ export default function ChatView({
   const [bridgeChecked, setBridgeChecked] = useState(false);
   const [savedIdeas, setSavedIdeas] = useState([]);
   const [workspaceStyle, setWorkspaceStyle] = useState(DEFAULT_STYLE_ID);
+  const [activeOrientation, setActiveOrientation] = useState('horizontal');
+  const [activeVideoType, setActiveVideoType] = useState('explainer');
+
+  useEffect(() => {
+    let active = true;
+    const fetchBranchContext = async () => {
+      try {
+        const api = window.electronAPI;
+        if (!api) return;
+        const [activeVideo, branches] = await Promise.all([
+          api.getActiveVideo?.(),
+          api.listBranches?.(),
+        ]);
+        if (!active) return;
+        if (activeVideo?.branchId && Array.isArray(branches)) {
+          const branch = branches.find((b) => b.id === activeVideo.branchId);
+          if (branch?.orientation) {
+            setActiveOrientation(branch.orientation);
+          }
+          if (branch?.videoType) {
+            setActiveVideoType(branch.videoType);
+          }
+        }
+      } catch {}
+    };
+
+    fetchBranchContext();
+
+    const handleActiveChanged = () => {
+      fetchBranchContext();
+    };
+
+    window.addEventListener('mecatube:active-video-changed', handleActiveChanged);
+    window.addEventListener('mecatube:workspace-style-changed', handleActiveChanged);
+
+    return () => {
+      active = false;
+      window.removeEventListener('mecatube:active-video-changed', handleActiveChanged);
+      window.removeEventListener('mecatube:workspace-style-changed', handleActiveChanged);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -213,10 +255,12 @@ export default function ChatView({
         }
         const preset = PRESETS.find((item) => item.id === action.presetId);
         if (!preset) return;
-        let promptText = effectiveText(preset, await loadOverrides());
-        if (preset.id === 'prompt-2') {
-          promptText = applyStyle(promptText, workspaceStyle);
-        }
+        let promptText = composePrompt(effectiveText(preset, await loadOverrides()), {
+          presetId: preset.id,
+          style: workspaceStyle,
+          orientation: activeOrientation,
+          videoType: activeVideoType,
+        });
         const conversationId = await handlePreset(promptText);
         if (!conversationId || !action.videoId) return;
         const field = action.role === 'illustrator' ? 'illustratorConversationId' : 'scriptConversationId';

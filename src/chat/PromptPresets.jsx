@@ -8,12 +8,15 @@ import {
   loadOverrides,
 } from '../prompts/presets.js';
 import { composeConnectorsMessage } from '../prompts/connectors.js';
-import { applyStyle, DEFAULT_STYLE_ID } from '../prompts/styles.js';
+import { DEFAULT_STYLE_ID } from '../prompts/styles.js';
+import { composePrompt } from '../prompts/compose.js';
 
 // The first two buttons start a new chat; the connectors button writes into the open conversation
 export default function PromptPresets({ disabled, hasActiveConversation, onSend, onSendConnectors }) {
   const [overrides, setOverrides] = useState({});
   const [currentStyle, setCurrentStyle] = useState(DEFAULT_STYLE_ID);
+  const [currentOrientation, setCurrentOrientation] = useState('horizontal');
+  const [currentVideoType, setCurrentVideoType] = useState('explainer');
 
   // Reload on mount and whenever Settings saves or restores a prompt
   useEffect(() => {
@@ -28,19 +31,45 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
       });
     };
     refreshStyle();
+
+    const refreshBranch = async () => {
+      try {
+        const api = window.electronAPI;
+        if (!api) return;
+        const [activeVideo, branches] = await Promise.all([
+          api.getActiveVideo?.(),
+          api.listBranches?.(),
+        ]);
+        if (!active) return;
+        if (activeVideo?.branchId && Array.isArray(branches)) {
+          const branch = branches.find((b) => b.id === activeVideo.branchId);
+          if (branch?.orientation) setCurrentOrientation(branch.orientation);
+          if (branch?.videoType) setCurrentVideoType(branch.videoType);
+        }
+      } catch {}
+    };
+    refreshBranch();
+
     const handleStyleChange = (e) => {
       if (e.detail?.style) {
         setCurrentStyle(e.detail.style);
       } else {
         refreshStyle();
       }
+      refreshBranch();
     };
+    const handleActiveChanged = () => {
+      refreshBranch();
+    };
+
     window.addEventListener('mecatube:workspace-style-changed', handleStyleChange);
+    window.addEventListener('mecatube:active-video-changed', handleActiveChanged);
 
     return () => {
       active = false;
       window.removeEventListener(PROMPTS_CHANGED_EVENT, refresh);
       window.removeEventListener('mecatube:workspace-style-changed', handleStyleChange);
+      window.removeEventListener('mecatube:active-video-changed', handleActiveChanged);
     };
   }, []);
 
@@ -53,10 +82,13 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
           className="chat-presets__button"
           disabled={disabled}
           onClick={() => {
-            let text = effectiveText(preset, overrides);
-            if (preset.id === 'prompt-2') {
-              text = applyStyle(text, currentStyle);
-            }
+            const rawText = effectiveText(preset, overrides);
+            const text = composePrompt(rawText, {
+              presetId: preset.id,
+              style: currentStyle,
+              orientation: currentOrientation,
+              videoType: currentVideoType,
+            });
             onSend(text);
           }}
         >

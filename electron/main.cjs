@@ -396,7 +396,7 @@ function setupWorkspace(workspacePath) {
   savedVoices = createSavedVoiceStore(workspacePath);
   flowStore = createFlowStore(workspacePath);
   if (bridge) {
-    flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, pushToWindow });
+    flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, branches: branchesProxy, pushToWindow });
   }
 }
 
@@ -434,7 +434,7 @@ app.whenReady().then(() => {
     getVideoTitle: (id) => videosProxy.list().find((v) => v.id === id)?.title ?? '',
   });
 
-  flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, pushToWindow });
+  flowService = createFlowService({ bridge, store: flowStoreProxy, videos: videosProxy, branches: branchesProxy, pushToWindow });
   registerFlowIpc({
     ipcMain,
     shell,

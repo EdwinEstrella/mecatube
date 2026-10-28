@@ -566,14 +566,15 @@
     if (!applied) throw new Error(`Flow no cambió al modelo «${label}».`);
   }
 
-  // Media = image, 16:9, the requested model and "xN" outputs; applied immediately by Flow
-  async function applySettings(doc, { model, outputs }) {
+  // Media = image, 16:9 (or 9:16), the requested model and "xN" outputs; applied immediately by Flow
+  async function applySettings(doc, { model, outputs, aspect }) {
     const modelText = model ? modelLabel(model) : null;
     const outputsText = outputs ? outputsLabel(outputs) : null;
-    if (!modelText && !outputsText) return;
+    const aspectText = String(aspect ?? SELECTORS.aspectLabel);
+    if (!modelText && !outputsText && !aspect) return;
     try {
       await ensureRadio(doc, SELECTORS.mediaLabel, 'tipo de medio');
-      await ensureRadio(doc, SELECTORS.aspectLabel, 'relación de aspecto');
+      await ensureRadio(doc, aspectText, 'relación de aspecto');
       if (modelText) await ensureModel(doc, modelText);
       // Last: changing the model can reset the output count
       if (outputsText) await ensureRadio(doc, outputsText, 'cantidad de imágenes');
@@ -850,7 +851,7 @@
   // Resolves to { images, submitMethod }. options.isAborted lets the caller stop a job whose port
   // closed; options.startTimeoutMs tunes the "generation must start" window (tests).
   // job: { prompt, model, outputs, references }. options.hook replaces the page-world upload hook (tests).
-  async function runGenerate({ prompt, model, outputs, references }, post, doc = document, now = Date.now, options = {}) {
+  async function runGenerate({ prompt, model, outputs, references, aspect }, post, doc = document, now = Date.now, options = {}) {
     const isAborted = options.isAborted ?? (() => false);
     const refs = normalizeReferences(references);
     let box = await waitFor(() => doc.querySelector(SELECTORS.promptBox), BOX_TIMEOUT_MS);
@@ -862,7 +863,7 @@
     if (!ready) throw new Error('El cuadro de prompt de Flow no quedó disponible (¿hay otra generación en curso?).');
 
     await ensureDirectMode(doc);
-    await applySettings(doc, { model, outputs });
+    await applySettings(doc, { model, outputs, aspect });
     if (refs.length > 0) {
       const hook = options.hook ?? createPageHook(doc.defaultView, installPageHook);
       await attachReferences(doc, box, refs, hook);
@@ -1278,18 +1279,24 @@
         if (message.type === 'new-project') {
           await runNewProject(post);
         } else if (message.kind === 'animate') {
+          const videoSettings = {
+            ...(message.video || {}),
+            aspect: message.video?.aspect ?? message.aspect ?? (message.orientation === 'vertical' ? '9:16' : '16:9'),
+          };
           const { videos, submitMethod } = await runAnimate(
-            { prompt: String(message.prompt ?? ''), sourceAssetId: message.sourceAssetId, video: message.video },
+            { prompt: String(message.prompt ?? ''), sourceAssetId: message.sourceAssetId, video: videoSettings },
             post, document, Date.now, { isAborted: () => !open },
           );
           post({ type: 'result', images: [], videos, submitMethod });
         } else {
+          const aspect = message.aspect ?? (message.orientation === 'vertical' ? '9:16' : '16:9');
           const { images, submitMethod } = await runGenerate(
             {
               prompt: String(message.prompt ?? ''),
               model: message.model,
               outputs: message.outputs,
               references: message.references,
+              aspect,
             },
             post, document, Date.now, {
             isAborted: () => !open,

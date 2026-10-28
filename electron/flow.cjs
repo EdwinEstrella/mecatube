@@ -478,6 +478,7 @@ function createFlowService({
   bridge,
   store,
   videos,
+  branches,
   pushToWindow,
   jobTimeoutMs = JOB_TIMEOUT_MS,
   animationTimeoutMs = ANIMATION_JOB_TIMEOUT_MS,
@@ -489,6 +490,12 @@ function createFlowService({
   const queue = [];
 
   const findVideo = (videoId) => videos.list().find((video) => video.id === videoId);
+
+  function branchOrientationFor(video) {
+    if (!video || !video.branchId || !branches?.list) return 'horizontal';
+    const branch = branches.list().find((b) => b.id === video.branchId);
+    return branch?.orientation === 'vertical' ? 'vertical' : 'horizontal';
+  }
 
   function sceneStatus(videoId, number, state, extra = {}) {
     pushToWindow('flow:scene-status', { videoId, number, state, percent: null, captcha: false, error: null, ...extra });
@@ -635,7 +642,9 @@ function createFlowService({
     job = { requestId, videoId, kind: 'character', characterKey, timer: startTimer() };
     try {
       // The prompt travels exactly as stored
-      bridge.sendFlowJob({ requestId, prompt, projectUrl: video.flowProjectUrl ?? null, model: FLOW_MODEL, outputs: FLOW_OUTPUTS, references: [] });
+      const orientation = branchOrientationFor(video);
+      const aspect = orientation === 'vertical' ? '9:16' : '16:9';
+      bridge.sendFlowJob({ requestId, prompt, projectUrl: video.flowProjectUrl ?? null, model: FLOW_MODEL, outputs: FLOW_OUTPUTS, references: [], aspect, orientation });
     } catch (error) {
       finishJob();
       throw error;
@@ -676,13 +685,17 @@ function createFlowService({
           const sourceAssetId = store.selectedSceneAssetId(item.videoId, item.number);
           job = { requestId, videoId: item.videoId, kind: 'animation', animation: { ...item, sourceAssetId }, timer: startTimer(animationTimeoutMs) };
           animationStatus(item.videoId, item.number, 'running');
+          const orientation = branchOrientationFor(video);
+          const aspect = orientation === 'vertical' ? '9:16' : '16:9';
           bridge.sendFlowJob({
             requestId,
             kind: 'animate',
             prompt: item.prompt,
             projectUrl: video.flowProjectUrl ?? null,
             sourceAssetId,
-            video: { ...ANIMATION_VIDEO_SETTINGS, seconds: item.seconds ?? ANIMATION_VIDEO_SETTINGS.seconds },
+            aspect,
+            orientation,
+            video: { ...ANIMATION_VIDEO_SETTINGS, aspect, seconds: item.seconds ?? ANIMATION_VIDEO_SETTINGS.seconds },
           });
         } catch (error) {
           finishJob();
@@ -695,6 +708,8 @@ function createFlowService({
         const references = referencesFor(item);
         job = { requestId, videoId: item.videoId, kind: 'scene', scene: item, timer: startTimer() };
         sceneStatus(item.videoId, item.number, 'running');
+        const orientation = branchOrientationFor(video);
+        const aspect = orientation === 'vertical' ? '9:16' : '16:9';
         bridge.sendFlowJob({
           requestId,
           prompt: references.length > 0 ? scenePromptForFlow(item.prompt, item.sheetRefs) : item.prompt,
@@ -702,6 +717,8 @@ function createFlowService({
           model: FLOW_MODEL,
           outputs: SCENE_OUTPUTS,
           references,
+          aspect,
+          orientation,
         });
       } catch (error) {
         finishJob();
