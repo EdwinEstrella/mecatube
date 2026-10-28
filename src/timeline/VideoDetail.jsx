@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import StageTrack, { STATUS_LABELS } from './StageTrack.jsx';
 import VoicePanel from '../voice/VoicePanel.jsx';
 import CustomSelect from '../ui/CustomSelect.jsx';
@@ -23,6 +23,7 @@ import { hasUserMessageAfter } from '../chat/chosenIdea.js';
 import { latestCharacterKeys } from '../flow/currentCharacters.js';
 import { useFlowScenes } from '../flow/useFlowScenes.js';
 import { useFlowAnimations } from '../flow/useFlowAnimations.js';
+import { isBlockComplete, blockCollapsedLabel } from './blockCollapse.js';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
@@ -110,11 +111,13 @@ export default function VideoDetail({
   const [prevVideoId, setPrevVideoId] = useState(video.id);
   const [prevNonce, setPrevNonce] = useState(stageNonce);
   const [selectedKey, setSelectedKey] = useState(() => getRememberedStageKey(video.id, stages));
+  const [manuallyExpanded, setManuallyExpanded] = useState({});
   const orientation = branch?.orientation ?? video?.orientation ?? 'horizontal';
 
   if (video.id !== prevVideoId) {
     setPrevVideoId(video.id);
     setSelectedKey(getRememberedStageKey(video.id, stages));
+    setManuallyExpanded({});
   }
   if (stageNonce !== prevNonce) {
     setPrevNonce(stageNonce);
@@ -215,6 +218,32 @@ export default function VideoDetail({
     () => parseIllustratorBlocks(illMessages),
     [illMessages]
   );
+
+  useEffect(() => {
+    setManuallyExpanded((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (next[key]) {
+          const isStillComplete =
+            sceneBlocks.some((b, i) => `images-${b.block?.index ?? b.messageIndex ?? i}` === key && isBlockComplete('images', b.scenes, flowScenes.records)) ||
+            animationBlocks.some((b, i) => `animations-${b.block?.index ?? b.messageIndex ?? i}` === key && isBlockComplete('animations', b.scenes, flowAnimations.records));
+          if (!isStillComplete) {
+            delete next[key];
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [sceneBlocks, animationBlocks, flowScenes.records, flowAnimations.records]);
+
+  const handleToggleBlock = (blockKey) => {
+    setManuallyExpanded((prev) => ({
+      ...prev,
+      [blockKey]: !prev[blockKey],
+    }));
+  };
 
   const handleApproveCharacters = async (keys) => {
     if (await flow.approve(keys)) {
@@ -381,25 +410,50 @@ export default function VideoDetail({
                 <p className="video-detail__stage-hint">{ILLUSTRATOR_HINTS[selectedStage.key]}</p>
               ) : (
                 <>
-                  {sceneBlocks.map((blockResult, idx) => (
-                    <div key={blockResult.block?.index ?? blockResult.messageIndex ?? idx} className="video-detail__block-group">
-                      <SceneCards
-                        block={blockResult.block}
-                        scenes={blockResult.scenes}
-                        flow={flowScenes}
-                        characterBusy={flow.job !== null}
-                        layout="grid"
-                        orientation={orientation}
-                      />
-                      {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
-                        <NextStepButtons
-                          step={nextStepPrompt(blockResult.message?.content)}
-                          canSend={canSendIllustrator}
-                          onSend={onSendIllustratorChat}
-                        />
-                      )}
-                    </div>
-                  ))}
+                  {sceneBlocks.map((blockResult, idx) => {
+                    const blockKey = `images-${blockResult.block?.index ?? blockResult.messageIndex ?? idx}`;
+                    const isComplete = isBlockComplete('images', blockResult.scenes, flowScenes.records);
+                    const isExpanded = !isComplete || Boolean(manuallyExpanded[blockKey]);
+                    const label = blockCollapsedLabel(blockResult.block, blockResult.scenes);
+
+                    return (
+                      <div key={blockKey} className="video-detail__block-group">
+                        {isComplete && (
+                          <button
+                            type="button"
+                            className={`video-detail__block-collapsed${isExpanded ? ' video-detail__block-collapsed--expanded' : ''}`}
+                            onClick={() => handleToggleBlock(blockKey)}
+                            aria-expanded={isExpanded}
+                          >
+                            <span
+                              className={`video-detail__block-chevron${isExpanded ? ' video-detail__block-chevron--expanded' : ''}`}
+                              aria-hidden="true"
+                            >
+                              ▶
+                            </span>
+                            <span className="video-detail__block-collapsed-title">{label}</span>
+                          </button>
+                        )}
+                        {isExpanded && (
+                          <SceneCards
+                            block={blockResult.block}
+                            scenes={blockResult.scenes}
+                            flow={flowScenes}
+                            characterBusy={flow.job !== null}
+                            layout="grid"
+                            orientation={orientation}
+                          />
+                        )}
+                        {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
+                          <NextStepButtons
+                            step={nextStepPrompt(blockResult.message?.content)}
+                            canSend={canSendIllustrator}
+                            onSend={onSendIllustratorChat}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                   {isAwaitingIllustrator && (
                     <p className="video-detail__stage-hint">
                       Cargando… DeepSeek está preparando las escenas.
@@ -420,26 +474,51 @@ export default function VideoDetail({
                 <p className="video-detail__stage-hint">{ILLUSTRATOR_HINTS[selectedStage.key]}</p>
               ) : (
                 <>
-                  {animationBlocks.map((blockResult, idx) => (
-                    <div key={blockResult.block?.index ?? blockResult.messageIndex ?? idx} className="video-detail__block-group">
-                      <AnimationCards
-                        block={blockResult.block}
-                        animations={blockResult.scenes}
-                        flow={flowAnimations}
-                        sceneRecords={flowScenes.records}
-                        characterBusy={flow.job !== null}
-                        layout="grid"
-                        orientation={orientation}
-                      />
-                      {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
-                        <NextStepButtons
-                          step={nextStepPrompt(blockResult.message?.content)}
-                          canSend={canSendIllustrator}
-                          onSend={onSendIllustratorChat}
-                        />
-                      )}
-                    </div>
-                  ))}
+                  {animationBlocks.map((blockResult, idx) => {
+                    const blockKey = `animations-${blockResult.block?.index ?? blockResult.messageIndex ?? idx}`;
+                    const isComplete = isBlockComplete('animations', blockResult.scenes, flowAnimations.records);
+                    const isExpanded = !isComplete || Boolean(manuallyExpanded[blockKey]);
+                    const label = blockCollapsedLabel(blockResult.block, blockResult.scenes);
+
+                    return (
+                      <div key={blockKey} className="video-detail__block-group">
+                        {isComplete && (
+                          <button
+                            type="button"
+                            className={`video-detail__block-collapsed${isExpanded ? ' video-detail__block-collapsed--expanded' : ''}`}
+                            onClick={() => handleToggleBlock(blockKey)}
+                            aria-expanded={isExpanded}
+                          >
+                            <span
+                              className={`video-detail__block-chevron${isExpanded ? ' video-detail__block-chevron--expanded' : ''}`}
+                              aria-hidden="true"
+                            >
+                              ▶
+                            </span>
+                            <span className="video-detail__block-collapsed-title">{label}</span>
+                          </button>
+                        )}
+                        {isExpanded && (
+                          <AnimationCards
+                            block={blockResult.block}
+                            animations={blockResult.scenes}
+                            flow={flowAnimations}
+                            sceneRecords={flowScenes.records}
+                            characterBusy={flow.job !== null}
+                            layout="grid"
+                            orientation={orientation}
+                          />
+                        )}
+                        {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
+                          <NextStepButtons
+                            step={nextStepPrompt(blockResult.message?.content)}
+                            canSend={canSendIllustrator}
+                            onSend={onSendIllustratorChat}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                   {isAwaitingIllustrator && (
                     <p className="video-detail__stage-hint">
                       Cargando… DeepSeek está preparando las animaciones.
