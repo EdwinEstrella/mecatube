@@ -4,11 +4,12 @@ import VoicePlayer from './VoicePlayer.jsx';
 import { DEFAULT_MODEL, DEFAULT_VOICE, cleanIpcError } from './constants.js';
 import { narrationFromChat } from './narration.js';
 import { useVoicePrefs } from './useVoicePrefs.js';
+import { usesCartesia } from './voiceMode.js';
 
 const SAVE_DELAY_MS = 700;
 
 // Container: narration text, voice choice, generation and the resulting track for one video
-export default function VoicePanel({ video, scriptMessages, voice, onSaveNarration }) {
+export default function VoicePanel({ video, branch: branchProp = null, scriptMessages, voice, onSaveNarration }) {
   const api = window.electronAPI;
   const derived = useMemo(() => narrationFromChat(scriptMessages), [scriptMessages]);
   // null until the user types or resets in this session; then the text shown is the draft
@@ -18,6 +19,8 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
 
   const prefs = useVoicePrefs();
   const [configured, setConfigured] = useState(null);
+  const [fetchedBranch, setFetchedBranch] = useState(null);
+  const branch = branchProp ?? fetchedBranch;
   const [voiceId, setVoiceId] = useState(voice?.voiceId || DEFAULT_VOICE.id);
   const [voiceName, setVoiceName] = useState(voice?.voiceName || DEFAULT_VOICE.name);
   const [model, setModel] = useState(voice?.model || DEFAULT_MODEL);
@@ -57,13 +60,15 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
   }, [prefs]);
 
   useEffect(() => {
-    if (voice?.voiceId) return;
     if (!api || !video?.branchId) return;
     api.listBranches?.().then((branches) => {
-      const branch = (branches || []).find((b) => b.id === video.branchId);
-      if (branch?.narratorVoiceId) {
-        setVoiceId(branch.narratorVoiceId);
-        setVoiceName('Narrador de rama');
+      const found = (branches || []).find((b) => b.id === video.branchId);
+      if (found) {
+        setFetchedBranch(found);
+        if (!voice?.voiceId && found.narratorVoiceId) {
+          setVoiceId(found.narratorVoiceId);
+          setVoiceName('Narrador de rama');
+        }
       }
     }).catch(() => {});
   }, [api, video?.branchId, voice?.voiceId]);
@@ -97,6 +102,7 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
   };
 
   const handleGenerate = async () => {
+    if (!usesCartesia(video, branch)) return;
     setIsConfirming(false);
     setError('');
     setSeconds(0);
@@ -118,6 +124,18 @@ export default function VoicePanel({ video, scriptMessages, voice, onSaveNarrati
   };
 
   const handleOpenFolder = () => api.openVoiceFolder(video.id).catch((openError) => setError(cleanIpcError(openError)));
+
+  if (!usesCartesia(video, branch)) {
+    return (
+      <div className="voice-panel">
+        <h4 className="voice-panel__title">Voz</h4>
+        <p className="settings__card-text">
+          Este video usa la voz de los personajes en Flow; no lleva voz en off.
+        </p>
+        {voice && <VoicePlayer videoId={video.id} voice={voice} onOpenFolder={handleOpenFolder} />}
+      </div>
+    );
+  }
 
   const canGenerate = configured === true && text.trim() !== '' && !isGenerating;
   const verb = voice ? 'Regenerar' : 'Generar';

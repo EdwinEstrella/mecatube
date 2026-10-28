@@ -242,6 +242,7 @@ export default function MessageList({
                   seconds={scriptVoice.seconds}
                   error={scriptVoice.error?.messageId === message.id ? scriptVoice.error.text : ''}
                   expandPlayer={scriptVoice.doneId === message.id}
+                  usesCartesia={scriptVoice.usesCartesia}
                   onRequest={() => scriptVoice.request(message.id)}
                   onConfirm={() => scriptVoice.confirm(message)}
                   onCancelConfirm={scriptVoice.cancelConfirm}

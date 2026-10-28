@@ -152,12 +152,19 @@ export default function VideoDetail({
           )}
 
           {selectedStage.key === 'voice' && (
-            <VoicePanel
-              video={video}
-              scriptMessages={scriptMessages}
-              voice={voice}
-              onSaveNarration={onSaveNarration}
-            />
+            selectedStage.status === 'not-needed' ? (
+              <p className="video-detail__stage-hint">
+                Este video usa la voz de los personajes en Flow; no lleva voz en off.
+              </p>
+            ) : (
+              <VoicePanel
+                video={video}
+                branch={branch}
+                scriptMessages={scriptMessages}
+                voice={voice}
+                onSaveNarration={onSaveNarration}
+              />
+            )
           )}
 
           {selectedStage.key === 'characters' && (

@@ -4,6 +4,7 @@ import { extractNarration } from './narration.js';
 import { ensureScriptVideo } from './scriptVideo.js';
 import { chooseVideoTarget } from '../ui/videoTargetDialog.js';
 import { FALLBACK_PREFS, useVoicePrefs } from './useVoicePrefs.js';
+import { usesCartesia } from './voiceMode.js';
 
 // Container logic for the "Generar voz en off" buttons of a script chat. All script messages share
 // one track: the video linked to the conversation.
@@ -17,6 +18,7 @@ export function useScriptVoice(conversationId, messages) {
   const [busy, setBusy] = useState(false);
   const [videoId, setVideoId] = useState(null);
   const [track, setTrack] = useState(null);
+  const [isCartesia, setIsCartesia] = useState(true);
   // { messageId, kind: 'confirm' | 'generating' }
   const [phase, setPhase] = useState(null);
   const [seconds, setSeconds] = useState(0);
@@ -32,13 +34,27 @@ export function useScriptVoice(conversationId, messages) {
       videoIdRef.current = null;
       setVideoId(null);
       setTrack(null);
+      setIsCartesia(true);
       return;
     }
-    const videos = (await api.listVideos()) ?? [];
-    const linked = videos.find((video) => video.scriptConversationId === conversationId);
+    const [videos, branches, active] = await Promise.all([
+      api.listVideos().catch(() => []),
+      (api.listBranches?.() ?? Promise.resolve([])).catch(() => []),
+      (api.getActiveVideo?.() ?? Promise.resolve(null)).catch(() => null),
+    ]);
+    const linked = (videos ?? []).find((video) => video.scriptConversationId === conversationId);
     videoIdRef.current = linked?.id ?? null;
     setVideoId(linked?.id ?? null);
-    setTrack(linked ? ((await api.getVoice(linked.id)) ?? null) : null);
+    setTrack(linked ? ((await api.getVoice(linked.id).catch(() => null)) ?? null) : null);
+
+    const branchList = branches ?? [];
+    let branch = null;
+    if (linked?.branchId) {
+      branch = branchList.find((b) => b.id === linked.branchId) ?? null;
+    } else if (active?.branchId) {
+      branch = branchList.find((b) => b.id === active.branchId) ?? null;
+    }
+    setIsCartesia(usesCartesia(linked, branch));
   }, [conversationId]);
 
   useEffect(() => {
@@ -67,6 +83,7 @@ export function useScriptVoice(conversationId, messages) {
   }, [loadTrack]);
 
   const request = (messageId) => {
+    if (!isCartesia) return;
     setError(null);
     setPhase({ messageId, kind: 'confirm' });
   };
@@ -91,6 +108,16 @@ export function useScriptVoice(conversationId, messages) {
 
       const branches = (await api.listBranches?.()) ?? [];
       const branch = branches.find((b) => b.id === video.branchId) ?? null;
+
+      if (!usesCartesia(video, branch)) {
+        setIsCartesia(false);
+        setError({
+          messageId: message.id,
+          text: 'Este video usa la voz de los personajes en Flow; no lleva voz en off.',
+        });
+        return;
+      }
+
       const finalVoiceId = chosenVoice?.id ?? (branch?.narratorVoiceId || voiceId);
       const finalVoiceName = chosenVoice?.name ?? (branch?.narratorVoiceId ? 'Narrador de rama' : voiceName);
 
@@ -124,6 +151,7 @@ export function useScriptVoice(conversationId, messages) {
     doneId,
     voiceId,
     voiceName,
+    usesCartesia: isCartesia,
     chooseVoice: setChosenVoice,
     request,
     confirm,

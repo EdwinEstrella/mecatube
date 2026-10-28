@@ -364,6 +364,32 @@ test('override false beats brief auto-done', () => {
   assert.equal(stages.find((s) => s.key === 'idea').overridden, true);
 });
 
+test('flow video: voice stage marked not-needed automatically', () => {
+  const vidFlow = { id: 'v1', title: 'Video Flow', voiceMode: 'flow', overrides: {} };
+  const stages = deriveStages(vidFlow, null, null);
+  const voiceStage = stages.find((s) => s.key === 'voice');
+  assert.equal(voiceStage.status, 'not-needed');
+  assert.equal(voiceStage.notNeeded, true);
+  assert.equal(voiceStage.overridden, false);
+});
+
+test('video inheriting flow voiceMode from branch: voice stage marked not-needed', () => {
+  const vidInherited = { id: 'v1', title: 'Video Default', voiceMode: null, overrides: {} };
+  const branch = { id: 'b1', name: 'Rama Flow', voiceMode: 'flow' };
+  const stages = deriveStages(vidInherited, null, null, { branch });
+  const voiceStage = stages.find((s) => s.key === 'voice');
+  assert.equal(voiceStage.status, 'not-needed');
+  assert.equal(voiceStage.notNeeded, true);
+});
+
+test('flow video: manual override beats not-needed', () => {
+  const vidOverridden = { id: 'v1', title: 'Video Flow', voiceMode: 'flow', overrides: { voice: true } };
+  const stages = deriveStages(vidOverridden, null, null);
+  const voiceStage = stages.find((s) => s.key === 'voice');
+  assert.equal(voiceStage.status, 'done');
+  assert.equal(voiceStage.overridden, true);
+});
+
 if (failures > 0) {
   console.log(`\n${failures} test(s) failed`);
   process.exit(1);

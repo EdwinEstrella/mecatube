@@ -4,6 +4,7 @@
 // case, accents and Markdown emphasis do not matter.
 import { parseIdeas } from '../chat/parseIdeas.js';
 import { chosenIdeaNumber } from '../chat/chosenIdea.js';
+import { usesCartesia } from '../voice/voiceMode.js';
 
 // `auto` stages can be detected from a chat; the others are only ever set by hand
 export const STAGES = [
@@ -171,8 +172,20 @@ export function deriveStages(
   return STAGES.map(({ key, label, auto: isAuto }) => {
     const overridden = typeof overrides[key] === 'boolean';
     const isCharactersSkipped = key === 'characters' && resolvedVideoType === 'list';
+    const isVoiceSkipped = key === 'voice' && !usesCartesia(video, resolvedBranch);
 
     if (isCharactersSkipped && !overridden) {
+      return {
+        key,
+        label,
+        status: 'not-needed',
+        notNeeded: true,
+        source: 'auto',
+        overridden: false,
+      };
+    }
+
+    if (isVoiceSkipped && !overridden) {
       return {
         key,
         label,
