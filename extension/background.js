@@ -226,21 +226,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Flow ignores synthetic (isTrusted: false) clicks on its generate button, so flow.js asks for a real
 // one: a mouse press/release through the DevTools protocol at viewport coordinates (CSS pixels).
-// Chrome shows its "debugging this browser" bar only while attached, which is a fraction of a second.
-// A hidden tab does not process input until it is shown, so the Flow tab is brought to the front first.
+// Chrome shows its "debugging this browser" bar for the whole Flow job so focus emulation and
+// active web lifecycle keep rAF and timers running in the background tab without stealing window focus.
 const TRUSTED_CLICK_TIMEOUT_MS = 10000;
 
-async function bringTabToFront(tabId) {
-  const tab = await chrome.tabs.update(tabId, { active: true });
-  await chrome.windows.update(tab.windowId, { focused: true });
-  await new Promise((resolve) => setTimeout(resolve, 300));
+let keepAliveTabId = null;
+
+async function applyKeepAlive(tabId) {
+  const target = { tabId };
+  await chrome.debugger.sendCommand(target, 'Emulation.setFocusEmulationEnabled', { enabled: true });
+  await chrome.debugger.sendCommand(target, 'Page.enable');
+  await chrome.debugger.sendCommand(target, 'Page.setWebLifecycleState', { state: 'active' });
 }
+
+async function attachKeepAlive(tabId) {
+  if (keepAliveTabId === tabId) return;
+  if (keepAliveTabId !== null) await detachKeepAlive();
+  try {
+    await chrome.debugger.attach({ tabId }, '1.3');
+  } catch (error) {
+    // A service worker restart loses keepAliveTabId while our session stays attached: reuse it
+    if (!error?.message?.includes('Another debugger is already attached')) throw error;
+  }
+  keepAliveTabId = tabId;
+  await applyKeepAlive(tabId);
+  await chrome.tabs.update(tabId, { autoDiscardable: false }).catch(() => {});
+}
+
+async function detachKeepAlive() {
+  if (keepAliveTabId === null) return;
+  const tabId = keepAliveTabId;
+  keepAliveTabId = null;
+  await chrome.debugger.detach({ tabId }).catch(() => {});
+  await chrome.tabs.update(tabId, { autoDiscardable: true }).catch(() => {});
+}
+
+chrome.debugger.onDetach.addListener((source) => {
+  if (source.tabId === keepAliveTabId) keepAliveTabId = null;
+});
 
 // Attaching shows the debugging bar, which shrinks the viewport and moves the button, so its center is
 // measured again after attaching; the coordinates sent by flow.js are only the fallback
-async function measureCenter(target, selector, fallback) {
+async function measureCenter(target, selector, fallback, shouldWait = true) {
   if (typeof selector !== 'string' || !selector) return fallback;
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  if (shouldWait) await new Promise((resolve) => setTimeout(resolve, 400));
   const expression = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return null;
     el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`;
@@ -267,14 +296,14 @@ async function step(name, promise, timeoutMs = TRUSTED_CLICK_TIMEOUT_MS) {
 }
 
 async function trustedClick(tabId, x, y, selector) {
-  await step('mostrar la pestaña de Flow', bringTabToFront(tabId));
+  const hadKeepAlive = keepAliveTabId === tabId;
+  await step('conectar el depurador', attachKeepAlive(tabId));
   const target = { tabId };
-  await step('conectar el depurador', chrome.debugger.attach(target, '1.3'));
   try {
-    const point = await step('medir el botón', measureCenter(target, selector, { x, y }));
+    const point = await step('medir el botón', measureCenter(target, selector, { x, y }, !hadKeepAlive));
     await step('enviar el clic', dispatchClick(target, point.x, point.y));
   } finally {
-    await chrome.debugger.detach(target).catch(() => {});
+    if (!hadKeepAlive) await detachKeepAlive();
   }
 }
 
@@ -300,22 +329,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Flow injects a tile's <video> only on a trusted hover (synthetic events do nothing), so flow.js asks
-// for a real mouse move over a marked element. Same safeguards as the trusted click: tab to front,
-// debugger attached only briefly, center re-measured after attaching, every step bounded.
+// for a real mouse move over a marked element. Same safeguards as the trusted click:
+// keep-alive session reused, center re-measured after attaching, every step bounded.
 async function trustedHover(tabId, x, y, selector) {
-  await step('mostrar la pestaña de Flow', bringTabToFront(tabId));
+  const hadKeepAlive = keepAliveTabId === tabId;
+  await step('conectar el depurador', attachKeepAlive(tabId));
   const target = { tabId };
-  await step('conectar el depurador', chrome.debugger.attach(target, '1.3'));
   try {
-    const point = await step('medir el vídeo', measureCenter(target, selector, { x, y }));
+    const point = await step('medir el vídeo', measureCenter(target, selector, { x, y }, !hadKeepAlive));
     const base = { x: point.x, y: point.y, button: 'none', clickCount: 0, type: 'mouseMoved' };
     // A small approach move first so the page sees the pointer enter the tile
     await step('mover el ratón', chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { ...base, x: point.x - 6, y: point.y - 6 }));
     await step('mover el ratón', chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', base));
-    // Keep the debugger attached briefly so the hover handler runs while the pointer is there
+    // Keep the pointer positioned briefly so the hover handler runs while the pointer is there
     await new Promise((resolve) => setTimeout(resolve, 600));
   } finally {
-    await chrome.debugger.detach(target).catch(() => {});
+    if (!hadKeepAlive) await detachKeepAlive();
   }
 }
 
@@ -445,6 +474,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
   try {
     let currentProject = projectUrl && FLOW_PROJECT_PATTERN.test(projectUrl) ? projectUrl : null;
     const tabId = await prepareFlowTab(currentProject);
+    await step('conectar el depurador', attachKeepAlive(tabId));
     if (currentProject) {
       const liveProject = await projectStillExists(tabId, currentProject);
       if (!liveProject) {
@@ -452,6 +482,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
         const { url } = await chrome.tabs.get(tabId);
         await chrome.tabs.update(tabId, { url: flowHomeFor(url?.includes('/u/') ? url : currentProject) });
         await waitForTabComplete(tabId, 'Flow');
+        await applyKeepAlive(tabId);
       }
       currentProject = liveProject;
     }
@@ -467,12 +498,11 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
       currentProject = await waitForProjectUrl(tabId);
       send({ type: 'flow-project', requestId, projectUrl: currentProject });
       await waitForTabComplete(tabId, 'Flow');
+      await applyKeepAlive(tabId);
       await ensureContentScript(tabId, 'flow.js', 'Flow');
     }
 
-    // A hidden tab does not render the virtualized grid while it scrolls, so a sheet or scene far down
-    // would never appear and the job would fall back to uploading it; show the tab before searching
-    if (sourceAssetId || references?.some((reference) => reference?.assetId)) await bringTabToFront(tabId);
+    // Focus emulation and active lifecycle keep rAF and virtualized grid rendering while hidden; no focus stealing needed
 
     const result = await runTabStep(
       tabId,
@@ -491,6 +521,7 @@ async function handleFlowGenerate({ requestId, prompt, projectUrl, model, output
   } catch (error) {
     send({ type: 'flow-error', requestId, message: error.message });
   } finally {
+    await detachKeepAlive();
     flowBusy = false;
   }
 }
