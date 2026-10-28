@@ -31,7 +31,7 @@ export default function CharactersPanel({
   const [editedFrom, setEditedFrom] = useState(stored);
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const autoSavedRef = useRef(false);
+  const savingRef = useRef(false);
 
   // Follow the stored value (e.g. set automatically after a generation) unless the user is typing
   if (editedFrom !== stored) {
@@ -40,7 +40,9 @@ export default function CharactersPanel({
   }
 
   const changed = draft.trim() !== stored;
-  const allHaveSelected = characters.length > 0 && characters.every((c) => Boolean(c.selectedFile));
+  const approvedCharacters = characters.filter((c) => c.approved && Boolean(c.selectedFile));
+  const branchCharKeys = new Set((branch?.characters || []).map((c) => c.key));
+  const hasUnsavedApproved = approvedCharacters.length > 0 && approvedCharacters.some((c) => !branchCharKeys.has(c.key));
 
   const [savedVoices, setSavedVoices] = useState([]);
   useEffect(() => {
@@ -64,7 +66,8 @@ export default function CharactersPanel({
 
 
   const handleSaveToBranch = async () => {
-    if (!branch?.id || !video?.id || !window.electronAPI) return;
+    if (!branch?.id || !video?.id || !window.electronAPI || savingRef.current) return;
+    savingRef.current = true;
     setIsSaving(true);
     try {
       await window.electronAPI.saveBranchCharactersFromVideo(branch.id, video.id);
@@ -73,22 +76,21 @@ export default function CharactersPanel({
     } catch (err) {
       setToastMessage(`Error: ${err.message || 'No se pudo guardar en la rama'}`);
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
 
   useEffect(() => {
     if (
-      !branchHasCharacters &&
-      allHaveSelected &&
-      !autoSavedRef.current &&
+      hasUnsavedApproved &&
+      !savingRef.current &&
       branch?.id &&
       branch?.characterMode === 'create'
     ) {
-      autoSavedRef.current = true;
       handleSaveToBranch();
     }
-  }, [allHaveSelected, branchHasCharacters, branch?.id, branch?.characterMode]);
+  }, [hasUnsavedApproved, branch?.id, branch?.characterMode]);
 
   if (branchHasCharacters) {
     return (
@@ -225,7 +227,7 @@ export default function CharactersPanel({
             ))}
           </ul>
 
-          {allHaveSelected && branch?.id && (
+          {approvedCharacters.length > 0 && branch?.id && (
             <div className="char-panel__actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
               <button
                 type="button"

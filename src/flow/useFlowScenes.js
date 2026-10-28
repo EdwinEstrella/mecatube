@@ -14,7 +14,7 @@ const hasScenesApi = () => typeof window !== 'undefined' && Boolean(window.elect
 // `statuses` is by scene number: { state, percent, captcha, error }; `records` the stored scenes.
 // characterKeys: keys of the characters in the chat's latest sheet message, so scene references
 // resolve only against this chat's approved sheets
-export function useFlowScenes(conversationId, conversationTitle, isConnected, characterKeys = []) {
+export function useFlowScenes(conversationId, conversationTitle, isConnected, characterKeys = [], reloadKey = null) {
   const [videoId, setVideoId] = useState(null);
   const [projectUrl, setProjectUrl] = useState(null);
   const [records, setRecords] = useState({});
@@ -48,7 +48,7 @@ export function useFlowScenes(conversationId, conversationTitle, isConnected, ch
     setError('');
     setStatuses({});
     load().catch(() => {});
-  }, [load]);
+  }, [load, reloadKey]);
 
   useEffect(() => {
     if (!hasScenesApi()) return undefined;

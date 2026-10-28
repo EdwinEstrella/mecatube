@@ -22,6 +22,7 @@ const {
   VOICE_ID_PATTERN,
   copyVideoCharacterFiles,
   copyVideoCharacters,
+  mergeBranchCharacters,
 } = require('./branches.cjs');
 
 function makeTmpDir() {
@@ -715,4 +716,33 @@ test('copyVideoCharacterFiles: copies with safe names and rejects traversal', ()
     () => copyVideoCharacterFiles(wsDir, branchId, videoId, [{ key: charKey, selectedFile: 'missing.png' }]),
     /Archivo no encontrado/
   );
+});
+
+test('mergeBranchCharacters merges by character key with incoming winning and preserving others', () => {
+  const existing = [
+    { key: 'char-1', name: 'Tomás Antiguo', file: 'tomas_old.png', source: 'flow' },
+    { key: 'char-2', name: 'Ana', file: 'ana.png', source: 'own' },
+  ];
+  const incoming = [
+    { key: 'char-1', name: 'Tomás Nuevo', file: 'tomas_new.png', source: 'flow' },
+    { key: 'char-3', name: 'Robot', file: 'robot.png', source: 'flow' },
+  ];
+
+  const merged = mergeBranchCharacters(existing, incoming);
+  assert.equal(merged.length, 3);
+  // char-1 updated
+  assert.equal(merged[0].key, 'char-1');
+  assert.equal(merged[0].name, 'Tomás Nuevo');
+  assert.equal(merged[0].file, 'tomas_new.png');
+  // char-2 kept in position
+  assert.equal(merged[1].key, 'char-2');
+  assert.equal(merged[1].name, 'Ana');
+  // char-3 appended
+  assert.equal(merged[2].key, 'char-3');
+  assert.equal(merged[2].name, 'Robot');
+
+  // Edge cases
+  assert.deepEqual(mergeBranchCharacters([], incoming), incoming);
+  assert.deepEqual(mergeBranchCharacters(existing, []), existing);
+  assert.deepEqual(mergeBranchCharacters(null, null), []);
 });

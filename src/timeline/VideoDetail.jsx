@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import StageTrack, { STATUS_LABELS } from './StageTrack.jsx';
 import VoicePanel from '../voice/VoicePanel.jsx';
 import CustomSelect from '../ui/CustomSelect.jsx';
@@ -14,6 +14,15 @@ import { syncChosenIdea } from './syncChosenIdea.js';
 import { usesCartesia } from '../voice/voiceMode.js';
 import { useFlowCharacters } from '../flow/useFlowCharacters.js';
 import { parseCharacterSheets } from '../flow/parseCharacterSheets.js';
+import SceneCards, { ThumbnailCard } from '../flow/SceneCards.jsx';
+import AnimationCards from '../flow/AnimationCards.jsx';
+import NextStepButtons from '../chat/NextStepButtons.jsx';
+import { parseIllustratorBlocks } from '../flow/illustratorBlocks.js';
+import { nextStepPrompt } from '../chat/nextStep.js';
+import { hasUserMessageAfter } from '../chat/chosenIdea.js';
+import { latestCharacterKeys } from '../flow/currentCharacters.js';
+import { useFlowScenes } from '../flow/useFlowScenes.js';
+import { useFlowAnimations } from '../flow/useFlowAnimations.js';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
@@ -160,25 +169,58 @@ export default function VideoDetail({
     video.illustratorConversationId,
     video.title,
     isConnected,
-    illustratorMessages
+    stageNonce
   );
 
   const illMessages = Array.isArray(illustratorMessages) ? illustratorMessages : [];
   const assistantMessages = illMessages.filter((m) => m?.role === 'assistant');
   const latestAssistantMessage = assistantMessages[assistantMessages.length - 1] ?? null;
-  const isIllustratorLoading = hasIllustrator && (isAwaitingIllustrator || !latestAssistantMessage);
 
-  const sheetsResult = latestAssistantMessage ? parseCharacterSheets(latestAssistantMessage.content) : null;
-  const characterSheets = sheetsResult?.characters ?? null;
-
-  const lastAssistantIndex = latestAssistantMessage ? illMessages.lastIndexOf(latestAssistantMessage) : -1;
-  const hasUserMessageAfter = lastAssistantIndex >= 0 && illMessages.slice(lastAssistantIndex + 1).some((m) => m?.role === 'user');
-  const isSheetsOpen = !hasUserMessageAfter;
+  let latestSheetsIndex = -1;
+  let latestSheetsResult = null;
+  if (!flow.branchHasCharacters) {
+    for (let i = illMessages.length - 1; i >= 0; i -= 1) {
+      const msg = illMessages[i];
+      if (msg?.role === 'assistant') {
+        const res = parseCharacterSheets(msg.content);
+        if (res?.characters && res.characters.length > 0) {
+          latestSheetsIndex = i;
+          latestSheetsResult = res;
+          break;
+        }
+      }
+    }
+  }
+  const characterSheets = latestSheetsResult?.characters ?? null;
+  const isSheetsOpen = latestSheetsIndex >= 0 && !hasUserMessageAfter(illMessages, latestSheetsIndex);
+  const isIllustratorLoading = hasIllustrator && (isAwaitingIllustrator || !latestAssistantMessage) && !characterSheets;
   const canSendIllustrator = (isConnected || isApiConfigured) && !isAwaitingIllustrator;
+
+  const characterKeys = useMemo(() => latestCharacterKeys(illMessages), [illMessages]);
+  const flowScenes = useFlowScenes(
+    video.illustratorConversationId,
+    video.title,
+    isConnected,
+    characterKeys,
+    stageNonce
+  );
+  const flowAnimations = useFlowAnimations(
+    video.illustratorConversationId,
+    video.title,
+    isConnected,
+    flowScenes,
+    stageNonce
+  );
+  const { sceneBlocks, animationBlocks, thumbnail } = useMemo(
+    () => parseIllustratorBlocks(illMessages),
+    [illMessages]
+  );
 
   const handleApproveCharacters = async (keys) => {
     if (await flow.approve(keys)) {
       await onSendIllustratorChat?.('1');
+      setSelectedKey('images');
+      rememberStageKey(video.id, 'images');
       onEdited?.();
     }
   };
@@ -315,19 +357,115 @@ export default function VideoDetail({
           )}
 
           {(selectedStage.key === 'images' || selectedStage.key === 'animations' || selectedStage.key === 'thumbnail') && (
+            <ChatLink
+              label="Ilustrador"
+              linkedId={video.illustratorConversationId}
+              state={chatStates.illustrator}
+              conversations={conversations}
+              onChange={(id) => onLink(video.id, 'illustratorConversationId', id)}
+              onOpen={onOpenChat}
+              onStart={() => onStartPrompt(video.id, 'illustrator')}
+              openLabel="Abrir chat del ilustrador"
+              startLabel="Enviar Prompt 2"
+              showStart={!video.illustratorConversationId}
+            />
+          )}
+
+          {selectedStage.key === 'images' && (
             <>
-              <ChatLink
-                label="Ilustrador"
-                linkedId={video.illustratorConversationId}
-                state={chatStates.illustrator}
-                conversations={conversations}
-                onChange={(id) => onLink(video.id, 'illustratorConversationId', id)}
-                onOpen={onOpenChat}
-                onStart={() => onStartPrompt(video.id, 'illustrator')}
-                openLabel="Abrir chat del ilustrador"
-                startLabel="Enviar Prompt 2"
-              />
-              <p className="video-detail__stage-hint">{ILLUSTRATOR_HINTS[selectedStage.key]}</p>
+              {sceneBlocks.length === 0 && isAwaitingIllustrator ? (
+                <p className="video-detail__stage-hint">
+                  Cargando… DeepSeek está preparando las escenas.
+                </p>
+              ) : sceneBlocks.length === 0 ? (
+                <p className="video-detail__stage-hint">{ILLUSTRATOR_HINTS[selectedStage.key]}</p>
+              ) : (
+                <>
+                  {sceneBlocks.map((blockResult, idx) => (
+                    <div key={blockResult.block?.index ?? blockResult.messageIndex ?? idx} className="video-detail__block-group">
+                      <SceneCards
+                        block={blockResult.block}
+                        scenes={blockResult.scenes}
+                        flow={flowScenes}
+                        characterBusy={flow.job !== null}
+                      />
+                      {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
+                        <NextStepButtons
+                          step={nextStepPrompt(blockResult.message?.content)}
+                          canSend={canSendIllustrator}
+                          onSend={onSendIllustratorChat}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {isAwaitingIllustrator && (
+                    <p className="video-detail__stage-hint">
+                      Cargando… DeepSeek está preparando las escenas.
+                    </p>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {selectedStage.key === 'animations' && (
+            <>
+              {animationBlocks.length === 0 && isAwaitingIllustrator ? (
+                <p className="video-detail__stage-hint">
+                  Cargando… DeepSeek está preparando las animaciones.
+                </p>
+              ) : animationBlocks.length === 0 ? (
+                <p className="video-detail__stage-hint">{ILLUSTRATOR_HINTS[selectedStage.key]}</p>
+              ) : (
+                <>
+                  {animationBlocks.map((blockResult, idx) => (
+                    <div key={blockResult.block?.index ?? blockResult.messageIndex ?? idx} className="video-detail__block-group">
+                      <AnimationCards
+                        block={blockResult.block}
+                        animations={blockResult.scenes}
+                        flow={flowAnimations}
+                        sceneRecords={flowScenes.records}
+                        characterBusy={flow.job !== null}
+                      />
+                      {!hasUserMessageAfter(illMessages, blockResult.messageIndex) && (
+                        <NextStepButtons
+                          step={nextStepPrompt(blockResult.message?.content)}
+                          canSend={canSendIllustrator}
+                          onSend={onSendIllustratorChat}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {isAwaitingIllustrator && (
+                    <p className="video-detail__stage-hint">
+                      Cargando… DeepSeek está preparando las animaciones.
+                    </p>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {selectedStage.key === 'thumbnail' && (
+            <>
+              {!thumbnail ? (
+                <p className="video-detail__stage-hint">{ILLUSTRATOR_HINTS[selectedStage.key]}</p>
+              ) : (
+                <div className="video-detail__block-group">
+                  <ThumbnailCard
+                    thumbnail={thumbnail}
+                    flow={flowScenes}
+                    characterBusy={flow.job !== null}
+                  />
+                  {!hasUserMessageAfter(illMessages, thumbnail.messageIndex) && (
+                    <NextStepButtons
+                      step={nextStepPrompt(thumbnail.message?.content)}
+                      canSend={canSendIllustrator}
+                      onSend={onSendIllustratorChat}
+                    />
+                  )}
+                </div>
+              )}
             </>
           )}
 

@@ -640,6 +640,33 @@ function copyVideoCharacterFiles(workspaceDir, branchId, videoId, characters) {
   return copiedCharacters;
 }
 
+
+function mergeBranchCharacters(existingCharacters = [], incomingCharacters = []) {
+  const existing = Array.isArray(existingCharacters) ? existingCharacters : [];
+  const incoming = Array.isArray(incomingCharacters) ? incomingCharacters : [];
+  const incomingMap = new Map(incoming.map((item) => [item.key, item]));
+  const seen = new Set();
+  const merged = [];
+
+  for (const item of existing) {
+    if (incomingMap.has(item.key)) {
+      merged.push(incomingMap.get(item.key));
+    } else {
+      merged.push(item);
+    }
+    seen.add(item.key);
+  }
+
+  for (const item of incoming) {
+    if (!seen.has(item.key)) {
+      merged.push(item);
+      seen.add(item.key);
+    }
+  }
+
+  return merged;
+}
+
 module.exports = {
   createBranchStore,
   migrateWorkspace,
@@ -666,4 +693,5 @@ module.exports = {
   getCharacterFilePath,
   copyVideoCharacterFiles,
   copyVideoCharacters: copyVideoCharacterFiles,
+  mergeBranchCharacters,
 };

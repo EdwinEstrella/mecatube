@@ -314,9 +314,7 @@ export default function TimelineView({
   const handleSendIllustratorChat = async (text) => {
     if (!video?.illustratorConversationId) return;
     const conversationId = video.illustratorConversationId;
-    if (text === '2') {
-      setAwaitingIllustrator((prev) => ({ ...prev, [video.id]: conversationId }));
-    }
+    setAwaitingIllustrator((prev) => ({ ...prev, [video.id]: conversationId }));
     try {
       await window.electronAPI?.sendChatMessage?.({ conversationId, text });
     } catch (chatError) {
