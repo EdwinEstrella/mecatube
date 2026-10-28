@@ -78,9 +78,10 @@ export function isScriptMessage(content) {
 }
 
 // ETAPA 4 output format (prompt-1.txt L456-467): "METADATOS DE PUBLICACION", or the
-// "1. TITULOS" and "4. ETIQUETAS" section headings together
+// "1. TITULOS" and "4. ETIQUETAS" section headings together, or platform blocks (Shorts/TikTok/Reels)
 export function isMetadata(lines) {
   if (test(lines, /^(?:\d+[.)] ?)?metadatos de publicacion:?$/)) return true;
+  if (test(lines, /youtube shorts/i) && (test(lines, /tiktok/i) || test(lines, /instagram reels/i))) return true;
   return (
     test(lines, /^(?:\d+[.)] ?)?titulos:?(?: \(.*\))?$/) && test(lines, /^(?:\d+[.)] ?)?etiquetas:?(?: \(.*\))?$/)
   );

@@ -3464,6 +3464,43 @@ body {
   color: var(--danger);
 }
 
+.publish-kit__tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 16px 0;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.publish-kit__tab {
+  background: var(--surface-sunken, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.publish-kit__tab:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.publish-kit__tab--active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.publish-kit__platform-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 /* Visual style picker: small square cards in an aligned grid */
 .style-picker {
   display: grid;

@@ -71,6 +71,15 @@ test('applyOrientation: adds vertical note near the top of prompt-1 for vertical
   );
 });
 
+test('applyOrientation: vertical prompt-1 asks for platform metadata blocks (Shorts/TikTok/Reels)', () => {
+  const v1 = applyOrientation(promptOne, 'vertical');
+  assert.ok(v1.includes('YOUTUBE SHORTS'), 'prompt-1 vertical missing YOUTUBE SHORTS block');
+  assert.ok(v1.includes('TIKTOK'), 'prompt-1 vertical missing TIKTOK block');
+  assert.ok(v1.includes('INSTAGRAM REELS'), 'prompt-1 vertical missing INSTAGRAM REELS block');
+  assert.ok(v1.includes('#Shorts'), 'prompt-1 vertical missing #Shorts requirement');
+  assert.ok(v1.includes('150'), 'prompt-1 vertical missing 150 chars caption requirement for TikTok');
+});
+
 test('applyOrientation: non-string input returns empty string', () => {
   assert.equal(applyOrientation(null, 'vertical'), '');
   assert.equal(applyOrientation(undefined, 'vertical'), '');

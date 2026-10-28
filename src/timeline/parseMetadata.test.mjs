@@ -157,3 +157,115 @@ test('stripWrapping correctly trims various quote styles', () => {
   assert.equal(stripWrapping('`hola`'), 'hola');
   assert.equal(stripWrapping('   "texto con espacios"   '), 'texto con espacios');
 });
+
+// T8 Multi-platform vertical metadata tests
+test('parses multi-platform vertical metadata with code blocks (Shorts / TikTok / Reels)', () => {
+  const verticalReply = `
+METADATOS DE PUBLICACIÓN
+
+YOUTUBE SHORTS
+Título:
+\`\`\`
+¿Qué hacían los romanos antes de dormir? #Shorts
+\`\`\`
+Descripción:
+\`\`\`
+Descubre la extraña costumbre nocturna de la Antigua Roma. Suscríbete para más curiosidades.
+\`\`\`
+Etiquetas:
+\`\`\`
+roma antigua, historia, curiosidades, shorts, datos historicos
+\`\`\`
+
+TIKTOK
+Descripción:
+\`\`\`
+La perturbadora costumbre nocturna de los romanos 😱 ¿Lo sabías? #curiosidades #historia #aprendeentiktok
+\`\`\`
+Hashtags:
+\`\`\`
+#curiosidades #historia #aprendeentiktok #datoscuriosos
+\`\`\`
+
+INSTAGRAM REELS
+Descripción:
+\`\`\`
+Ni te imaginas lo que hacían los romanos en su habitación... Sígueme para más datos insólitos.
+\`\`\`
+Hashtags:
+\`\`\`
+#historiaantigua #curiosidadeshistoricas #reelsinstagram #datosreales
+\`\`\`
+`.trim();
+
+  const result = parseMetadata(verticalReply);
+  assert.ok(result !== null);
+  assert.ok(result.platforms !== null);
+
+  // YouTube Shorts
+  assert.equal(result.platforms.youtubeShorts.title, '¿Qué hacían los romanos antes de dormir? #Shorts');
+  assert.ok(result.platforms.youtubeShorts.description.includes('costumbre nocturna'));
+  assert.deepEqual(result.platforms.youtubeShorts.tags, [
+    'roma antigua',
+    'historia',
+    'curiosidades',
+    'shorts',
+    'datos historicos',
+  ]);
+
+  // TikTok
+  assert.ok(result.platforms.tiktok.caption.includes('La perturbadora costumbre nocturna'));
+  assert.ok(result.platforms.tiktok.hashtags.includes('#curiosidades'));
+  assert.ok(result.platforms.tiktok.hashtags.includes('#historia'));
+
+  // Instagram Reels
+  assert.ok(result.platforms.instagramReels.caption.includes('Ni te imaginas lo que hacían'));
+  assert.ok(result.platforms.instagramReels.hashtags.includes('#historiaantigua'));
+  assert.ok(result.platforms.instagramReels.hashtags.includes('#reelsinstagram'));
+
+  // Backwards compatible fields
+  assert.deepEqual(result.titles, ['¿Qué hacían los romanos antes de dormir? #Shorts']);
+  assert.ok(result.description.includes('costumbre nocturna'));
+  assert.equal(result.tags.length, 5);
+});
+
+test('parses multi-platform vertical metadata with markdown headers, bold, numbering and emojis', () => {
+  const emojiReply = `
+**METADATOS DE PUBLICACIÓN**
+
+### 1. 🎬 YOUTUBE SHORTS
+**Título:**
+¿Qué pasaría si caes en un agujero negro? #Shorts
+
+**Descripción:**
+La física extrema explicada en menos de 60 segundos con animación stickman.
+
+**Etiquetas:**
+espacio, agujero negro, ciencia, fisica, astrofisica
+
+### 2. 📱 TIKTOK
+**Descripción (caption):**
+Lo que nadie te contó sobre los agujeros negros 🕳️🚀 #ciencia #espacio #fyp
+
+**Hashtags:**
+#ciencia, #espacio, #fyp, #parati
+
+### 3. 📸 INSTAGRAM REELS
+**Descripción:**
+¿Es posible sobrevivir a un agujero negro? La respuesta te va a sorprender. Dale like y comparte.
+
+**Hashtags:**
+#astronomia #espacioexterior #cienciaparatodos
+`.trim();
+
+  const result = parseMetadata(emojiReply);
+  assert.ok(result !== null);
+  assert.ok(result.platforms !== null);
+
+  assert.equal(result.platforms.youtubeShorts.title, '¿Qué pasaría si caes en un agujero negro? #Shorts');
+  assert.equal(result.platforms.youtubeShorts.tags.length, 5);
+  assert.ok(result.platforms.tiktok.caption.includes('Lo que nadie te contó'));
+  assert.ok(result.platforms.tiktok.hashtags.includes('#ciencia'));
+  assert.ok(result.platforms.instagramReels.caption.includes('¿Es posible sobrevivir'));
+  assert.ok(result.platforms.instagramReels.hashtags.includes('#astronomia'));
+});

@@ -200,7 +200,11 @@ export default function VideoDetail({
           )}
 
           {selectedStage.key === 'published' && (
-            <PublishKit video={video} scriptMessages={scriptMessages} />
+            <PublishKit
+              video={video}
+              scriptMessages={scriptMessages}
+              orientation={branch?.orientation ?? video?.orientation ?? 'horizontal'}
+            />
           )}
 
           <div className="video-detail__status-control">
