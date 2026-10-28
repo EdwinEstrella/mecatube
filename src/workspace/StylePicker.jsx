@@ -57,9 +57,7 @@ export default function StylePicker({ value = DEFAULT_STYLE_ID, onChange, disabl
                       <div
                         className={`style-picker__placeholder style-picker__placeholder--${getCategorySlug(style.category)}`}
                         aria-hidden="true"
-                      >
-                        <span className="style-picker__placeholder-label">{style.label}</span>
-                      </div>
+                      />
                     )}
                     <div className="style-picker__overlay">
                       <span className="style-picker__label">{style.label}</span>

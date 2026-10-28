@@ -4062,14 +4062,6 @@ body {
   box-sizing: border-box;
 }
 
-.style-picker__placeholder-label {
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.2;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-  word-break: break-word;
-}
 
 .style-picker__placeholder--basicos {
   background: linear-gradient(135deg, #1e293b, #334155);
