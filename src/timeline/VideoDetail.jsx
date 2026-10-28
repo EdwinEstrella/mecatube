@@ -10,6 +10,7 @@ import IdeaStagePanel from './IdeaStagePanel.jsx';
 import ScriptStagePanel from './ScriptStagePanel.jsx';
 import { latestIdeas, latestScript } from './stageContent.js';
 import { syncChosenIdea } from './syncChosenIdea.js';
+import { usesCartesia } from '../voice/voiceMode.js';
 
 const ILLUSTRATOR_HINTS = {
   images: 'Las imágenes de las escenas se generan desde el chat del ilustrador.',
@@ -18,7 +19,18 @@ const ILLUSTRATOR_HINTS = {
 };
 
 // state: 'ok' | 'deleted' | 'none' for one linked chat
-function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onStart, openLabel, startLabel }) {
+function ChatLink({
+  label,
+  linkedId,
+  state,
+  conversations,
+  onChange,
+  onOpen,
+  onStart,
+  openLabel,
+  startLabel,
+  showStart = true,
+}) {
   const options = [
     { value: '', label: 'Sin vincular' },
     ...(state === 'deleted' ? [{ value: linkedId, label: 'Chat eliminado' }] : []),
@@ -40,9 +52,11 @@ function ChatLink({ label, linkedId, state, conversations, onChange, onOpen, onS
         </button>
       )}
       {state === 'deleted' && <span className="video-detail__note">chat eliminado</span>}
-      <button type="button" className="settings__button settings__button--primary" onClick={onStart}>
-        {startLabel}
-      </button>
+      {showStart && (
+        <button type="button" className="settings__button settings__button--primary" onClick={onStart}>
+          {startLabel}
+        </button>
+      )}
     </div>
   );
 }
@@ -115,6 +129,26 @@ export default function VideoDetail({
     onEdited?.();
   };
 
+  const scriptText = latestScript(scriptMessages);
+  const hasScript = scriptText != null;
+
+  const hasIllustrator = Boolean(video.illustratorConversationId);
+  const illustratorActionLabel = hasIllustrator ? 'Abrir chat del ilustrador' : 'Enviar Prompt 2';
+  const handleIllustratorAction = () => {
+    if (hasIllustrator) {
+      onOpenChat(video.illustratorConversationId);
+    } else {
+      onStartPrompt(video.id, 'illustrator');
+    }
+  };
+
+  const handleVoiceAction = () => {
+    setSelectedKey('voice');
+    rememberStageKey(video.id, 'voice');
+  };
+  const voiceActionLabel = voice ? 'Ver voz en off' : 'Generar voz en off';
+  const showVoiceAction = usesCartesia(video, branch);
+
   return (
     <div className="video-detail">
       <div className="video-detail__header-bar">
@@ -163,6 +197,7 @@ export default function VideoDetail({
               onStart={() => onStartPrompt(video.id, 'script')}
               openLabel="Abrir chat del guion"
               startLabel="Enviar Prompt 1"
+              showStart={selectedStage.key !== 'script' || !hasScript}
             />
           )}
 
@@ -177,8 +212,13 @@ export default function VideoDetail({
 
           {selectedStage.key === 'script' && (
             <ScriptStagePanel
-              scriptText={latestScript(scriptMessages)}
+              scriptText={scriptText}
               hasChosenIdea={Boolean(video.ideaNumber || latestIdeas(scriptMessages)?.chosenNumber != null)}
+              illustratorActionLabel={illustratorActionLabel}
+              onIllustratorAction={handleIllustratorAction}
+              showVoiceAction={showVoiceAction}
+              voiceActionLabel={voiceActionLabel}
+              onVoiceAction={handleVoiceAction}
             />
           )}
 
