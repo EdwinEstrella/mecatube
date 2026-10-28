@@ -3,7 +3,17 @@
 const assert = require('node:assert/strict');
 const content = require('./content.js');
 
-const { extractFinalText, extractHistoryMessages, parseToken, sessionIdFromUrl, fragmentsText, historyMessages } = content;
+const {
+  extractFinalText,
+  extractHistoryMessages,
+  parseToken,
+  sessionIdFromUrl,
+  fragmentsText,
+  historyMessages,
+  ensureSearchToggle,
+  findSearchToggle,
+  isSearchToggleOn,
+} = content;
 let passed = 0;
 function test(name, fn) {
   fn();
@@ -98,6 +108,152 @@ test('helpers tolerate junk', () => {
   assert.equal(fragmentsText(null, 'RESPONSE'), '');
   assert.equal(fragmentsText({ fragments: [null, { type: 'RESPONSE', content: 5 }] }, 'RESPONSE'), '');
   assert.equal(historyMessages(undefined), null);
+});
+
+
+// --- T7 DeepSeek web search toggle tests --------------------------------------------------------
+
+function createFakeToggle({
+  text = 'Búsqueda inteligente',
+  ariaPressed = 'false',
+  className = 'f79352dc ds-toggle-button ds-toggle-button--m',
+  isCandidate = true,
+} = {}) {
+  const el = {
+    tagName: 'DIV',
+    innerText: text,
+    textContent: text,
+    className,
+    isCandidate,
+    attributes: {
+      'aria-pressed': ariaPressed,
+      tabindex: '0',
+    },
+    clicks: 0,
+    getAttribute(attr) {
+      return this.attributes[attr] || null;
+    },
+    hasAttribute(attr) {
+      return attr in this.attributes;
+    },
+    click() {
+      this.clicks++;
+      const current = this.attributes['aria-pressed'];
+      const next = current === 'true' ? 'false' : 'true';
+      this.attributes['aria-pressed'] = next;
+      if (next === 'true') {
+        this.className += ' ds-toggle-button--selected';
+      } else {
+        this.className = this.className.replace(' ds-toggle-button--selected', '');
+      }
+    },
+  };
+  return el;
+}
+
+function createFakeDoc(elements = []) {
+  return {
+    querySelectorAll(selector) {
+      if (
+        selector.includes('.ds-toggle-button') ||
+        selector.includes('[role="button"]') ||
+        selector.includes('div[tabindex="0"]')
+      ) {
+        return elements.filter((el) => el.isCandidate);
+      }
+      return elements;
+    },
+    body: { tagName: 'BODY' },
+  };
+}
+
+test('search toggle: off -> click once to enable', () => {
+  const toggle = createFakeToggle({ ariaPressed: 'false' });
+  const doc = createFakeDoc([toggle]);
+
+  assert.equal(isSearchToggleOn(toggle), false);
+  const result = ensureSearchToggle(doc, true);
+
+  assert.equal(result.found, true);
+  assert.equal(result.clicked, true);
+  assert.equal(toggle.clicks, 1);
+  assert.equal(isSearchToggleOn(toggle), true);
+});
+
+test('search toggle: on -> no click (idempotent)', () => {
+  const toggle = createFakeToggle({
+    ariaPressed: 'true',
+    className: 'f79352dc ds-toggle-button ds-toggle-button--m ds-toggle-button--selected',
+  });
+  const doc = createFakeDoc([toggle]);
+
+  assert.equal(isSearchToggleOn(toggle), true);
+  const result = ensureSearchToggle(doc, true);
+
+  assert.equal(result.found, true);
+  assert.equal(result.clicked, false);
+  assert.equal(toggle.clicks, 0);
+  assert.equal(isSearchToggleOn(toggle), true);
+});
+
+test('search toggle: missing -> no throw and emits warning callback', () => {
+  const deepThinkOnly = createFakeToggle({
+    text: 'Pensamiento Profundo',
+    ariaPressed: 'false',
+  });
+  const doc = createFakeDoc([deepThinkOnly]);
+
+  let warning = null;
+  assert.doesNotThrow(() => {
+    const result = ensureSearchToggle(doc, true, (msg) => {
+      warning = msg;
+    });
+    assert.equal(result.found, false);
+    assert.equal(result.clicked, false);
+  });
+
+  assert.equal(deepThinkOnly.clicks, 0);
+  assert.ok(warning && warning.includes('No se encontró'));
+});
+
+test('search toggle: recognizes English label "Search" and toggles correctly', () => {
+  const toggle = createFakeToggle({ text: 'Search', ariaPressed: 'false' });
+  const doc = createFakeDoc([toggle]);
+
+  const result = ensureSearchToggle(doc, true);
+  assert.equal(result.found, true);
+  assert.equal(result.clicked, true);
+  assert.equal(toggle.clicks, 1);
+});
+
+test('ensureSearchToggle(doc, false) clicks once when ON and not when OFF', () => {
+  // When ON: clicks once to turn OFF
+  const toggleOn = createFakeToggle({
+    text: 'Búsqueda inteligente',
+    ariaPressed: 'true',
+    className: 'ds-toggle-button ds-toggle-button--selected',
+  });
+  const docOn = createFakeDoc([toggleOn]);
+
+  const resultOn = ensureSearchToggle(docOn, false);
+  assert.equal(resultOn.found, true);
+  assert.equal(resultOn.clicked, true);
+  assert.equal(toggleOn.clicks, 1);
+  assert.equal(isSearchToggleOn(toggleOn), false);
+
+  // When OFF: does not click
+  const toggleOff = createFakeToggle({
+    text: 'Búsqueda inteligente',
+    ariaPressed: 'false',
+    className: 'ds-toggle-button',
+  });
+  const docOff = createFakeDoc([toggleOff]);
+
+  const resultOff = ensureSearchToggle(docOff, false);
+  assert.equal(resultOff.found, true);
+  assert.equal(resultOff.clicked, false);
+  assert.equal(toggleOff.clicks, 0);
+  assert.equal(isSearchToggleOn(toggleOff), false);
 });
 
 console.log(`\n${passed} passed`);

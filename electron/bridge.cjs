@@ -157,11 +157,11 @@ function createBridge({ port = BRIDGE_PORT, host = BRIDGE_HOST } = {}) {
     server = null;
   }
 
-  function sendPrompt({ requestId, text, deepseekUrl }) {
+  function sendPrompt({ requestId, text, deepseekUrl, webSearch = true }) {
     if (!client || client.readyState !== client.OPEN) {
       throw new Error('La extensión de DeepSeek no está conectada.');
     }
-    client.send(JSON.stringify({ type: 'prompt', requestId, text, deepseekUrl: deepseekUrl ?? null }));
+    client.send(JSON.stringify({ type: 'prompt', requestId, text, deepseekUrl: deepseekUrl ?? null, webSearch: webSearch !== false }));
   }
 
   // model / outputs / references (see flow.cjs) are applied by the extension inside the Flow page

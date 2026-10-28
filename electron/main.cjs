@@ -15,6 +15,7 @@ const deepseek = require('./deepseek.cjs');
 const { createVoiceService } = require('./cartesia.cjs');
 const { MEDIA_SCHEME, registerMediaScheme, createMediaHandler, registerVoiceIpc } = require('./voice-ipc.cjs');
 const { createVoicePrefsStore } = require('./voice-prefs.cjs');
+const { createDeepSeekPrefsStore } = require('./deepseek-prefs.cjs');
 const { createCreditStore } = require('./credits.cjs');
 const { createSavedVoiceStore } = require('./saved-voices.cjs');
 const { createUpdater } = require('./updates.cjs');
@@ -365,7 +366,8 @@ ipcMain.handle('chat:send', (_event, { conversationId, text }) => {
   const requestId = crypto.randomUUID();
   inFlight = { requestId, conversationId: conversation.id };
   try {
-    bridge.sendPrompt({ requestId, text: content, deepseekUrl: conversation.deepseekUrl });
+    const dsPrefs = deepseekPrefs ? deepseekPrefs.get() : { webSearch: true };
+    bridge.sendPrompt({ requestId, text: content, deepseekUrl: conversation.deepseekUrl, webSearch: dsPrefs.webSearch });
   } catch (error) {
     inFlight = null;
     throw error;
@@ -401,6 +403,7 @@ let workspaceStore;
 let activeWorkspacePath;
 let branches;
 let prefs;
+let deepseekPrefs;
 let credits;
 let savedVoices;
 let flowStore;
@@ -434,6 +437,7 @@ function setupWorkspace(workspacePath) {
     onProgress: (progress) => pushToWindow('voice:progress', progress),
   });
   prefs = createVoicePrefsStore(workspacePath);
+  deepseekPrefs = createDeepSeekPrefsStore(workspacePath);
   credits = createCreditStore(workspacePath);
   savedVoices = createSavedVoiceStore(workspacePath);
   flowStore = createFlowStore(workspacePath);
@@ -448,6 +452,8 @@ app.whenReady().then(() => {
   secrets = createSecretStore(app.getPath('userData'), safeStorage);
   bridge = createBridge();
 
+  ipcMain.handle('deepseek:prefs-get', () => (deepseekPrefs ? deepseekPrefs.get() : { webSearch: true }));
+  ipcMain.handle('deepseek:prefs-set', (_event, input) => (deepseekPrefs ? deepseekPrefs.set(input) : { webSearch: true }));
   ipcMain.handle('secrets:deepseek-status', () => secrets.deepSeekStatus());
   ipcMain.handle('secrets:deepseek-save', (_event, { key } = {}) => {
     secrets.saveDeepSeekKey(key);

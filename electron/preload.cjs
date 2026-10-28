@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveCartesiaKey: (key) => ipcRenderer.invoke('secrets:cartesia-save', { key }),
   clearCartesiaKey: () => ipcRenderer.invoke('secrets:cartesia-clear'),
   testCartesiaKey: () => ipcRenderer.invoke('secrets:cartesia-test'),
+  getDeepSeekPrefs: () => ipcRenderer.invoke('deepseek:prefs-get'),
+  saveDeepSeekPrefs: (prefs) => ipcRenderer.invoke('deepseek:prefs-set', prefs),
   getDeepSeekStatus: () => ipcRenderer.invoke('secrets:deepseek-status'),
   saveDeepSeekKey: (key) => ipcRenderer.invoke('secrets:deepseek-save', { key }),
   clearDeepSeekKey: () => ipcRenderer.invoke('secrets:deepseek-clear'),

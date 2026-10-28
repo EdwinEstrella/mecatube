@@ -138,7 +138,7 @@ async function ensureContentScript(tabId, file = 'content.js', label = 'DeepSeek
 // The DeepSeek tab serves one job at a time: a prompt in flight or a history read
 let deepseekBusy = false;
 
-async function handlePrompt({ requestId, text, deepseekUrl }) {
+async function handlePrompt({ requestId, text, deepseekUrl, webSearch }) {
   if (deepseekBusy) {
     send({ type: 'error', requestId, message: 'DeepSeek está ocupado con otra tarea. Inténtalo de nuevo en unos segundos.' });
     return;
@@ -152,6 +152,10 @@ async function handlePrompt({ requestId, text, deepseekUrl }) {
     const port = chrome.tabs.connect(tabId, { name: 'mecatube-prompt' });
     let finished = false;
     port.onMessage.addListener((message) => {
+      if (message?.type === 'warning') {
+        console.warn('[Mecatube background]', message.message);
+        return;
+      }
       send({ ...message, requestId });
       if (message.type === 'done' || message.type === 'error') {
         finished = true;
@@ -165,7 +169,7 @@ async function handlePrompt({ requestId, text, deepseekUrl }) {
       deepseekBusy = false;
       send({ type: 'error', requestId, message: 'La página de DeepSeek se cerró o se recargó antes de terminar la respuesta.' });
     });
-    port.postMessage({ type: 'prompt', text });
+    port.postMessage({ type: 'prompt', text, webSearch: webSearch !== false });
   } catch (error) {
     deepseekBusy = false;
     send({ type: 'error', requestId, message: error.message });
