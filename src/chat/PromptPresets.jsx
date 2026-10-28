@@ -17,6 +17,9 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
   const [currentStyle, setCurrentStyle] = useState(DEFAULT_STYLE_ID);
   const [currentOrientation, setCurrentOrientation] = useState('horizontal');
   const [currentVideoType, setCurrentVideoType] = useState('explainer');
+  const [currentBranchVoiceMode, setCurrentBranchVoiceMode] = useState('voiceover');
+  const [currentVideoVoiceMode, setCurrentVideoVoiceMode] = useState(null);
+  const [currentActiveVideoId, setCurrentActiveVideoId] = useState(null);
   const [currentBranchCharacters, setCurrentBranchCharacters] = useState(null);
   const [currentBrief, setCurrentBrief] = useState(null);
 
@@ -43,11 +46,14 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
           api.listBranches?.(),
         ]);
         if (!active) return;
+        setCurrentActiveVideoId(activeVideo?.id ?? null);
+        setCurrentVideoVoiceMode(activeVideo?.voiceMode ?? null);
         if (activeVideo?.branchId && Array.isArray(branches)) {
           setCurrentBrief(activeVideo?.brief ?? null);
           const branch = branches.find((b) => b.id === activeVideo.branchId);
           if (branch?.orientation) setCurrentOrientation(branch.orientation);
           if (branch?.videoType) setCurrentVideoType(branch.videoType);
+          if (branch?.voiceMode) setCurrentBranchVoiceMode(branch.voiceMode);
           if (Array.isArray(branch?.characters) && branch.characters.length > 0) {
             setCurrentBranchCharacters(branch.characters);
           } else if (
@@ -105,8 +111,19 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
           type="button"
           className="chat-presets__button"
           disabled={disabled}
-          onClick={() => {
+          onClick={async () => {
             const rawText = effectiveText(preset, overrides);
+            // Prompt 1 snapshots the branch mode onto the video; later prompts reuse the video's value
+            let selectedVoiceMode = currentVideoVoiceMode || currentBranchVoiceMode;
+            if (preset.id === 'prompt-1') {
+              selectedVoiceMode = currentBranchVoiceMode;
+              if (currentActiveVideoId) {
+                try {
+                  await window.electronAPI?.updateVideo?.(currentActiveVideoId, { voiceMode: currentBranchVoiceMode });
+                  setCurrentVideoVoiceMode(currentBranchVoiceMode);
+                } catch {}
+              }
+            }
             const text = composePrompt(rawText, {
               presetId: preset.id,
               style: currentStyle,
@@ -114,6 +131,7 @@ export default function PromptPresets({ disabled, hasActiveConversation, onSend,
               videoType: currentVideoType,
               branchCharacters: currentBranchCharacters,
               brief: currentBrief,
+              voiceMode: selectedVoiceMode,
             });
             onSend(text);
           }}

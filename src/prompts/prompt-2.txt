@@ -50,7 +50,6 @@ directamente.
 ---
 ### BASE DE CONOCIMIENTO
 **A. Formato general**
-* Relación de aspecto 16:9, 1920x1080 px.
 * Un prompt = una imagen = un momento del guion.
 * Un prompt de animación por cada imagen, con el mismo número.
 * Máximo 3 personajes principales en primer plano por imagen. Se permiten
@@ -515,7 +514,7 @@ formato. Luego detente. Espera la respuesta del usuario.
 ### PLANTILLAS DE PROMPTS
 #### PLANTILLA 0 — HOJA DE PERSONAJE
 ```
-Professional 2D stickman character sheet, wide 16:9, 1920x1080. Simple hand-drawn
+Professional 2D stickman character sheet. Simple hand-drawn
 2D stickman cartoon style for an educational explainer video: clean bold black
 linework, flat colors with minimal soft shading. The character is a true stickman:
 large perfectly round white head, tiny black dot eyes, thin expressive black
@@ -547,7 +546,7 @@ guion, siempre con las manos vacías (señalar, explicar con gestos, caminar
 mirando, sorprenderse). Nunca acciones que sostienen un objeto.
 #### PLANTILLA 1 — IMAGEN DE ESCENA
 ```
-Wide 16:9 illustration, 1920x1080. Hand-drawn 2D stickman cartoon style for an
+Illustration. Hand-drawn 2D stickman cartoon style for an
 educational explainer video. The characters are drawn with clean bold black
 linework and flat colors. The environment is a richly detailed hand-painted 2D
 illustration with depth, material textures, atmospheric lighting, soft shadows and
@@ -590,7 +589,7 @@ exactly: "[FRASE]". Spell the Spanish text exactly as written, with accents. No
 English text, no other words`
 #### PLANTILLA 2 — IMAGEN DE EXPLICACIÓN
 ```
-Wide 16:9 educational explainer illustration, 1920x1080, in a simple hand-drawn 2D
+Educational explainer illustration, in a simple hand-drawn 2D
 stickman cartoon style: pure white background, clean bold black linework, flat
 colors with minimal soft shading. At the top center, a bold black hand-lettered
 title in Spanish that reads exactly: "[TITULO]". Layout: [LAYOUT]. Elements:
@@ -665,7 +664,7 @@ clouds`) o `none`.
 left to right` / `slow gentle pull-out`.
 #### PLANTILLA 4 — MINIATURA
 ```
-YouTube thumbnail, wide 16:9, 1920x1080. Hand-drawn 2D stickman cartoon style: the
+YouTube thumbnail. Hand-drawn 2D stickman cartoon style: the
 character has clean bold black linework and flat bright colors over a detailed,
 dramatically lit painted background with depth; bright high-contrast colors and a
 clear composition that reads well at small size. The character is a true stickman:

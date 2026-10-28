@@ -55,12 +55,16 @@ test('composePrompt: vertical orientation removes 16:9 and 1920x1080 across all 
       `Style ${style} vertical contains 1920x1080`
     );
     assert.ok(
-      composed.includes('9:16'),
-      `Style ${style} vertical missing 9:16`
+      !composed.includes('1080x1920'),
+      `Style ${style} vertical contains redundant 1080x1920`
     );
     assert.ok(
-      composed.includes('1080x1920'),
-      `Style ${style} vertical missing 1080x1920`
+      composed.includes('vertical framing'),
+      `Style ${style} vertical missing vertical framing`
+    );
+    assert.ok(
+      composed.includes('Vertical thumbnail.'),
+      `Style ${style} vertical missing Vertical thumbnail`
     );
   }
 });

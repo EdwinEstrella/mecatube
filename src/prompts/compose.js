@@ -4,6 +4,7 @@
 import { applyStyle } from './styles.js';
 import { applyOrientation } from './orientation.js';
 import { applyVideoType } from './videoTypes.js';
+import { applyVoiceMode, DEFAULT_VOICE_MODE } from './voiceMode.js';
 
 export function composePrompt(
   text,
@@ -14,6 +15,7 @@ export function composePrompt(
     videoType = 'explainer',
     branchCharacters = null,
     brief = null,
+    voiceMode = DEFAULT_VOICE_MODE,
   } = {}
 ) {
   if (typeof text !== 'string') return '';
@@ -31,7 +33,10 @@ export function composePrompt(
   // 3. Video type adaptation
   result = applyVideoType(result, presetId, videoType);
 
-  // 4. Branch characters adaptation (only for prompt-2 when branch characters exist)
+  // 4. Voice mode adaptation (voiceover vs flow)
+  result = applyVoiceMode(result, { presetId, voiceMode });
+
+  // 5. Branch characters adaptation (only for prompt-2 when branch characters exist)
   if (presetId === 'prompt-2' && Array.isArray(branchCharacters) && branchCharacters.length > 0) {
     const list = branchCharacters
       .map((char, index) => {
@@ -56,7 +61,7 @@ export function composePrompt(
     result = `${result.trim()}\n\n${block}\n`;
   }
 
-  // 5. Brief injection (only for prompt-1 when a video brief is provided)
+  // 6. Brief injection (only for prompt-1 when a video brief is provided)
   if (presetId === 'prompt-1' && typeof brief === 'string' && brief.trim().length > 0) {
     const block = [
       '=== CONTEXTO DE ESTE VIDEO ===',

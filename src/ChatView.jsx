@@ -44,6 +44,7 @@ export default function ChatView({
   const [workspaceStyle, setWorkspaceStyle] = useState(DEFAULT_STYLE_ID);
   const [activeOrientation, setActiveOrientation] = useState('horizontal');
   const [activeVideoType, setActiveVideoType] = useState('explainer');
+  const [activeVoiceMode, setActiveVoiceMode] = useState('voiceover');
   const [activeBranchCharacters, setActiveBranchCharacters] = useState(null);
   const [activeBrief, setActiveBrief] = useState(null);
 
@@ -70,6 +71,9 @@ export default function ChatView({
           }
           if (branch?.videoType) {
             setActiveVideoType(branch.videoType);
+          }
+          if (branch?.voiceMode) {
+            setActiveVoiceMode(branch.voiceMode);
           }
           if (Array.isArray(branch?.characters) && branch.characters.length > 0) {
             setActiveBranchCharacters(branch.characters);
@@ -284,12 +288,23 @@ export default function ChatView({
         const preset = PRESETS.find((item) => item.id === action.presetId);
         if (!preset) return;
         let videoBrief = activeBrief;
+        let targetVid = null;
         if (action.videoId) {
           try {
             const vList = await window.electronAPI?.listVideos?.();
-            const targetVid = vList?.find((v) => v.id === action.videoId);
+            targetVid = vList?.find((v) => v.id === action.videoId);
             if (targetVid?.brief) videoBrief = targetVid.brief;
           } catch {}
+        }
+        // Prompt 1 snapshots the branch mode onto the video; later prompts reuse the video's value
+        let selectedVoiceMode = targetVid?.voiceMode || activeVoiceMode;
+        if (preset.id === 'prompt-1') {
+          selectedVoiceMode = activeVoiceMode;
+          if (action.videoId) {
+            try {
+              await window.electronAPI?.updateVideo?.(action.videoId, { voiceMode: activeVoiceMode });
+            } catch {}
+          }
         }
         let promptText = composePrompt(effectiveText(preset, await loadOverrides()), {
           presetId: preset.id,
@@ -298,6 +313,7 @@ export default function ChatView({
           videoType: activeVideoType,
           branchCharacters: activeBranchCharacters,
           brief: videoBrief,
+          voiceMode: selectedVoiceMode,
         });
         const conversationId = await handlePreset(promptText);
         if (!conversationId || !action.videoId) return;
