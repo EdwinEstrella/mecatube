@@ -234,6 +234,13 @@ body {
   padding: 40px 32px;
 }
 
+.settings.settings--wide {
+  max-width: none;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 32px 40px;
+}
+
 .settings__title {
   margin: 0 0 24px;
   font-size: 1.75rem;
@@ -3973,6 +3980,20 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 10px;
+}
+
+.settings--wide .style-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 24px 32px;
+}
+
+.settings--wide .style-picker__category:first-child {
+  grid-column: 1 / -1;
+}
+
+.settings--wide .style-picker__grid {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
 }
 
 .style-picker__card {

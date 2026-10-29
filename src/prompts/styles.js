@@ -18,8 +18,9 @@ export const STYLE_CATEGORIES = [
   'Para explicar',
 ];
 
+// import.meta.glob is compiled away by Vite, so guard on import.meta.env (present only under Vite, absent in plain Node tests)
 const styleImages =
-  typeof import.meta.glob === 'function'
+  import.meta.env
     ? import.meta.glob('../assets/styles/*.png', { eager: true, query: '?url', import: 'default' })
     : {};
 
