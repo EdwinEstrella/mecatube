@@ -22,7 +22,8 @@ Para conectarse con DeepSeek y Flow usa una pequeña extensión de Chrome (inclu
 | Qué | Enlace |
 | --- | --- |
 | **Aplicación para Windows** | [Descargar Mecatube.exe](https://github.com/EdwinEstrella/mecatube/releases/latest/download/Mecatube.exe) |
-| **Extensión para Chrome** | [Descargar extension.zip](https://github.com/EdwinEstrella/mecatube/releases/latest/download/extension.zip) |
+| **Extensión para Chrome** | [Instalar desde Chrome Web Store](https://chromewebstore.google.com/detail/mecatube-bridge/ookdahhhlcdoajgjikdigdhgchemjloc) |
+| Extensión (instalación manual) | [Descargar extension.zip](https://github.com/EdwinEstrella/mecatube/releases/latest/download/extension.zip) |
 | Todas las versiones | [Ver versiones](https://github.com/EdwinEstrella/mecatube/releases) |
 
 ## Instalar la app paso a paso
@@ -35,16 +36,26 @@ Para conectarse con DeepSeek y Flow usa una pequeña extensión de Chrome (inclu
 
 ## Instalar la extensión en Chrome paso a paso
 
+1. Abre **[Mecatube Bridge en la Chrome Web Store](https://chromewebstore.google.com/detail/mecatube-bridge/ookdahhhlcdoajgjikdigdhgchemjloc)**.
+2. Pulsa **Añadir a Chrome** y confirma con **Añadir extensión**.
+3. Opcional: haz clic en el icono de puzle de Chrome y fija **Mecatube Bridge** para tenerlo a la mano.
+
+Chrome actualiza la extensión automáticamente cuando hay una versión nueva.
+
+<details>
+<summary>Instalación manual (sin la Chrome Web Store)</summary>
+
 1. Descarga **extension.zip** con el enlace de arriba.
 2. Descomprímelo en una carpeta que **no vayas a borrar ni mover** (por ejemplo `Documentos\Mecatube-Extension`). Chrome usa esa carpeta cada vez que se abre.
 3. En Chrome escribe `chrome://extensions` en la barra de direcciones y pulsa Enter.
 4. Activa **Modo de desarrollador** (interruptor arriba a la derecha).
 5. Pulsa **Cargar descomprimida** y selecciona la carpeta donde descomprimiste el zip (la que contiene el archivo `manifest.json`).
-6. Opcional: haz clic en el icono de puzle de Chrome y fija **Mecatube Bridge** para tenerlo a la mano.
 
 > No borres la carpeta de la extensión: si lo haces, Chrome la desactivará.
 
-**Para actualizar la extensión:** descarga el zip nuevo, descomprímelo sobre la misma carpeta (reemplazando los archivos), ve a `chrome://extensions` y pulsa el botón de recargar de la extensión.
+**Para actualizar:** descarga el zip nuevo, descomprímelo sobre la misma carpeta (reemplazando los archivos), ve a `chrome://extensions` y pulsa el botón de recargar de la extensión.
+
+</details>
 
 ## Primeros pasos
 
